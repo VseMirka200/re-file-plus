@@ -148,14 +148,14 @@ class MethodsPanel:
         self.app.template_buttons_frame.columnconfigure(1, weight=1)
         
         self.app.btn_save_template = self.app.create_rounded_button(
-            self.app.template_buttons_frame, "Сохранить шаблон", self.app.save_current_template,
+            self.app.template_buttons_frame, "💾 Сохранить шаблон", self.app.save_current_template,
             '#10B981', 'white',
             font=font, padx=padx, pady=pady,
             active_bg='#059669', expand=True)
         self.app.btn_save_template.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         
         self.app.btn_saved = self.app.create_rounded_button(
-            self.app.template_buttons_frame, "Сохраненные шаблоны", self.app.show_saved_templates,
+            self.app.template_buttons_frame, "📋 Сохраненные шаблоны", self.app.show_saved_templates,
             self.app.colors['primary'], 'white',
             font=font, padx=padx, pady=pady,
             active_bg=self.app.colors['primary_hover'], expand=True)
@@ -558,7 +558,7 @@ class MethodsPanel:
         self.app.regex_replace.pack(fill=tk.X, pady=(0, 4))
         
         btn_test = self.app.create_rounded_button(
-            self.app.settings_frame, "Тест Regex", self.test_regex,
+            self.app.settings_frame, "🧪 Тест Regex", self.test_regex,
             '#818CF8', 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg='#6366F1')

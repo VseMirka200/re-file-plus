@@ -214,46 +214,8 @@ if sys.platform == 'win32':
 # script_dir уже определен выше, используем его
 os.chdir(script_dir)
 
-# Проверка и запрос прав администратора (Windows)
-if sys.platform == 'win32':
-    try:
-        import ctypes
-        HAS_CTYPES = True
-    except ImportError:
-        HAS_CTYPES = False
-        
-    if HAS_CTYPES:
-        def is_admin():
-            """Проверка, запущена ли программа от имени администратора."""
-            try:
-                return ctypes.windll.shell32.IsUserAnAdmin()
-            except (OSError, AttributeError, ValueError):
-                return False
-        
-        def run_as_admin():
-            """Запуск программы от имени администратора."""
-            if is_admin():
-                return True
-            else:
-                # Перезапускаем программу с правами администратора
-                script = os.path.abspath(__file__)
-                # Передаем аргументы командной строки
-                args = ' '.join([f'"{arg}"' for arg in sys.argv[1:]])
-                if args:
-                    command = f'"{script}" {args}'
-                else:
-                    command = f'"{script}"'
-                
-                ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", sys.executable, command, None, 1
-                )
-                return False
-        
-        # Проверяем права администратора
-        if not is_admin():
-            # Перезапускаем с правами администратора
-            run_as_admin()
-            sys.exit(0)
+# Проверка прав администратора отключена для работы drag and drop
+# Программа теперь работает без прав администратора
 
 # Импорт и запуск основного приложения
 try:

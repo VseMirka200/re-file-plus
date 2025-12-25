@@ -561,6 +561,16 @@ class FileRenamerApp:
         )
         support_tab.create_tab()
     
+    def _create_help_tab(self, notebook):
+        """Создание вкладки 'Справка' в notebook"""
+        from ui.help_tab import HelpTab
+        help_tab = HelpTab(
+            notebook,
+            self.colors,
+            self.bind_mousewheel
+        )
+        help_tab.create_tab()
+    
     
     def update_scroll_region(self):
         """Обновление области прокрутки.

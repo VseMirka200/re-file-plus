@@ -18,22 +18,10 @@ import shutil
 import subprocess
 import sys
 import time
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from typing import Any, Dict, List, Optional, Tuple
 
 # Локальные импорты
-try:
-    from config.constants import (
-        COM_OPERATION_DELAY,
-        DEFAULT_JPEG_QUALITY,
-        PACKAGE_INSTALL_TIMEOUT,
-    )
-except ImportError:
-    # Fallback если константы недоступны
-    PACKAGE_INSTALL_TIMEOUT = 300
-    COM_OPERATION_DELAY = 0.5
-    DEFAULT_JPEG_QUALITY = 95
-
 try:
     from config.constants import (
         COM_OPERATION_DELAY,
@@ -72,8 +60,10 @@ def cleanup_word_application(word_app: Optional[Any]) -> None:
     if word_app:
         try:
             word_app.Quit(SaveChanges=False)
-        except Exception as e:
+        except (AttributeError, OSError, RuntimeError) as e:
             logger.warning(f"Ошибка при закрытии Word: {e}")
+        except Exception as e:
+            logger.warning(f"Неожиданная ошибка при закрытии Word: {e}")
 
 
 def cleanup_word_document(doc: Optional[Any]) -> None:
@@ -85,8 +75,61 @@ def cleanup_word_document(doc: Optional[Any]) -> None:
     if doc:
         try:
             doc.Close(SaveChanges=False)
-        except Exception as e:
+        except (AttributeError, OSError, RuntimeError) as e:
             logger.warning(f"Ошибка при закрытии документа: {e}")
+        except Exception as e:
+            logger.warning(f"Неожиданная ошибка при закрытии документа: {e}")
+
+
+@contextmanager
+def word_application_context(com_client: Any):
+    """Context manager для безопасной работы с Word.Application.
+    
+    Гарантирует закрытие Word приложения даже при возникновении ошибок.
+    
+    Args:
+        com_client: Клиент COM (win32com.client или comtypes.client)
+        
+    Yields:
+        Word.Application объект или None
+        
+    Example:
+        with word_application_context(com_client) as word_app:
+            if word_app:
+                # Работа с Word
+                pass
+    """
+    word_app = None
+    pythoncom_module = None
+    com_initialized = False
+    
+    try:
+        word_app, error_msg = create_word_application(com_client)
+        if word_app:
+            # Инициализация COM уже выполнена в create_word_application
+            import pythoncom
+            pythoncom_module = pythoncom
+            com_initialized = True
+        yield word_app
+    finally:
+        # Закрываем документы перед закрытием приложения
+        if word_app:
+            try:
+                # Закрываем все открытые документы
+                for doc in list(word_app.Documents):
+                    cleanup_word_document(doc)
+            except (AttributeError, OSError, RuntimeError):
+                pass
+        
+        # Закрываем приложение
+        cleanup_word_application(word_app)
+        
+        # Освобождаем COM
+        if com_initialized and pythoncom_module:
+            try:
+                pythoncom_module.CoUninitialize()
+            except (OSError, RuntimeError):
+                pass
 
 
 def check_word_installed() -> Tuple[bool, str]:
@@ -163,17 +206,21 @@ def create_word_application(com_client: Any) -> Tuple[Optional[Any], Optional[st
                 pythoncom_module.CoInitialize()
         else:
             pythoncom_module.CoInitialize()
-    except Exception as init_error:
+    except (OSError, RuntimeError, AttributeError) as init_error:
         # Если уже инициализирован, это нормально
-        if "already initialized" not in str(init_error).lower() and "RPC_E_CHANGED_MODE" not in str(init_error):
+        error_str = str(init_error).lower()
+        if "already initialized" not in error_str and "rpc_e_changed_mode" not in error_str:
             logger.warning(f"Ошибка инициализации COM: {init_error}")
+    except Exception as init_error:
+        # Неожиданная ошибка
+        logger.warning(f"Неожиданная ошибка инициализации COM: {init_error}")
     com_initialized = True
     
     # Пробуем разные способы создания Word объекта
     try:
         word = com_client.Dispatch('Word.Application')
         return word, None
-    except Exception as e1:
+    except (OSError, RuntimeError, AttributeError, TypeError) as e1:
         error_msg1 = str(e1)
         logger.warning(f"Первый способ создания Word.Application не удался: {error_msg1}")
         
@@ -182,7 +229,7 @@ def create_word_application(com_client: Any) -> Tuple[Optional[Any], Optional[st
             word = com_client.DispatchEx('Word.Application')
             logger.debug("Word.Application создан через DispatchEx")
             return word, None
-        except Exception as e2:
+        except (OSError, RuntimeError, AttributeError, TypeError) as e2:
             error_msg2 = str(e2)
             logger.warning(f"Второй способ создания Word.Application не удался: {error_msg2}")
             
@@ -191,7 +238,7 @@ def create_word_application(com_client: Any) -> Tuple[Optional[Any], Optional[st
                 word = com_client.GetActiveObject('Word.Application')
                 logger.debug("Word.Application получен через GetActiveObject (Word уже запущен)")
                 return word, None
-            except Exception as e3:
+            except (OSError, RuntimeError, AttributeError, TypeError) as e3:
                 error_msg3 = str(e3)
                 logger.error(f"Все способы создания Word.Application не удались. Ошибки: {error_msg1}, {error_msg2}, {error_msg3}")
                 
@@ -199,8 +246,10 @@ def create_word_application(com_client: Any) -> Tuple[Optional[Any], Optional[st
                 if com_initialized and pythoncom_module:
                     try:
                         pythoncom_module.CoUninitialize()
-                    except Exception:
+                    except (OSError, RuntimeError, AttributeError):
                         pass
+                    except Exception as uninit_error:
+                        logger.debug(f"Неожиданная ошибка при освобождении COM: {uninit_error}")
                 
                 # Формируем понятное сообщение об ошибке
                 if any(keyword in error_msg1.lower() for keyword in ['invalid class string', 'clsid', 'class not registered', 'progid']):
@@ -256,11 +305,16 @@ def convert_docx_with_word(
                 AddToRecentFiles=False
             )
             logger.debug("Документ открыт успешно")
-        except Exception as open_error:
+        except (OSError, RuntimeError, AttributeError, TypeError) as open_error:
             error_msg = str(open_error)
             logger.error(f"Ошибка при открытии документа: {error_msg}")
             if "не найден" in error_msg.lower() or "not found" in error_msg.lower():
                 return False, f"Не удалось открыть документ: {file_path}"
+            return False, f"Ошибка при открытии документа: {error_msg}"
+        except Exception as open_error:
+            # Неожиданная ошибка
+            error_msg = str(open_error)
+            logger.error(f"Неожиданная ошибка при открытии документа: {error_msg}")
             return False, f"Ошибка при открытии документа: {error_msg}"
         
         # Сохраняем как PDF
@@ -269,7 +323,7 @@ def convert_docx_with_word(
         try:
             doc.SaveAs(FileName=pdf_path, FileFormat=17)  # 17 = PDF format
             logger.debug("Документ сохранен как PDF")
-        except Exception as save_error:
+        except (OSError, RuntimeError, AttributeError, PermissionError) as save_error:
             error_msg = str(save_error)
             logger.error(f"Ошибка при сохранении PDF: {error_msg}")
             # Проверяем, может быть файл уже существует и заблокирован
@@ -277,16 +331,28 @@ def convert_docx_with_word(
                 try:
                     os.remove(pdf_path)
                     doc.SaveAs(FileName=pdf_path, FileFormat=17)
-                except Exception as retry_error:
+                except (OSError, PermissionError, RuntimeError) as retry_error:
                     return False, f"Не удалось сохранить PDF: {retry_error}"
+                except Exception as retry_error:
+                    return False, f"Неожиданная ошибка при повторной попытке сохранения: {retry_error}"
             else:
                 return False, f"Ошибка при сохранении PDF: {error_msg}"
+        except Exception as save_error:
+            # Неожиданная ошибка
+            error_msg = str(save_error)
+            logger.error(f"Неожиданная ошибка при сохранении PDF: {error_msg}")
+            return False, f"Ошибка при сохранении PDF: {error_msg}"
         
         return True, None
         
-    except Exception as e:
+    except (OSError, RuntimeError, AttributeError, TypeError) as e:
         error_msg = str(e)
         logger.error(f"Ошибка при конвертации через {com_client_type}: {error_msg}")
+        return False, error_msg
+    except Exception as e:
+        # Неожиданная ошибка
+        error_msg = str(e)
+        logger.error(f"Неожиданная ошибка при конвертации через {com_client_type}: {error_msg}", exc_info=True)
         return False, error_msg
     finally:
         cleanup_word_document(doc)
@@ -1427,9 +1493,13 @@ class FileConverter:
                     AddToRecentFiles=False
                 )
                 logger.debug("ODT файл открыт успешно в Word")
-            except Exception as open_error:
+            except (OSError, RuntimeError, AttributeError, TypeError) as open_error:
                 error_msg = str(open_error)
                 logger.error(f"Ошибка при открытии ODT файла в Word: {error_msg}")
+                return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
+            except Exception as open_error:
+                error_msg = str(open_error)
+                logger.error(f"Неожиданная ошибка при открытии ODT файла в Word: {error_msg}")
                 return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
             
             # Сохраняем в нужном формате
@@ -1442,7 +1512,7 @@ class FileConverter:
             try:
                 doc.SaveAs(FileName=output_path_abs, FileFormat=file_format)
                 logger.debug(f"Файл сохранен как {target_ext}")
-            except Exception as save_error:
+            except (OSError, RuntimeError, AttributeError, PermissionError) as save_error:
                 error_msg = str(save_error)
                 logger.error(f"Ошибка при сохранении файла: {error_msg}")
                 # Проверяем, может быть файл уже существует
@@ -1450,10 +1520,14 @@ class FileConverter:
                     try:
                         os.remove(output_path_abs)
                         doc.SaveAs(FileName=output_path_abs, FileFormat=file_format)
-                    except Exception as retry_error:
+                    except (OSError, PermissionError, RuntimeError) as retry_error:
                         return False, f"Не удалось сохранить файл: {retry_error}", None
-                else:
-                    return False, f"Ошибка при сохранении файла: {error_msg[:200]}", None
+                    except Exception as retry_error:
+                        return False, f"Неожиданная ошибка при повторной попытке сохранения: {retry_error}", None
+            except Exception as save_error:
+                error_msg = str(save_error)
+                logger.error(f"Неожиданная ошибка при сохранении файла: {error_msg}")
+                return False, f"Ошибка при сохранении файла: {error_msg[:200]}", None
             
             return True, f"ODT файл успешно конвертирован через Microsoft Word в {target_ext}", output_path_abs
             
@@ -1832,9 +1906,15 @@ class FileConverter:
             
             return False, "Не удалось создать сжатый PDF"
             
-        except Exception as e:
+        except (OSError, IOError, PermissionError) as e:
             logger.error(f"Ошибка при сжатии PDF {pdf_path}: {e}", exc_info=True)
             return False, f"Ошибка сжатия: {str(e)}"
+        except (AttributeError, TypeError, ValueError) as e:
+            logger.error(f"Ошибка при обработке PDF {pdf_path}: {e}", exc_info=True)
+            return False, f"Ошибка обработки PDF: {str(e)}"
+        except Exception as e:
+            logger.error(f"Неожиданная ошибка при сжатии PDF {pdf_path}: {e}", exc_info=True)
+            return False, f"Неожиданная ошибка: {str(e)}"
     
     def _convert_docx_to_pdf(self, file_path: str, output_path: str, 
                               compress_pdf: bool = False) -> Tuple[bool, str, Optional[str]]:

@@ -163,21 +163,21 @@ class MainWindow:
         
         # Кнопки управления - компактное расположение
         btn_add_files = self.app.create_rounded_button(
-            control_panel, "Добавить файлы", self.app.add_files,
+            control_panel, "➕ Добавить файлы", self.app.add_files,
             self.app.colors['primary'], 'white', 
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['primary_hover'])
         btn_add_files.grid(row=0, column=0, padx=(0, 4), sticky="ew")
         
         btn_add_folder = self.app.create_rounded_button(
-            control_panel, "Добавить папку", self.app.add_folder,
+            control_panel, "📁 Добавить папку", self.app.add_folder,
             self.app.colors['primary'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['primary_hover'])
         btn_add_folder.grid(row=0, column=1, padx=(0, 4), sticky="ew")
         
         btn_clear = self.app.create_rounded_button(
-            control_panel, "Очистить", self.app.clear_files,
+            control_panel, "🗑️ Очистить", self.app.clear_files,
             self.app.colors['danger'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['danger_hover'])
@@ -507,7 +507,7 @@ class MainWindow:
         
         # Кнопка "Начать переименование" внизу на всю ширину
         btn_start_rename = self.app.create_rounded_button(
-            self.app.method_buttons_frame, "Начать переименование", self.app.start_rename,
+            self.app.method_buttons_frame, "▶️ Начать переименование", self.app.start_rename,
             self.app.colors['success'], 'white',
             font=font, padx=6, pady=8,
             active_bg=self.app.colors['success_hover'], expand=True)

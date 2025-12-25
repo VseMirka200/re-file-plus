@@ -87,7 +87,7 @@ class SorterTab:
         folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         
         btn_browse = self.app.create_rounded_button(
-            folder_path_frame, "Обзор...", self.browse_sorter_folder,
+            folder_path_frame, "🔍 Обзор...", self.browse_sorter_folder,
             self.app.colors['primary'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=5,
             active_bg=self.app.colors['primary_hover'], expand=False)
@@ -147,21 +147,21 @@ class SorterTab:
         filter_buttons_frame.pack(fill=tk.X, pady=(10, 0))
         
         btn_add_filter = self.app.create_rounded_button(
-            filter_buttons_frame, "Добавить правило", self.add_sorter_filter,
+            filter_buttons_frame, "➕ Добавить правило", self.add_sorter_filter,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['success_hover'], expand=True)
         btn_add_filter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         
         btn_save_filters = self.app.create_rounded_button(
-            filter_buttons_frame, "Сохранить", self.save_sorter_filters,
+            filter_buttons_frame, "💾 Сохранить", self.save_sorter_filters,
             self.app.colors['info'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['info_hover'], expand=True)
         btn_save_filters.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         
         btn_load_filters = self.app.create_rounded_button(
-            filter_buttons_frame, "Загрузить", self.load_sorter_filters,
+            filter_buttons_frame, "📂 Загрузить", self.load_sorter_filters,
             self.app.colors['primary'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['primary_hover'], expand=True)
@@ -195,7 +195,7 @@ class SorterTab:
         
         # Кнопка предпросмотра
         btn_preview = self.app.create_rounded_button(
-            buttons_frame, "Предпросмотр", self.preview_file_sorting,
+            buttons_frame, "👁️ Предпросмотр", self.preview_file_sorting,
             self.app.colors['info'], 'white',
             font=('Robot', 9, 'bold'), padx=12, pady=8,
             active_bg=self.app.colors['info_hover'], expand=True)
@@ -203,7 +203,7 @@ class SorterTab:
         
         # Кнопка запуска сортировки
         btn_start_sort = self.app.create_rounded_button(
-            buttons_frame, "Начать сортировку", self.start_file_sorting,
+            buttons_frame, "▶️ Начать сортировку", self.start_file_sorting,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=12, pady=8,
             active_bg=self.app.colors['success_hover'], expand=True)
@@ -284,8 +284,10 @@ class SorterTab:
         
         try:
             set_window_icon(filter_window, self.app._icon_photos)
-        except Exception:
-            pass
+        except (AttributeError, tk.TclError, OSError) as e:
+            logger.debug(f"Не удалось установить иконку окна: {e}")
+        except Exception as e:
+            logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         main_frame = tk.Frame(filter_window, bg=self.app.colors['bg_card'])
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
@@ -372,14 +374,14 @@ class SorterTab:
             messagebox.showinfo("Успешно", "Правило добавлено")
         
         btn_save = self.app.create_rounded_button(
-            buttons_frame, "Сохранить", save_filter,
+            buttons_frame, "💾 Сохранить", save_filter,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=15, pady=8,
             active_bg=self.app.colors['success_hover'], expand=True)
         btn_save.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         
         btn_cancel = self.app.create_rounded_button(
-            buttons_frame, "Отмена", filter_window.destroy,
+            buttons_frame, "❌ Отмена", filter_window.destroy,
             self.app.colors['danger'], 'white',
             font=('Robot', 9, 'bold'), padx=15, pady=8,
             active_bg=self.app.colors['danger_hover'], expand=True)
@@ -413,7 +415,7 @@ class SorterTab:
             
             # Кнопка удаления
             btn_delete = self.app.create_rounded_button(
-                filter_frame, "Удалить", lambda idx=i: self.delete_filter(idx),
+                filter_frame, "🗑️ Удалить", lambda idx=i: self.delete_filter(idx),
                 self.app.colors['danger'], 'white',
                 font=('Robot', 8, 'bold'), padx=8, pady=4,
                 active_bg=self.app.colors['danger_hover'], expand=False)
@@ -506,8 +508,10 @@ class SorterTab:
         
         try:
             set_window_icon(preview_window, self.app._icon_photos)
-        except Exception:
-            pass
+        except (AttributeError, tk.TclError, OSError) as e:
+            logger.debug(f"Не удалось установить иконку окна: {e}")
+        except Exception as e:
+            logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         main_frame = tk.Frame(preview_window, bg=self.app.colors['bg_card'])
         main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
@@ -625,7 +629,7 @@ class SorterTab:
         
         # Кнопка закрытия
         btn_close = self.app.create_rounded_button(
-            main_frame, "Закрыть", preview_window.destroy,
+            main_frame, "❌ Закрыть", preview_window.destroy,
             self.app.colors['primary'], 'white',
             font=('Robot', 9, 'bold'), padx=15, pady=8,
             active_bg=self.app.colors['primary_hover'], expand=False)
@@ -793,7 +797,11 @@ class SorterTab:
                         return file_size > size_bytes
                     else:
                         return file_size < size_bytes
-            except:
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.debug(f"Ошибка при парсинге размера файла: {e}")
+                return False
+            except Exception as e:
+                logger.warning(f"Неожиданная ошибка при проверке размера файла: {e}")
                 return False
         
         elif filter_type == 'date':
@@ -803,7 +811,11 @@ class SorterTab:
                 file_date = datetime.fromtimestamp(file_mtime).date()
                 # Упрощенная проверка (можно расширить)
                 return True  # Заглушка
-            except:
+            except (OSError, ValueError, TypeError) as e:
+                logger.debug(f"Ошибка при получении даты файла: {e}")
+                return False
+            except Exception as e:
+                logger.warning(f"Неожиданная ошибка при проверке даты файла: {e}")
                 return False
         
         elif filter_type == 'mime':

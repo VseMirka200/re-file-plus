@@ -103,16 +103,10 @@ def get_data_dir() -> str:
     """Получение директории для хранения конфигурационных файлов и кеша.
     
     Returns:
-        Путь к директории данных
+        Путь к директории данных (используется app_data_dir вместо отдельной папки data)
     """
-    data_dir = os.path.join(get_app_data_dir(), "data")
-    # Создаём директорию, если её нет
-    if not os.path.exists(data_dir):
-        try:
-            os.makedirs(data_dir, exist_ok=True)
-        except Exception:
-            pass
-    return data_dir
+    # Используем app_data_dir напрямую, без создания отдельной папки data
+    return get_app_data_dir()
 
 
 def get_log_file_path() -> str:

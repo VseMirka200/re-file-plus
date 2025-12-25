@@ -89,14 +89,14 @@ class ConverterTab:
         buttons_frame_left.columnconfigure(1, weight=1, uniform="buttons")
         
         btn_add_files_left = self.app.create_rounded_button(
-            buttons_frame_left, "Добавить файлы", self.add_files_for_conversion,
+            buttons_frame_left, "➕ Добавить файлы", self.add_files_for_conversion,
             self.app.colors['primary'], 'white', 
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['primary_hover'])
         btn_add_files_left.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         
         btn_clear_left = self.app.create_rounded_button(
-            buttons_frame_left, "Очистить", self.clear_converter_files_list,
+            buttons_frame_left, "🗑️ Очистить", self.clear_converter_files_list,
             self.app.colors['warning'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['warning_hover'])
@@ -123,18 +123,24 @@ class ConverterTab:
         scrollbar_y.config(command=tree.yview)
         scrollbar_x.config(command=tree.xview)
         
-        # Настройка колонок с равной шириной
+        # Настройка колонок (как в основном списке файлов)
         tree.heading("file", text="Файл")
         tree.heading("status", text="Статус")
         
         # Столбцы будут занимать равную ширину (50% каждый)
-        tree.column("file", width=300, anchor='w', minwidth=150, stretch=tk.YES)
-        tree.column("status", width=300, anchor='center', minwidth=150, stretch=tk.YES)
+        # Настройка колонок с адаптивными размерами (как в основном списке)
+        tree.column("file", width=300, anchor='w', minwidth=100, stretch=tk.YES)
+        tree.column("status", width=300, anchor='w', minwidth=100, stretch=tk.YES)
         
         # Настройка тегов для цветового выделения
         tree.tag_configure('ready', background='#FEF3C7', foreground='#92400E')  # Желтый - готов к конвертации
         tree.tag_configure('success', background='#D1FAE5', foreground='#065F46')  # Зеленый - успешно конвертирован
         tree.tag_configure('error', background='#FEE2E2', foreground='#991B1B')  # Красный - ошибка
+        # Тег для строки с путем (занимает обе колонки)
+        tree.tag_configure('path_row', 
+                          background=self.app.colors.get('bg_secondary', '#F3F4F6'),
+                          foreground=self.app.colors.get('text_secondary', '#6B7280'),
+                          font=('Robot', 8))
         
         # Размещение таблицы и скроллбаров
         tree.grid(row=0, column=0, sticky="nsew")
@@ -202,90 +208,6 @@ class ConverterTab:
         
         # Обновляем видимость скроллбаров после создания виджетов
         self.app.root.after(200, update_converter_scrollbars)
-        
-        # Полоска отображения пути файлов (под таблицей файлов)
-        converter_path_frame = tk.Frame(left_panel, bg=self.app.colors['bg_card'], relief=tk.FLAT, bd=1)
-        converter_path_frame.pack(fill=tk.X, pady=(6, 0))
-        
-        converter_path_label = tk.Label(converter_path_frame, 
-                                       text="Путь: ",
-                                       font=('Robot', 9, 'bold'),
-                                       bg=self.app.colors['bg_card'],
-                                       fg=self.app.colors['text_primary'],
-                                       anchor='w')
-        converter_path_label.pack(side=tk.LEFT, padx=(6, 4))
-        
-        self.app.converter_path_label = tk.Label(converter_path_frame,
-                                                  text="",
-                                                  font=('Robot', 9),
-                                                  bg=self.app.colors['bg_card'],
-                                                  fg=self.app.colors['text_secondary'],
-                                                  anchor='w',
-                                                  wraplength=500)
-        self.app.converter_path_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-        
-        # Функция для обновления пути конвертера
-        def update_converter_path():
-            if not hasattr(self.app, 'converter_files') or not self.app.converter_files:
-                self.app.converter_path_label.config(text="")
-                return
-            
-            # Получаем пути всех файлов
-            paths = []
-            for file_data in self.app.converter_files:
-                path = file_data.get('path', '')
-                if path:
-                    # Нормализуем путь
-                    path = os.path.normpath(os.path.abspath(path))
-                    # Если это файл, берем директорию, если папка - оставляем как есть
-                    if os.path.isfile(path):
-                        paths.append(os.path.dirname(path))
-                    elif os.path.isdir(path):
-                        paths.append(path)
-                    else:
-                        # Если путь не существует, пробуем взять директорию
-                        paths.append(os.path.dirname(path))
-            
-            if not paths:
-                self.app.converter_path_label.config(text="")
-                return
-            
-            # Находим общий путь
-            try:
-                if len(paths) > 1:
-                    # Нормализуем все пути для корректного сравнения
-                    normalized_paths = [os.path.normpath(p) for p in paths]
-                    common_path = os.path.commonpath(normalized_paths)
-                else:
-                    common_path = paths[0] if paths else ""
-                
-                # Проверяем, что путь существует и это директория
-                if common_path and os.path.exists(common_path) and os.path.isdir(common_path):
-                    pass  # Путь корректен
-                elif common_path:
-                    # Если путь не существует или это файл, берем родительскую директорию
-                    parent = os.path.dirname(common_path)
-                    if parent and os.path.isdir(parent):
-                        common_path = parent
-                    else:
-                        # Используем первый путь
-                        common_path = paths[0] if paths else ""
-            except (ValueError, OSError):
-                # Если пути на разных дисках или ошибка, показываем первый путь
-                common_path = paths[0] if paths else ""
-            
-            # Обновляем текст
-            if common_path:
-                # Нормализуем для отображения
-                common_path = os.path.normpath(common_path)
-                self.app.converter_path_label.config(text=common_path)
-            else:
-                self.app.converter_path_label.config(text="")
-        
-        # Сохраняем функцию для обновления
-        self.app.update_converter_path = update_converter_path
-        # Обновляем путь при создании
-        self.app.root.after(100, update_converter_path)
         
         # Прогресс-бар внизу
         progress_container = tk.Frame(left_panel, bg=self.app.colors['bg_card'])
@@ -417,7 +339,7 @@ class ConverterTab:
         buttons_frame.pack(fill=tk.X, padx=6, pady=(6, 0))
         
         btn_convert = self.app.create_rounded_button(
-            buttons_frame, "Конвертировать", self.convert_files,
+            buttons_frame, "🔄 Конвертировать", self.convert_files,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['success_hover'])
@@ -630,9 +552,6 @@ class ConverterTab:
                 self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {count})")
             # Применяем фильтр - это обновит treeview и доступные форматы
             self.filter_converter_files_by_type()
-            # Обновляем путь
-            if hasattr(self.app, 'update_converter_path'):
-                self.app.root.after_idle(self.app.update_converter_path)
             logger.info(f"Добавлено файлов в список конвертации: {added_count}, пропущено: {skipped_count}")
             self.app.log(f"Добавлено файлов для конвертации: {len(files)}")
     
@@ -720,14 +639,50 @@ class ConverterTab:
         
         target_category = filter_mapping.get(filter_type)
         
-        # Добавляем только файлы, соответствующие фильтру
-        visible_count = 0
+        # Фильтруем файлы по категории
         visible_files = []
         for file_data in self.app.converter_files:
             file_category = file_data.get('category')
-            
-            # Если фильтр "Все" или категория совпадает
             if target_category is None or file_category == target_category:
+                visible_files.append(file_data)
+        
+        # Группируем файлы по папкам (как в основном списке)
+        files_by_path = {}
+        for file_data in visible_files:
+            file_path = file_data.get('path', '')
+            if file_path:
+                # Получаем путь к папке файла
+                if os.path.exists(file_path):
+                    if os.path.isfile(file_path):
+                        folder_path = os.path.dirname(file_path)
+                    elif os.path.isdir(file_path):
+                        folder_path = file_path
+                    else:
+                        folder_path = os.path.dirname(file_path)
+                else:
+                    folder_path = os.path.dirname(file_path)
+                
+                # Нормализуем путь
+                if folder_path:
+                    folder_path = os.path.normpath(os.path.abspath(folder_path))
+                    if folder_path not in files_by_path:
+                        files_by_path[folder_path] = []
+                    files_by_path[folder_path].append(file_data)
+        
+        # Сортируем пути для консистентного отображения
+        sorted_paths = sorted(files_by_path.keys())
+        
+        # Добавляем файлы, группируя по папкам
+        visible_count = 0
+        for folder_path in sorted_paths:
+            files_in_folder = files_by_path[folder_path]
+            
+            # Вставляем строку с путем перед группой файлов
+            path_text = folder_path
+            self.app.converter_tree.insert("", tk.END, values=(path_text, ""), tags=('path_row',))
+            
+            # Добавляем файлы из этой папки
+            for file_data in files_in_folder:
                 file_name = os.path.basename(file_data['path'])
                 # Определяем тег в зависимости от статуса
                 status = file_data.get('status', 'Готов')
@@ -742,7 +697,6 @@ class ConverterTab:
                 
                 self.app.converter_tree.insert("", tk.END, values=(file_name, status), tags=(tag,))
                 visible_count += 1
-                visible_files.append(file_data)
         
         # Обновляем видимость скроллбаров после обновления содержимого
         if hasattr(self.app, 'converter_scrollbar_y') and hasattr(self.app, 'converter_scrollbar_x'):
@@ -815,10 +769,6 @@ class ConverterTab:
                 self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {total_count})")
             else:
                 self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {visible_count} / {total_count})")
-        
-        # Обновляем путь файлов
-        if hasattr(self.app, 'update_converter_path'):
-            self.app.root.after_idle(self.app.update_converter_path)
     
     def convert_files(self):
         """Конвертация выбранных файлов"""
@@ -1161,9 +1111,6 @@ class ConverterTab:
             # Обновляем заголовок панели
             if hasattr(self.app, 'converter_left_panel'):
                 self.app.converter_left_panel.config(text=f"Список файлов (Файлов: 0)")
-            # Обновляем путь
-            if hasattr(self.app, 'update_converter_path'):
-                self.app.root.after_idle(self.app.update_converter_path)
             # Обновляем видимость скроллбаров после очистки
             if hasattr(self.app, 'converter_scrollbar_y') and hasattr(self.app, 'converter_scrollbar_x'):
                 self.app.root.after_idle(lambda: self.app.update_scrollbar_visibility(
@@ -1302,9 +1249,6 @@ class ConverterTab:
                     self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {count})")
                 # Применяем фильтр - это обновит treeview и доступные форматы
                 self.filter_converter_files_by_type()
-                # Обновляем путь
-                if hasattr(self.app, 'update_converter_path'):
-                    self.app.root.after_idle(self.app.update_converter_path)
                 self.app.log(f"Добавлено файлов для конвертации перетаскиванием: {added_count}")
         except Exception as e:
             logger.error(f"Ошибка при обработке перетаскивания файлов для конвертации: {e}", exc_info=True)
@@ -1313,6 +1257,11 @@ class ConverterTab:
         """Показ контекстного меню для файла в конвертации"""
         item = self.app.converter_tree.identify_row(event.y)
         if not item:
+            return
+        
+        # Игнорируем строку с путем (не показываем меню)
+        tags = self.app.converter_tree.item(item, 'tags')
+        if tags and 'path_row' in tags:
             return
         
         # Выделяем элемент, если он не выделен
@@ -1466,9 +1415,6 @@ class ConverterTab:
         
         # Обновляем отображение
         self.filter_converter_files_by_type()
-        # Обновляем путь
-        if hasattr(self.app, 'update_converter_path'):
-            self.app.root.after_idle(self.app.update_converter_path)
         self.app.log(f"Удалено файлов из списка конвертации: {len(files_to_remove)}")
 
 

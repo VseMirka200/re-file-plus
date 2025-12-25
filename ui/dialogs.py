@@ -45,8 +45,10 @@ class Dialogs:
         # Установка иконки
         try:
             set_window_icon(window, self.app._icon_photos)
-        except Exception:
-            pass
+        except (AttributeError, tk.TclError, OSError) as e:
+            logger.debug(f"Не удалось установить иконку окна: {e}")
+        except Exception as e:
+            logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         # Настройка адаптивности окна
         window.columnconfigure(0, weight=1)
@@ -78,7 +80,7 @@ class Dialogs:
         buttons_frame.columnconfigure(1, weight=1)
         
         btn_start = self.app.create_rounded_button(
-            buttons_frame, "Начать переименование", self.app.start_rename,
+            buttons_frame, "▶️ Начать переименование", self.app.start_rename,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['success_hover'])
@@ -111,7 +113,7 @@ class Dialogs:
         # Кнопка отмены
         self.app.cancel_rename_var = tk.BooleanVar(value=False)
         btn_cancel = self.app.create_rounded_button(
-            progress_container, "Отменить", lambda: self.app.cancel_rename_var.set(True),
+            progress_container, "❌ Отменить", lambda: self.app.cancel_rename_var.set(True),
             self.app.colors['danger'], 'white',
             font=('Robot', 8, 'bold'), padx=8, pady=4,
             active_bg=self.app.colors['danger_hover'])
@@ -158,7 +160,7 @@ class Dialogs:
             
             # Переключаемся на нужную вкладку
             if self.app.tabs_window_notebook:
-                tab_index_map = {'settings': 0, 'about': 1, 'support': 2}
+                tab_index_map = {'settings': 0, 'about': 1, 'support': 2, 'help': 3}
                 if tab_name in tab_index_map:
                     self.app.tabs_window_notebook.select(tab_index_map[tab_name])
             return
@@ -172,8 +174,10 @@ class Dialogs:
         # Установка иконки
         try:
             set_window_icon(window, self.app._icon_photos)
-        except Exception:
-            pass
+        except (AttributeError, tk.TclError, OSError) as e:
+            logger.debug(f"Не удалось установить иконку окна: {e}")
+        except Exception as e:
+            logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         window.columnconfigure(0, weight=1)
         window.rowconfigure(0, weight=1)
@@ -187,9 +191,10 @@ class Dialogs:
         self.app._create_settings_tab(notebook)
         self.app._create_about_tab(notebook)
         self.app._create_support_tab(notebook)
+        self.app._create_help_tab(notebook)
         
         # Переключаемся на нужную вкладку
-        tab_index_map = {'settings': 0, 'about': 1, 'support': 2}
+        tab_index_map = {'settings': 0, 'about': 1, 'support': 2, 'help': 3}
         if tab_name in tab_index_map:
             notebook.select(tab_index_map[tab_name])
         
@@ -251,6 +256,10 @@ class WindowManagement:
     def open_support_window(self):
         """Открытие окна с вкладкой 'Поддержка'"""
         self.open_tabs_window('support')
+    
+    def open_help_window(self):
+        """Открытие окна с вкладкой 'Справка'"""
+        self.open_tabs_window('help')
     
     def close_window(self, window_name: str):
         """Закрытие окна по имени

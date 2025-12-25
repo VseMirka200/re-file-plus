@@ -79,21 +79,21 @@ class MethodsWindow:
         header_buttons.columnconfigure(0, weight=1)
         
         btn_add = self.app.create_rounded_button(
-            header_buttons, "Добавить", lambda: self.add_method_from_window(),
+            header_buttons, "➕ Добавить", lambda: self.add_method_from_window(),
             self.app.colors['primary'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=10,
             active_bg=self.app.colors['primary_hover'])
         btn_add.grid(row=0, column=0, sticky="ew", pady=(0, 5))
         
         btn_remove = self.app.create_rounded_button(
-            header_buttons, "Удалить", lambda: self.remove_method_from_window(),
+            header_buttons, "➖ Удалить", lambda: self.remove_method_from_window(),
             self.app.colors['primary_light'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=10,
             active_bg=self.app.colors['primary'])
         btn_remove.grid(row=1, column=0, sticky="ew", pady=(0, 5))
         
         btn_clear = self.app.create_rounded_button(
-            header_buttons, "Очистить", lambda: self.clear_methods_from_window(),
+            header_buttons, "🗑️ Очистить", lambda: self.clear_methods_from_window(),
             self.app.colors['danger'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=10,
             active_bg=self.app.colors['danger_hover'])

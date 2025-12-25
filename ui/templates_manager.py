@@ -166,8 +166,10 @@ class TemplatesManager:
             # Установка иконки
             try:
                 set_window_icon(template_window, self.app._icon_photos)
-            except Exception:
-                pass
+            except (AttributeError, tk.TclError, OSError) as e:
+                logger.debug(f"Не удалось установить иконку окна: {e}")
+            except Exception as e:
+                logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
             
             # Настройка фона окна
             template_window.configure(bg=self.app.colors['bg_main'])
@@ -278,7 +280,7 @@ class TemplatesManager:
                             messagebox.showinfo("Информация", "Все шаблоны удалены")
             
             btn_apply = self.app.create_rounded_button(
-                btn_frame, "Применить", apply_template,
+                btn_frame, "✅ Применить", apply_template,
                 self.app.colors['success'], 'white',
                 font=('Robot', 9, 'bold'), padx=10, pady=6,
                 active_bg=self.app.colors['success_hover'])
@@ -303,14 +305,14 @@ class TemplatesManager:
                         self.app.log(f"Ошибка выгрузки шаблонов: {e}")
             
             btn_delete = self.app.create_rounded_button(
-                btn_frame, "Удалить", delete_template,
+                btn_frame, "🗑️ Удалить", delete_template,
                 self.app.colors['danger'], 'white',
                 font=('Robot', 9, 'bold'), padx=10, pady=6,
                 active_bg=self.app.colors['danger_hover'])
             btn_delete.grid(row=0, column=1, sticky="ew", padx=(0, 5))
             
             btn_export = self.app.create_rounded_button(
-                btn_frame, "Выгрузить", export_templates,
+                btn_frame, "💾 Выгрузить", export_templates,
                 self.app.colors['primary'], 'white',
                 font=('Robot', 9, 'bold'), padx=10, pady=6,
                 active_bg=self.app.colors['primary_hover'])
@@ -331,14 +333,14 @@ class TemplatesManager:
                 template_window.after_idle(update_saved_template_scrollbar)
             
             btn_load = self.app.create_rounded_button(
-                btn_frame, "Загрузить", load_templates_and_refresh,
+                btn_frame, "📂 Загрузить", load_templates_and_refresh,
                 '#3B82F6', 'white',
                 font=('Robot', 9, 'bold'), padx=10, pady=6,
                 active_bg='#2563EB')
             btn_load.grid(row=0, column=3, sticky="ew", padx=(0, 5))
             
             btn_close = self.app.create_rounded_button(
-                btn_frame, "Закрыть", template_window.destroy,
+                btn_frame, "❌ Закрыть", template_window.destroy,
                 '#818CF8', 'white',
                 font=('Robot', 9, 'bold'), padx=10, pady=6,
                 active_bg='#6366F1')

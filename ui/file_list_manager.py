@@ -152,7 +152,7 @@ class FileListManager:
             files_in_folder = files_by_path[folder_path]
             
             # Вставляем строку с путем перед группой файлов
-            path_text = f"📁 {folder_path}"
+            path_text = folder_path
             self.app.tree.insert("", tk.END, values=(path_text, ""), tags=('path_row',))
             
             # Добавляем файлы из этой папки
@@ -505,12 +505,26 @@ class FileListManager:
                     file_count=files_count,
                     method_name='clear_files'
                 )
-                self.app.files.clear()
+                # ВАЖНО: Очищаем state.files напрямую, а не через property
+                # так как property возвращает копию списка, и clear() очищает только копию
+                if hasattr(self.app, 'state') and self.app.state:
+                    # Очищаем state.files напрямую
+                    self.app.state.files.clear()
+                else:
+                    # Fallback для обратной совместимости
+                    if hasattr(self.app, '_files_compat'):
+                        self.app._files_compat.clear()
+                    elif hasattr(self.app, '_get_files_list'):
+                        # Используем внутренний метод для получения реального списка
+                        files_list = self.app._get_files_list()
+                        files_list.clear()
+                
+                # Очищаем дерево
                 for item in self.app.tree.get_children():
                     self.app.tree.delete(item)
+                
+                # Обновляем статус
                 self.update_status()
-                # Обновляем путь
-                # Пути теперь вставляются прямо в refresh_treeview, дополнительное обновление не нужно
                 self.app.log("Список файлов очищен")
     
     def delete_selected(self) -> None:

@@ -240,7 +240,7 @@ class SettingsTab:
                     update_context_menu_status()
                 
                 install_btn = self.app.create_rounded_button(
-                    context_menu_controls, "Установить", install_context_menu,
+                    context_menu_controls, "✅ Установить", install_context_menu,
                     self.app.colors['primary'], 'white',
                     font=('Robot', 9), padx=15, pady=8,
                     active_bg=self.app.colors['primary_hover'])
@@ -257,7 +257,7 @@ class SettingsTab:
                     update_context_menu_status()
                 
                 uninstall_btn = self.app.create_rounded_button(
-                    context_menu_controls, "Удалить", uninstall_context_menu,
+                    context_menu_controls, "❌ Удалить", uninstall_context_menu,
                     self.app.colors['danger'], 'white',
                     font=('Robot', 9), padx=15, pady=8,
                     active_bg=self.app.colors['danger_hover'])
@@ -500,28 +500,28 @@ class SettingsTab:
                 messagebox.showerror("Ошибка", f"Не удалось удалить ярлык: {e}")
         
         btn_create_desktop = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "Создать ярлык на рабочем столе", create_desktop_shortcut,
+            shortcuts_buttons_frame, "➕ Создать ярлык на рабочем столе", create_desktop_shortcut,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg=self.app.colors['success_hover'], expand=True)
         btn_create_desktop.grid(row=0, column=0, sticky="ew", padx=(0, 5))
         
         btn_delete_desktop = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "Удалить ярлык с рабочего стола", delete_desktop_shortcut,
+            shortcuts_buttons_frame, "🗑️ Удалить ярлык с рабочего стола", delete_desktop_shortcut,
             self.app.colors['danger'], 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg=self.app.colors['danger_hover'], expand=True)
         btn_delete_desktop.grid(row=0, column=1, sticky="ew")
         
         btn_create_start = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "Создать ярлык в меню Пуск", create_start_menu_shortcut,
+            shortcuts_buttons_frame, "➕ Создать ярлык в меню Пуск", create_start_menu_shortcut,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg=self.app.colors['success_hover'], expand=True)
         btn_create_start.grid(row=1, column=0, sticky="ew", padx=(0, 5), pady=(5, 0))
         
         btn_delete_start = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "Удалить ярлык из меню Пуск", delete_start_menu_shortcut,
+            shortcuts_buttons_frame, "🗑️ Удалить ярлык из меню Пуск", delete_start_menu_shortcut,
             self.app.colors['danger'], 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg=self.app.colors['danger_hover'], expand=True)
@@ -529,7 +529,7 @@ class SettingsTab:
         
         # Кнопка для обновления иконок существующих ярлыков
         btn_update_icons = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "Обновить иконки ярлыков", update_existing_shortcuts,
+            shortcuts_buttons_frame, "🔄 Обновить иконки ярлыков", update_existing_shortcuts,
             self.app.colors['info'], 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg=self.app.colors['info_hover'], expand=True)
@@ -618,7 +618,7 @@ class SettingsTab:
                 messagebox.showerror("Ошибка", f"Не удалось открыть файл логов: {e}")
         
         btn_open_logs = self.app.create_rounded_button(
-            logs_buttons_frame, "Открыть файл логов", open_logs,
+            logs_buttons_frame, "📄 Открыть файл логов", open_logs,
             self.app.colors['primary'], 'white',
             font=('Robot', 9, 'bold'), padx=8, pady=6,
             active_bg=self.app.colors['primary_hover'], expand=True)
