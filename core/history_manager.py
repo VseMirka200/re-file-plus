@@ -14,7 +14,7 @@ try:
     from config.constants import HISTORY_FILE, MAX_HISTORY_ITEMS
 except ImportError:
     # Fallback если константы не доступны
-    HISTORY_FILE = ".rename_plus_history.json"
+    HISTORY_FILE = ".re_file_plus_history.json"
     MAX_HISTORY_ITEMS = 100
 
 logger = logging.getLogger(__name__)

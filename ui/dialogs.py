@@ -145,8 +145,8 @@ class Dialogs:
                     self.app.main_notebook.select(i)
                     break
     
-    def open_tabs_window(self, tab_name='log'):
-        """Открытие окна с вкладками (логи, настройки, о программе, поддержка)"""
+    def open_tabs_window(self, tab_name='about'):
+        """Открытие окна с вкладками (настройки, о программе, поддержка)"""
         if self.app.windows['tabs'] is not None and self.app.windows['tabs'].winfo_exists():
             try:
                 if self.app.windows['tabs'].state() == 'iconic':
@@ -158,7 +158,7 @@ class Dialogs:
             
             # Переключаемся на нужную вкладку
             if self.app.tabs_window_notebook:
-                tab_index_map = {'log': 0, 'settings': 1, 'about': 2, 'support': 3}
+                tab_index_map = {'settings': 0, 'about': 1, 'support': 2}
                 if tab_name in tab_index_map:
                     self.app.tabs_window_notebook.select(tab_index_map[tab_name])
             return
@@ -189,7 +189,7 @@ class Dialogs:
         self.app._create_support_tab(notebook)
         
         # Переключаемся на нужную вкладку
-        tab_index_map = {'log': 0, 'settings': 1, 'about': 2, 'support': 3}
+        tab_index_map = {'settings': 0, 'about': 1, 'support': 2}
         if tab_name in tab_index_map:
             notebook.select(tab_index_map[tab_name])
         
@@ -245,28 +245,12 @@ class WindowManagement:
             logger.warning("Dialogs handler not initialized")
     
     def open_about_window(self):
-        """Переключение на вкладку о программе в главном окне"""
-        if hasattr(self.app, 'main_notebook') and self.app.main_notebook:
-            # Находим индекс вкладки "О программе"
-            try:
-                for i in range(self.app.main_notebook.index('end')):
-                    if self.app.main_notebook.tab(i, 'text') == 'О программе':
-                        self.app.main_notebook.select(i)
-                        break
-            except (tk.TclError, AttributeError):
-                logger.debug("Не удалось переключиться на вкладку 'О программе'")
+        """Открытие окна с вкладкой 'О программе'"""
+        self.open_tabs_window('about')
     
     def open_support_window(self):
-        """Переключение на вкладку 'О программе' (поддержка теперь там)"""
-        if hasattr(self.app, 'main_notebook') and self.app.main_notebook:
-            # Находим индекс вкладки "О программе"
-            try:
-                for i in range(self.app.main_notebook.index('end')):
-                    if self.app.main_notebook.tab(i, 'text') == 'О программе':
-                        self.app.main_notebook.select(i)
-                        break
-            except (tk.TclError, AttributeError):
-                logger.debug("Не удалось переключиться на вкладку 'О программе'")
+        """Открытие окна с вкладкой 'Поддержка'"""
+        self.open_tabs_window('support')
     
     def close_window(self, window_name: str):
         """Закрытие окна по имени

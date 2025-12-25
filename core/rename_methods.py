@@ -588,7 +588,7 @@ class ScriptEngine:
         import os
         self.scripts_dir = os.path.join(
             os.path.expanduser("~"),
-            ".rename_plus_scripts"
+            ".re_file_plus_scripts"
         )
         self._ensure_scripts_dir()
     

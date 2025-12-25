@@ -1484,9 +1484,16 @@ if __name__ == "__main__":
     
     # Запускаем главное приложение
     try:
-        from file_renamer import main
-        main()
-    except ImportError as e:
+        # Используем importlib для импорта модуля с дефисом в имени
+        import importlib.util
+        import os
+        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        file_path = os.path.join(script_dir, "file_re-file-plus.py")
+        spec = importlib.util.spec_from_file_location("file_re_file_plus", file_path)
+        file_re_file_plus = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(file_re_file_plus)
+        file_re_file_plus.main()
+    except (ImportError, Exception) as e:
         print(f"Ошибка импорта: {e}")
         print("Убедитесь, что вы запускаете из корневой директории проекта")
         sys.exit(1)

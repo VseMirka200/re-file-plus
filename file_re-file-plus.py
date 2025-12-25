@@ -52,7 +52,7 @@ def run_as_admin():
         return True
     else:
         # Перезапускаем программу с правами администратора
-        # Используем Запуск.pyw если он существует, иначе file_renamer.py
+        # Используем Запуск.pyw если он существует, иначе file_re-file-plus.py
         script = os.path.abspath(__file__)
         script_dir = os.path.dirname(script)
         launch_script = os.path.join(script_dir, "Запуск.pyw")

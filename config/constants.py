@@ -63,11 +63,11 @@ WINDOWS_RESERVED_NAMES = frozenset(
 INVALID_FILENAME_CHARS = frozenset(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
 
 # Имена файлов конфигурации и логов
-LOG_FILE = "rename-plus.log"
+LOG_FILE = "re-file-plus.log"
 CONTEXT_MENU_WRAPPER_LOG = "context_menu_wrapper.log"
-SETTINGS_FILE = "rename-plus_settings.json"
-TEMPLATES_FILE = "rename-plus_templates.json"
-STATS_FILE = ".rename_plus_stats.json"  # Файл статистики (хранится в домашней директории)
+SETTINGS_FILE = "re-file-plus_settings.json"
+TEMPLATES_FILE = "re-file-plus_templates.json"
+STATS_FILE = ".re_file_plus_stats.json"  # Файл статистики (хранится в домашней директории)
 
 # Для обратной совместимости - импортируем функции из infrastructure/system/paths.py
 # Эти функции перенесены в infrastructure/system/paths.py
@@ -104,7 +104,7 @@ except ImportError:
             try:
                 os.makedirs(logs_dir, exist_ok=True)
             except (OSError, PermissionError):
-                temp_logs_dir = os.path.join(tempfile.gettempdir(), "rename-plus-logs")
+                temp_logs_dir = os.path.join(tempfile.gettempdir(), "re-file-plus-logs")
                 os.makedirs(temp_logs_dir, exist_ok=True)
                 return temp_logs_dir
         return logs_dir

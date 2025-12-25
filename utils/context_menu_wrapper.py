@@ -100,8 +100,8 @@ logger.info(f"Валидных файлов: {len(valid_files)}")
 # Используем временный файл для сбора всех файлов
 # Это позволяет собрать файлы даже если обертка вызывается несколько раз
 temp_dir = tempfile.gettempdir()
-lock_file = os.path.join(temp_dir, "rename_plus_context_menu.lock")
-files_list_file = os.path.join(temp_dir, "rename_plus_files_list.txt")
+lock_file = os.path.join(temp_dir, "re_file_plus_context_menu.lock")
+files_list_file = os.path.join(temp_dir, "re_file_plus_files_list.txt")
 
 # Записываем файлы в список (даже если их нет, чтобы проверить механизм)
 if valid_files:

@@ -1,11 +1,10 @@
 """Модуль для создания вкладки 'О программе'.
 
-Отображает информацию о программе, разработчиках и используемых библиотеках.
+Отображает информацию о программе и разработчиках.
 """
 
 import logging
 import os
-import sys
 import tkinter as tk
 from tkinter import ttk
 
@@ -172,14 +171,19 @@ class AboutTab:
         desc_frame = tk.Frame(about_content_frame, bg=self.colors['bg_card'])
         desc_frame.grid(row=0, column=1, sticky="nsew")
         
-        desc_text = """Ре-Файл+ - это мощная и удобная программа для массового переименования файлов. 
+        desc_text = """Ре-Файл+ - это современная и мощная программа для массового переименования файлов с расширенными возможностями.
 
-Программа предоставляет широкий набор инструментов для работы с именами файлов: 
-переименование по различным шаблонам, поддержка метаданных (EXIF, ID3 и др.), 
-предпросмотр изменений перед применением, удобный интерфейс с поддержкой Drag & Drop, 
-возможность перестановки файлов в списке и многое другое.
+Основные возможности:
+• Переименование файлов по шаблонам с поддержкой метаданных (EXIF, ID3, документы Office и др.)
+• Предпросмотр изменений перед применением
+• Удобный интерфейс с поддержкой Drag & Drop для быстрого добавления файлов
+• Перестановка файлов в списке простым перетаскиванием
+• Конвертация файлов между различными форматами
+• Сортировка и организация файлов
+• Гибкая настройка методов переименования
+• Сохранение и загрузка шаблонов переименования
 
-Программа поможет вам быстро и эффективно организовать ваши файлы."""
+Программа поможет вам быстро и эффективно организовать ваши файлы и упростить работу с большими коллекциями документов, изображений, музыки и других файлов."""
         
         desc_label = tk.Label(desc_frame, 
                               text=desc_text,
@@ -190,9 +194,6 @@ class AboutTab:
                               anchor=tk.NW,
                               wraplength=500)
         desc_label.pack(anchor=tk.NW)
-        
-        # Карточка с используемыми библиотеками
-        self._create_libraries_card(content_frame)
         
         # Разработчики - карточка
         self._create_developers_card(content_frame)
@@ -208,121 +209,6 @@ class AboutTab:
         
         # Поддержка проекта - карточка
         self._create_support_card(content_frame)
-    
-    def _create_libraries_card(self, parent):
-        """Создание карточки с используемыми библиотеками и ссылками на скачивание"""
-        libraries_card = ttk.LabelFrame(parent, text="Используемые библиотеки", 
-                                        style='Card.TLabelframe', padding=20)
-        libraries_card.pack(fill=tk.X, pady=(0, 20))
-        
-        # Список библиотек
-        required_libs = ['Pillow', 'tkinterdnd2']
-        optional_libs = ['python-docx', 'mutagen', 'openpyxl', 'python-pptx', 'pypdf', 'PyPDF2', 'pydub', 'moviepy']
-        windows_libs = ['pywin32', 'comtypes', 'docx2pdf', 'pdf2docx'] if sys.platform == 'win32' else []
-        
-        # Стандартные библиотеки Python (без ссылок, так как встроены)
-        standard_libs = ['Python 3', 'Tkinter', 'os', 'sys', 'subprocess', 'threading', 'logging', 'json', 're', 'pathlib']
-        
-        # Словарь ссылок на библиотеки (PyPI и документация Python)
-        library_links = {
-            # Стандартные библиотеки Python
-            'Python 3': 'https://www.python.org/downloads/',
-            'Tkinter': 'https://docs.python.org/3/library/tkinter.html',
-            'os': 'https://docs.python.org/3/library/os.html',
-            'sys': 'https://docs.python.org/3/library/sys.html',
-            'subprocess': 'https://docs.python.org/3/library/subprocess.html',
-            'threading': 'https://docs.python.org/3/library/threading.html',
-            'logging': 'https://docs.python.org/3/library/logging.html',
-            'json': 'https://docs.python.org/3/library/json.html',
-            're': 'https://docs.python.org/3/library/re.html',
-            'pathlib': 'https://docs.python.org/3/library/pathlib.html',
-            # Внешние библиотеки
-            'Pillow': 'https://pypi.org/project/Pillow/',
-            'tkinterdnd2': 'https://pypi.org/project/tkinterdnd2/',
-            'python-docx': 'https://pypi.org/project/python-docx/',
-            'mutagen': 'https://pypi.org/project/mutagen/',
-            'openpyxl': 'https://pypi.org/project/openpyxl/',
-            'python-pptx': 'https://pypi.org/project/python-pptx/',
-            'pypdf': 'https://pypi.org/project/pypdf/',
-            'PyPDF2': 'https://pypi.org/project/PyPDF2/',
-            'pydub': 'https://pypi.org/project/pydub/',
-            'moviepy': 'https://pypi.org/project/moviepy/',
-            'pywin32': 'https://pypi.org/project/pywin32/',
-            'comtypes': 'https://pypi.org/project/comtypes/',
-            'docx2pdf': 'https://pypi.org/project/docx2pdf/',
-            'pdf2docx': 'https://pypi.org/project/pdf2docx/',
-        }
-        
-        # Объединяем все библиотеки в один общий список
-        all_libraries = []
-        all_libraries.extend(standard_libs)
-        all_libraries.extend(required_libs)
-        all_libraries.extend(optional_libs)
-        if windows_libs:
-            all_libraries.extend(windows_libs)
-        
-        # Разделяем библиотеки на 5 столбцов
-        total_libs = len(all_libraries)
-        items_per_column = (total_libs + 4) // 5  # Округляем вверх
-        column1_libs = all_libraries[:items_per_column]
-        column2_libs = all_libraries[items_per_column:items_per_column * 2]
-        column3_libs = all_libraries[items_per_column * 2:items_per_column * 3]
-        column4_libs = all_libraries[items_per_column * 3:items_per_column * 4]
-        column5_libs = all_libraries[items_per_column * 4:]
-        
-        # Контейнер для пяти столбцов библиотек
-        libraries_columns_frame = tk.Frame(libraries_card, bg=self.colors['bg_card'])
-        libraries_columns_frame.pack(anchor=tk.NW, fill=tk.X)
-        
-        # Функция для создания столбца библиотек
-        def create_library_column(parent_frame, libs_list, padx_right=15):
-            column_frame = tk.Frame(parent_frame, bg=self.colors['bg_card'])
-            column_frame.pack(side=tk.LEFT, anchor=tk.NW, padx=(0, padx_right))
-            
-            for lib in libs_list:
-                lib_frame = tk.Frame(column_frame, bg=self.colors['bg_card'])
-                lib_frame.pack(anchor=tk.W, pady=2)
-                
-                bullet_label = tk.Label(lib_frame,
-                                       text="•",
-                                       font=('Robot', 9),
-                                       bg=self.colors['bg_card'],
-                                       fg=self.colors['text_primary'])
-                bullet_label.pack(side=tk.LEFT, padx=(0, 5))
-                
-                # Если есть ссылка, делаем библиотеку кликабельной
-                if lib in library_links:
-                    lib_url = library_links[lib]
-                    def make_open_url(url):
-                        def open_url(event):
-                            import webbrowser
-                            webbrowser.open(url)
-                        return open_url
-                    
-                    lib_label = tk.Label(lib_frame,
-                                       text=lib,
-                                       font=('Robot', 9),
-                                       bg=self.colors['bg_card'],
-                                       fg=self.colors['primary'],
-                                       cursor='hand2',
-                                       underline=0)
-                    lib_label.pack(side=tk.LEFT)
-                    lib_label.bind("<Button-1>", make_open_url(lib_url))
-                else:
-                    # Библиотеки без ссылок
-                    lib_label = tk.Label(lib_frame,
-                                       text=lib,
-                                       font=('Robot', 9),
-                                       bg=self.colors['bg_card'],
-                                       fg=self.colors['text_primary'])
-                    lib_label.pack(side=tk.LEFT)
-        
-        # Создаем 5 столбцов
-        create_library_column(libraries_columns_frame, column1_libs, padx_right=15)
-        create_library_column(libraries_columns_frame, column2_libs, padx_right=15)
-        create_library_column(libraries_columns_frame, column3_libs, padx_right=15)
-        create_library_column(libraries_columns_frame, column4_libs, padx_right=15)
-        create_library_column(libraries_columns_frame, column5_libs, padx_right=0)
     
     def _create_developers_card(self, parent):
         """Создание карточки с информацией о разработчиках"""
@@ -458,7 +344,7 @@ class AboutTab:
         
         def open_github(event):
             import webbrowser
-            webbrowser.open("https://github.com/VseMirka200/nazovi")
+            webbrowser.open("https://github.com/VseMirka200/re-file-plus")
         
         github_frame = tk.Frame(github_card, bg=self.colors['bg_card'])
         github_frame.pack(anchor=tk.W, fill=tk.X)

@@ -9,9 +9,6 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
-# Локальные импорты
-from ui.about_tab import AboutTab
-
 logger = logging.getLogger(__name__)
 
 
@@ -211,6 +208,12 @@ class MainWindow:
         self.app.tree.heading("old_name", text="Исходное имя")
         self.app.tree.heading("new_name", text="Новое имя")
         
+        # Тег для строки с путем (занимает обе колонки)
+        self.app.tree.tag_configure('path_row', 
+                                    background=self.app.colors.get('bg_secondary', '#F3F4F6'),
+                                    foreground=self.app.colors.get('text_secondary', '#6B7280'),
+                                    font=('Robot', 8))
+        
         # Настройка тегов для цветового выделения
         # Светло-зеленый для готовых
         self.app.tree.tag_configure('ready', background='#D1FAE5', foreground='#065F46')
@@ -255,7 +258,7 @@ class MainWindow:
         self.app.tree_scrollbar_y = scrollbar_y
         self.app.tree_scrollbar_x = scrollbar_x
         
-        list_frame.grid_rowconfigure(0, weight=1)
+        list_frame.grid_rowconfigure(0, weight=1)  # Таблица растягивается
         list_frame.grid_columnconfigure(0, weight=1)
         
         # Привязка прокрутки колесом мыши для таблицы
@@ -292,135 +295,14 @@ class MainWindow:
         for col in ("old_name", "new_name"):
             self.app.tree.heading(col, command=lambda c=col: self.app.sort_column(c))
         
-        # Полоска отображения пути файлов (под таблицей файлов)
-        path_frame = tk.Frame(left_panel, bg=self.app.colors['bg_card'], relief=tk.FLAT, bd=1)
-        path_frame.pack(fill=tk.X, pady=(6, 0))
-        
-        path_label = tk.Label(path_frame, 
-                             text="Путь: ",
-                             font=('Robot', 9, 'bold'),
-                             bg=self.app.colors['bg_card'],
-                             fg=self.app.colors['text_primary'],
-                             anchor='w')
-        path_label.pack(side=tk.LEFT, padx=(6, 4))
-        
-        self.app.files_path_label = tk.Label(path_frame,
-                                            text="",
-                                            font=('Robot', 9),
-                                            bg=self.app.colors['bg_card'],
-                                            fg=self.app.colors['text_secondary'],
-                                            anchor='w',
-                                            wraplength=500)
-        self.app.files_path_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
-        
-        # Функция для обновления пути
+        # Функция для обновления путей в таблице (теперь пути вставляются в refresh_treeview)
+        # Эта функция больше не нужна, так как пути вставляются автоматически в refresh_treeview
         def update_files_path():
-            if not hasattr(self.app, 'files') or not self.app.files:
-                self.app.files_path_label.config(text="")
-                return
-            
-            # Получаем пути всех файлов и папок
-            paths = []
-            for file_data in self.app.files:
-                full_path = None
-                
-                # Обрабатываем FileInfo объект
-                if hasattr(file_data, 'full_path'):
-                    full_path = file_data.full_path
-                elif hasattr(file_data, 'path'):
-                    # Если это Path объект
-                    path_obj = file_data.path
-                    if hasattr(path_obj, 'parent'):
-                        # Это файл, берем директорию
-                        if hasattr(file_data, 'old_name') and hasattr(file_data, 'extension'):
-                            # Собираем полный путь к файлу
-                            full_path = str(path_obj)
-                        else:
-                            # Это может быть папка
-                            if os.path.isdir(str(path_obj)):
-                                full_path = str(path_obj)
-                            else:
-                                full_path = str(path_obj.parent)
-                    else:
-                        full_path = str(path_obj)
-                
-                # Обрабатываем словарь
-                elif isinstance(file_data, dict):
-                    full_path = file_data.get('full_path', '')
-                    if not full_path:
-                        path = file_data.get('path', '')
-                        old_name = file_data.get('old_name', '')
-                        extension = file_data.get('extension', '')
-                        is_folder = file_data.get('is_folder', False)
-                        
-                        if path:
-                            if is_folder:
-                                # Это папка
-                                full_path = path
-                            else:
-                                # Это файл, собираем полный путь
-                                if old_name:
-                                    full_path = os.path.join(path, old_name + extension)
-                                else:
-                                    # Если нет имени, возможно это путь к папке
-                                    if os.path.isdir(path):
-                                        full_path = path
-                                    else:
-                                        full_path = path
-                
-                # Добавляем путь, если он найден
-                if full_path:
-                    # Нормализуем путь
-                    full_path = os.path.normpath(os.path.abspath(full_path))
-                    # Если это файл, берем директорию, если папка - оставляем как есть
-                    if os.path.isfile(full_path):
-                        paths.append(os.path.dirname(full_path))
-                    elif os.path.isdir(full_path):
-                        paths.append(full_path)
-                    else:
-                        # Если путь не существует, пробуем взять директорию
-                        paths.append(os.path.dirname(full_path))
-            
-            if not paths:
-                self.app.files_path_label.config(text="")
-                return
-            
-            # Находим общий путь
-            try:
-                if len(paths) > 1:
-                    # Нормализуем все пути для корректного сравнения
-                    normalized_paths = [os.path.normpath(p) for p in paths]
-                    common_path = os.path.commonpath(normalized_paths)
-                else:
-                    common_path = paths[0] if paths else ""
-                
-                # Проверяем, что путь существует и это директория
-                if common_path and os.path.exists(common_path) and os.path.isdir(common_path):
-                    pass  # Путь корректен
-                elif common_path:
-                    # Если путь не существует или это файл, берем родительскую директорию
-                    parent = os.path.dirname(common_path)
-                    if parent and os.path.isdir(parent):
-                        common_path = parent
-                    else:
-                        # Используем первый путь
-                        common_path = paths[0] if paths else ""
-            except (ValueError, OSError):
-                # Если пути на разных дисках или ошибка, показываем первый путь
-                common_path = paths[0] if paths else ""
-            
-            # Обновляем текст
-            if common_path:
-                # Нормализуем для отображения
-                common_path = os.path.normpath(common_path)
-                self.app.files_path_label.config(text=common_path)
-            else:
-                self.app.files_path_label.config(text="")
+            # Пустая функция для обратной совместимости, если где-то еще вызывается
+            pass
         
-        # Сохраняем функцию для обновления
+        # Сохраняем функцию для обратной совместимости
         self.app.update_files_path = update_files_path
-        # Обновляем путь при создании
-        self.app.root.after(100, update_files_path)
         
         # Прогресс-бар (под списком файлов слева)
         progress_container = tk.Frame(left_panel, bg=self.app.colors['bg_card'])
@@ -644,19 +526,10 @@ class MainWindow:
         
         
         # Создание вкладок на главном экране
-        # Создаем вкладки для конвертации, сортировки, настроек, о программе и поддержки
+        # Создаем вкладки для конвертации, сортировки и настроек
         self.app.converter_tab_handler.create_tab()
         self.app.sorter_tab_handler.create_tab()
         self.app.settings_tab_handler.create_tab()
-        
-        # Создание вкладок через модули
-        about_tab = AboutTab(
-            self.app.main_notebook,
-            self.app.colors,
-            self.app.bind_mousewheel,
-            self.app._icon_photos
-        )
-        about_tab.create_tab()
         
         # Обработка файлов из аргументов командной строки
         if self.app.files_from_args:

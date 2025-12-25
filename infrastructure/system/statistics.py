@@ -12,7 +12,7 @@ try:
     from config.constants import STATS_FILE
 except ImportError:
     # Fallback если константы не доступны
-    STATS_FILE = ".rename_plus_stats.json"
+    STATS_FILE = ".re_file_plus_stats.json"
 
 
 class StatisticsManager:

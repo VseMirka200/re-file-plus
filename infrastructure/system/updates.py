@@ -22,7 +22,7 @@ class UpdateChecker:
         """
         if update_url is None:
             # Можно указать реальный URL для проверки обновлений
-            update_url = "https://api.github.com/repos/your-repo/rename-plus/releases/latest"
+            update_url = "https://api.github.com/repos/VseMirka200/re-file-plus/releases/latest"
         self.update_url = update_url
         self.check_enabled = True
     

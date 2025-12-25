@@ -28,8 +28,8 @@ except ImportError:
             os.makedirs(data_dir, exist_ok=True)
         except Exception:
             pass
-    SETTINGS_FILE_PATH = os.path.join(data_dir, "rename-plus_settings.json")
-    TEMPLATES_FILE_PATH = os.path.join(data_dir, "rename-plus_templates.json")
+    SETTINGS_FILE_PATH = os.path.join(data_dir, "re-file-plus_settings.json")
+    TEMPLATES_FILE_PATH = os.path.join(data_dir, "re-file-plus_templates.json")
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ class SettingsManager:
                         os.makedirs(data_dir, exist_ok=True)
                     except (OSError, PermissionError):
                         pass
-                settings_file = os.path.join(data_dir, "rename-plus_settings.json")
+                settings_file = os.path.join(data_dir, "re-file-plus_settings.json")
         self.settings_file = settings_file
         self.settings = self.load_settings()
     
@@ -299,7 +299,7 @@ class TemplatesManager:
                         os.makedirs(data_dir, exist_ok=True)
                     except (OSError, PermissionError):
                         pass
-                templates_file = os.path.join(data_dir, "rename-plus_templates.json")
+                templates_file = os.path.join(data_dir, "re-file-plus_templates.json")
         self.templates_file = templates_file
         self.templates = self.load_templates()
     

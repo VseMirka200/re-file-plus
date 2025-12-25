@@ -46,7 +46,7 @@ except (ImportError, ValueError, Exception) as e:
     # Если не удалось импортировать или получить путь, используем директорию скрипта
     app_data_dir = script_dir
     logs_dir = os.path.join(app_data_dir, "logs")
-    log_file_path = os.path.join(logs_dir, "rename-plus.log")
+    log_file_path = os.path.join(logs_dir, "re-file-plus.log")
     # Выводим информацию для отладки (только если есть проблемы)
     if isinstance(e, ImportError):
         print(f"Информация: Не удалось импортировать config.constants, используется директория скрипта: {app_data_dir}")
@@ -361,12 +361,18 @@ try:
         logger.error(f"Ошибка при логировании отфильтрованных аргументов: {e}")
     
     # Логируем перед импортом
-    logger.info("Начинаем импорт file_renamer...")
+    logger.info("Начинаем импорт file_re-file-plus...")
     try:
-        from file_renamer import main
-        logger.info("Импорт file_renamer успешен")
+        # Используем importlib для импорта модуля с дефисом в имени
+        import importlib.util
+        file_path = os.path.join(script_dir, "file_re-file-plus.py")
+        spec = importlib.util.spec_from_file_location("file_re_file_plus", file_path)
+        file_re_file_plus = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(file_re_file_plus)
+        main = file_re_file_plus.main
+        logger.info("Импорт file_re-file-plus успешен")
     except Exception as import_error:
-        logger.error(f"Ошибка при импорте file_renamer: {import_error}", exc_info=True)
+        logger.error(f"Ошибка при импорте file_re-file-plus: {import_error}", exc_info=True)
         raise
     
     if __name__ == "__main__":

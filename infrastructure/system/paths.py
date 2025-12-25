@@ -17,10 +17,10 @@ try:
     )
 except ImportError:
     # Fallback если константы недоступны
-    LOG_FILE = "rename-plus.log"
+    LOG_FILE = "re-file-plus.log"
     CONTEXT_MENU_WRAPPER_LOG = "context_menu_wrapper.log"
-    SETTINGS_FILE = "rename-plus_settings.json"
-    TEMPLATES_FILE = "rename-plus_templates.json"
+    SETTINGS_FILE = "re-file-plus_settings.json"
+    TEMPLATES_FILE = "re-file-plus_templates.json"
     WINDOWS_MAX_PATH_LENGTH = 260
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,7 @@ def get_logs_dir() -> str:
             
             # Пробуем использовать временную директорию как fallback
             try:
-                temp_logs_dir = os.path.join(tempfile.gettempdir(), "rename-plus-logs")
+                temp_logs_dir = os.path.join(tempfile.gettempdir(), "re-file-plus-logs")
                 temp_logs_dir = os.path.normpath(temp_logs_dir)
                 os.makedirs(temp_logs_dir, exist_ok=True)
                 try:

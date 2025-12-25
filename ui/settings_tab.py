@@ -345,7 +345,7 @@ class SettingsTab:
                 shortcut = shell.CreateShortCut(shortcut_path)
                 # Определяем путь к основному файлу запуска
                 app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                launch_file = os.path.join(app_dir, "file_renamer.py")
+                launch_file = os.path.join(app_dir, "file_re-file-plus.py")
                 if not os.path.exists(launch_file):
                     launch_file = os.path.join(app_dir, "Запуск.pyw")
                 shortcut.Targetpath = sys.executable
@@ -392,7 +392,7 @@ class SettingsTab:
                 
                 # Определяем путь к основному файлу запуска
                 app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                launch_file = os.path.join(app_dir, "file_renamer.py")
+                launch_file = os.path.join(app_dir, "file_re-file-plus.py")
                 if not os.path.exists(launch_file):
                     launch_file = os.path.join(app_dir, "Запуск.pyw")
                 

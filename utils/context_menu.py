@@ -24,9 +24,9 @@ class ContextMenuManager:
     """Класс для управления контекстным меню Windows."""
     
     # Ключ реестра для контекстного меню файлов
-    CONTEXT_MENU_KEY = r"*\shell\RenamePlusConverter"
+    CONTEXT_MENU_KEY = r"*\shell\ReFilePlusConverter"
     # Ключ реестра для контекстного меню папок
-    FOLDER_CONTEXT_MENU_KEY = r"Directory\shell\RenamePlusConverter"
+    FOLDER_CONTEXT_MENU_KEY = r"Directory\shell\ReFilePlusConverter"
     
     def __init__(self):
         """Инициализация менеджера контекстного меню."""
@@ -54,8 +54,8 @@ class ContextMenuManager:
             if os.path.exists(launch_file):
                 script_path = launch_file
             else:
-                # Fallback на file_renamer.py
-                script_path = os.path.join(project_root, "file_renamer.py")
+                # Fallback на file_re-file-plus.py
+                script_path = os.path.join(project_root, "file_re-file-plus.py")
         
         return os.path.normpath(script_path)
     

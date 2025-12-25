@@ -26,7 +26,7 @@ class BackupManager:
         if backup_dir is None:
             # Используем подпапку в домашней директории
             home_dir = os.path.expanduser("~")
-            backup_dir = os.path.join(home_dir, ".rename_plus_backups")
+            backup_dir = os.path.join(home_dir, ".re_file_plus_backups")
         
         self.backup_dir = backup_dir
         self._ensure_backup_dir()

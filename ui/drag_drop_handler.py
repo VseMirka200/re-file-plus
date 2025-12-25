@@ -99,7 +99,7 @@ def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
         # В tkinterdnd2 данные могут быть в разных форматах
         data = None
         
-        # Метод 1: Прямое получение через атрибут data
+        # Метод 1: Прямое получение через атрибут data (основной способ для tkinterdnd2)
         if hasattr(event, 'data'):
             try:
                 data = event.data
@@ -107,29 +107,25 @@ def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
             except Exception as e:
                 logger.debug(f"Ошибка получения event.data: {e}")
         
-        # Метод 2: Через getattr
-        if not data and hasattr(event, '__dict__'):
+        # Метод 2: Через getattr (для совместимости)
+        if not data:
             try:
                 data = getattr(event, 'data', None)
-                if not data:
-                    # Пробуем другие возможные атрибуты
-                    for attr in ['files', 'file', 'paths', 'path']:
-                        if hasattr(event, attr):
-                            data = getattr(event, attr)
-                            logger.debug(f"Данные получены через event.{attr}")
-                            break
+                if data:
+                    logger.debug("Данные получены через getattr(event, 'data')")
             except Exception as e:
                 logger.debug(f"Ошибка получения через getattr: {e}")
         
-        # Метод 3: Пробуем получить как строку
-        if not data:
+        # Метод 3: Пробуем другие возможные атрибуты
+        if not data and hasattr(event, '__dict__'):
             try:
-                event_str = str(event)
-                if event_str and event_str != str(type(event)):
-                    data = event_str
-                    logger.debug("Данные получены через str(event)")
-            except:
-                pass
+                for attr in ['files', 'file', 'paths', 'path']:
+                    if hasattr(event, attr):
+                        data = getattr(event, attr)
+                        logger.debug(f"Данные получены через event.{attr}")
+                        break
+            except Exception as e:
+                logger.debug(f"Ошибка получения через другие атрибуты: {e}")
         
         if not data:
             logger.error("Событие drag and drop не содержит данных")
@@ -430,57 +426,51 @@ class DragDropHandler:
                         else:
                             logger.warning(f"Ошибка при регистрации DND_FILES: {reg_error}")
                             raise
-                        
-                        # Привязываем обработчик события Drop
-                        # ВАЖНО: Используем простой подход - вызываем метод класса напрямую
-                        def on_drop(event):
-                            """Обработчик drop события"""
-                            try:
-                                logger.info("=" * 60)
-                                logger.info("🎯🎯🎯 СОБЫТИЕ DROP ПОЛУЧЕНО НА ROOT! 🎯🎯🎯")
-                                logger.info(f"Тип события: {type(event)}")
-                                
-                                # Вызываем метод класса для обработки события
-                                # Метод сам получит данные из события и вызовет callback
-                                self._on_drop_files(event)
-                                
-                                # Возвращаем None (требование tkinterdnd2)
-                                return None
-                            except Exception as e:
-                                logger.error(f"❌ Ошибка в обработчике drop: {e}", exc_info=True)
-                                import traceback
-                                logger.error(traceback.format_exc())
-                                self.app.log(f"❌ Ошибка в обработчике drop: {e}")
-                                return None
-                        
-                        # Привязываем обработчик ПРОСТЫМ способом, как в тесте
-                        # Это работает в тесте, поэтому должно работать и здесь
-                        self.app.root.dnd_bind('<<Drop>>', on_drop)
-                        logger.info("✅ Обработчик <<Drop>> привязан к root окну")
-                        
-                        # Привязываем отладочные обработчики для диагностики
-                        def on_drag_enter(event):
-                            logger.info("🟢 DragEnter получено!")
-                            self.app.log("🟢 DragEnter - файлы над окном!")
+                    
+                    # Привязываем обработчик события Drop
+                    # ВАЖНО: Используем простой подход - вызываем метод класса напрямую
+                    def on_drop(event):
+                        """Обработчик drop события"""
+                        try:
+                            logger.info("=" * 60)
+                            logger.info("🎯 СОБЫТИЕ DROP ПОЛУЧЕНО НА ROOT! 🎯")
+                            logger.info(f"Тип события: {type(event)}")
+                            
+                            # Вызываем метод класса для обработки события
+                            # Метод сам получит данные из события и вызовет callback
+                            self._on_drop_files(event)
+                            
+                            # Возвращаем None (требование tkinterdnd2)
                             return None
-                        
-                        def on_drag_leave(event):
-                            logger.info("🔴 DragLeave получено!")
-                            self.app.log("🔴 DragLeave - файлы покинули окно")
+                        except Exception as e:
+                            logger.error(f"❌ Ошибка в обработчике drop: {e}", exc_info=True)
+                            import traceback
+                            logger.error(traceback.format_exc())
+                            self.app.log(f"❌ Ошибка в обработчике drop: {e}")
                             return None
-                        
-                        self.app.root.dnd_bind('<<DragEnter>>', on_drag_enter)
-                        self.app.root.dnd_bind('<<DragLeave>>', on_drag_leave)
-                        logger.info("✅ Отладочные обработчики DragEnter/DragLeave привязаны")
-                        
-                        # Проверяем, что регистрация прошла успешно
-                        if hasattr(self.app.root, 'dnd_bind'):
-                            logger.info("Drag and drop успешно зарегистрирован на root окне")
-                        else:
-                            logger.warning("Метод dnd_bind недоступен после регистрации")
-                    except Exception as e:
-                        logger.error(f"Ошибка при настройке обработчиков: {e}", exc_info=True)
-                        raise
+                    
+                    # Привязываем обработчик ПРОСТЫМ способом
+                    self.app.root.dnd_bind('<<Drop>>', on_drop)
+                    logger.info("✅ Обработчик <<Drop>> привязан к root окну")
+                    
+                    # Привязываем отладочные обработчики для диагностики
+                    def on_drag_enter(event):
+                        logger.debug("🟢 DragEnter получено!")
+                        return None
+                    
+                    def on_drag_leave(event):
+                        logger.debug("🔴 DragLeave получено!")
+                        return None
+                    
+                    self.app.root.dnd_bind('<<DragEnter>>', on_drag_enter)
+                    self.app.root.dnd_bind('<<DragLeave>>', on_drag_leave)
+                    logger.info("✅ Обработчики DragEnter/DragLeave привязаны")
+                    
+                    # Проверяем, что регистрация прошла успешно
+                    if hasattr(self.app.root, 'dnd_bind'):
+                        logger.info("Drag and drop успешно зарегистрирован на root окне")
+                    else:
+                        logger.warning("Метод dnd_bind недоступен после регистрации")
                 except Exception as e:
                     logger.error(f"Ошибка регистрации drag and drop на root: {e}", exc_info=True)
                     if not self._drag_drop_logged:
@@ -632,12 +622,11 @@ class DragDropHandler:
             logger.info("Применяются методы переименования...")
             self.app.apply_methods()
         
-        # Обновляем статус и путь
+        # Обновляем статус
         if hasattr(self.app, 'update_status'):
             self.app.update_status()
         
-        if hasattr(self.app, 'update_files_path'):
-            self.app.root.after_idle(self.app.update_files_path)
+        # Пути теперь вставляются прямо в refresh_treeview, дополнительное обновление не нужно
         
         # Подсчитываем реальное количество добавленных файлов
         files_after = len(self.app.files)
@@ -681,6 +670,12 @@ class DragDropHandler:
         if region == "heading" or region == "separator":
             return
         
+        # Игнорируем строку с путем (нельзя перетаскивать)
+        if item:
+            tags = self.app.tree.item(item, 'tags')
+            if tags and 'path_row' in tags:
+                return
+        
         if item:
             self.app.drag_item = item
             self.app.drag_start_index = self.app.tree.index(item)
@@ -712,13 +707,43 @@ class DragDropHandler:
         if self.app.drag_item and self.app.is_dragging:
             target_item = self.app.tree.identify_row(event.y)
             
+            # Игнорируем строку с путем (нельзя перемещать на неё или с неё)
+            if target_item:
+                tags = self.app.tree.item(target_item, 'tags')
+                if tags and 'path_row' in tags:
+                    # Сброс состояния
+                    self.app.drag_item = None
+                    self.app.drag_start_index = None
+                    self.app.drag_start_y = None
+                    self.app.is_dragging = False
+                    return
+            
             if target_item and target_item != self.app.drag_item:
                 try:
                     # Получаем индексы
                     start_idx = self.app.tree.index(self.app.drag_item)
                     target_idx = self.app.tree.index(target_item)
                     
+                    # Игнорируем строку с путем (она всегда на позиции 0)
+                    if start_idx == 0 or target_idx == 0:
+                        # Проверяем, не является ли это строкой с путем
+                        if start_idx == 0:
+                            start_tags = self.app.tree.item(self.app.drag_item, 'tags')
+                            if start_tags and 'path_row' in start_tags:
+                                return
+                        if target_idx == 0:
+                            target_tags = self.app.tree.item(target_item, 'tags')
+                            if target_tags and 'path_row' in target_tags:
+                                return
+                        # Корректируем индексы, если строка с путем присутствует
+                        if start_idx > 0:
+                            start_idx -= 1
+                        if target_idx > 0:
+                            target_idx -= 1
+                    
                     # Перемещаем элемент в списке и в дереве
+                    # Учитываем, что строка с путем всегда на позиции 0
+                    # Индексы уже скорректированы выше
                     if 0 <= start_idx < len(self.app.files) and 0 <= target_idx < len(self.app.files):
                         # Сохраняем новое имя с исходной позиции (оно должно остаться на месте)
                         preserved_new_name = self.app.files[start_idx].get('new_name', '')
@@ -745,11 +770,13 @@ class DragDropHandler:
                         # Обновляем дерево
                         self.app.refresh_treeview()
                         
-                        # Выделяем перемещенный элемент
+                        # Выделяем перемещенный элемент (учитываем строку с путем на позиции 0)
                         children = self.app.tree.get_children()
-                        if target_idx < len(children):
-                            self.app.tree.selection_set(children[target_idx])
-                            self.app.tree.see(children[target_idx])  # Прокручиваем к элементу
+                        # target_idx + 1, так как строка с путем на позиции 0
+                        display_idx = target_idx + 1
+                        if display_idx < len(children):
+                            self.app.tree.selection_set(children[display_idx])
+                            self.app.tree.see(children[display_idx])  # Прокручиваем к элементу
                         
                         old_name = file_data.get('old_name', 'unknown')
                         self.app.log(f"Файл '{old_name}' перемещен с позиции {start_idx + 1} на {target_idx + 1}")
