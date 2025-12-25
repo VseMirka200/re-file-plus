@@ -1,0 +1,217 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+*.dll
+*.pyd
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+env.bak/
+venv.bak/
+.conda/
+
+# IDE - Visual Studio Code
+.vscode/
+*.code-workspace
+.history/
+
+# IDE - PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# IDE - Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# IDE - Vim
+*.swp
+*.swo
+*~
+*.swn
+*.swm
+
+# IDE - Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# IDE - Eclipse
+.project
+.pydevproject
+.settings/
+.classpath
+.externalToolBuilders/
+
+# IDE - NetBeans
+nbproject/
+nb-configuration.xml
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# OS - macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Icon
+
+# OS - Windows
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# OS - Linux
+*~
+.directory
+.Trash-*
+
+# Project specific - Logs
+*.log
+logs/
+*.log.*
+
+# Project specific - Application data (user settings)
+# Игнорируем пользовательские настройки и шаблоны
+data/rename-plus_settings.json
+data/rename-plus_templates.json
+data/*.json
+# Но разрешаем файл-маркер для сохранения структуры директории
+!data/.gitkeep
+
+# Project specific - Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+
+# Project specific - COM objects (Windows)
+comtypes.gen/
+*.gen.py
+
+# Project specific - Temporary conversion files
+*_temp.pdf
+*_temp.*
+temp_*
+.temp/
+
+# Project specific - Backup files
+backup/
+backups/
+*.backup
+
+# Project specific - Test files
+test_files/
+test_data/
+*.test
+
+# Project specific - Cache
+.cache/
+*.cache
+
+# Project specific - Old project files
+.nazovi_libs_installed.json
+.nazovi.log
+
+# Project specific - Compiled Python files
+*.pyc
+*.pyo
+*.pyd
+
+# Project specific - Environment variables
+.env
+.env.local
+.env.*.local
+
+# Project specific - Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Project specific - Lock files (if using package managers)
+package-lock.json
+yarn.lock
