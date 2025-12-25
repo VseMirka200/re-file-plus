@@ -32,11 +32,18 @@ MAX_RECURSION_DEPTH = 20     # Максимальная глубина реку�
 
 # Опциональные импорты
 HAS_TKINTERDND2 = False
+HAS_DRAGANDDROPTK = False
 try:
     from tkinterdnd2 import DND_FILES, TkinterDnD
     HAS_TKINTERDND2 = True
 except ImportError:
     HAS_TKINTERDND2 = False
+
+try:
+    from DragAndDropTk import DragAndDropTk
+    HAS_DRAGANDDROPTK = True
+except ImportError:
+    HAS_DRAGANDDROPTK = False
 
 
 # ============================================================================
@@ -310,6 +317,16 @@ class DragDropHandler:
             logger.debug("Drag and drop уже настроен, пропускаем повторную регистрацию")
             return
         
+        # Пробуем использовать DragAndDropTk как альтернативу, если tkinterdnd2 не работает
+        if HAS_DRAGANDDROPTK and not HAS_TKINTERDND2:
+            try:
+                logger.info("Попытка использования DragAndDropTk (альтернатива tkinterdnd2)...")
+                self._setup_draganddroptk()
+                if self._drag_drop_setup:
+                    return  # Успешно настроено
+            except Exception as e:
+                logger.warning(f"Не удалось настроить DragAndDropTk: {e}", exc_info=True)
+        
         if not HAS_TKINTERDND2:
             if not self._drag_drop_logged:
                 error_msg = (
@@ -385,6 +402,19 @@ class DragDropHandler:
                         logger.error("DND_FILES не определен")
                         return
                     
+                    # Убеждаемся, что окно полностью готово
+                    self.app.root.update_idletasks()
+                    self.app.root.update()
+                    
+                    # Проверяем, что root окно поддерживает drag and drop
+                    if not hasattr(self.app.root, 'drop_target_register'):
+                        logger.error("Root окно не поддерживает drop_target_register")
+                        if not self._drag_drop_logged:
+                            self.app.log("Ошибка: Root окно не поддерживает drag and drop")
+                            self.app.log("Убедитесь, что окно создано через TkinterDnD.Tk()")
+                        self._drag_drop_logged = True
+                        return
+                    
                     # Регистрируем drop target
                     # Важно: регистрация должна быть ДО привязки обработчиков
                     try:
@@ -394,54 +424,63 @@ class DragDropHandler:
                         logger.info(f"DND_FILES зарегистрирован: {DND_FILES}")
                     except Exception as reg_error:
                         # Если уже зарегистрирован, это нормально
-                        if "already registered" not in str(reg_error).lower():
+                        error_str = str(reg_error).lower()
+                        if "already registered" in error_str or "уже зарегистрирован" in error_str:
+                            logger.info("DND_FILES уже зарегистрирован, продолжаем...")
+                        else:
                             logger.warning(f"Ошибка при регистрации DND_FILES: {reg_error}")
                             raise
-                        else:
-                            logger.info("DND_FILES уже зарегистрирован, продолжаем...")
-                    
-                    # Привязываем обработчик события Drop
-                    # Важно: создаем функцию-обертку для правильной передачи события
-                    def on_drop_wrapper(event):
-                        """Обертка для обработчика drop события"""
-                        try:
-                            logger.info("=" * 60)
-                            logger.info("СОБЫТИЕ DROP ПОЛУЧЕНО!")
-                            logger.info(f"Тип события: {type(event)}")
-                            logger.info(f"Событие: {event}")
-                            self._on_drop_files(event)
-                        except Exception as e:
-                            logger.error(f"Ошибка в обработчике drop: {e}", exc_info=True)
-                    
-                    self.app.root.dnd_bind('<<Drop>>', on_drop_wrapper)
-                    logger.info("Обработчик <<Drop>> привязан к root окну")
-                    
-                    # Привязываем события для отладки (только один раз)
-                    def on_drag_enter(event):
-                        logger.info(">>> DragEnter на root окне")
-                        return None
-                    
-                    def on_drag_leave(event):
-                        logger.info("<<< DragLeave на root окне")
-                        return None
-                    
-                    def on_drag_motion(event):
-                        logger.debug("--- DragMotion на root окне")
-                        return None
-                    
-                    try:
+                        
+                        # Привязываем обработчик события Drop
+                        # ВАЖНО: Используем простой подход - вызываем метод класса напрямую
+                        def on_drop(event):
+                            """Обработчик drop события"""
+                            try:
+                                logger.info("=" * 60)
+                                logger.info("🎯🎯🎯 СОБЫТИЕ DROP ПОЛУЧЕНО НА ROOT! 🎯🎯🎯")
+                                logger.info(f"Тип события: {type(event)}")
+                                
+                                # Вызываем метод класса для обработки события
+                                # Метод сам получит данные из события и вызовет callback
+                                self._on_drop_files(event)
+                                
+                                # Возвращаем None (требование tkinterdnd2)
+                                return None
+                            except Exception as e:
+                                logger.error(f"❌ Ошибка в обработчике drop: {e}", exc_info=True)
+                                import traceback
+                                logger.error(traceback.format_exc())
+                                self.app.log(f"❌ Ошибка в обработчике drop: {e}")
+                                return None
+                        
+                        # Привязываем обработчик ПРОСТЫМ способом, как в тесте
+                        # Это работает в тесте, поэтому должно работать и здесь
+                        self.app.root.dnd_bind('<<Drop>>', on_drop)
+                        logger.info("✅ Обработчик <<Drop>> привязан к root окну")
+                        
+                        # Привязываем отладочные обработчики для диагностики
+                        def on_drag_enter(event):
+                            logger.info("🟢 DragEnter получено!")
+                            self.app.log("🟢 DragEnter - файлы над окном!")
+                            return None
+                        
+                        def on_drag_leave(event):
+                            logger.info("🔴 DragLeave получено!")
+                            self.app.log("🔴 DragLeave - файлы покинули окно")
+                            return None
+                        
                         self.app.root.dnd_bind('<<DragEnter>>', on_drag_enter)
                         self.app.root.dnd_bind('<<DragLeave>>', on_drag_leave)
-                        self.app.root.dnd_bind('<<DragMotion>>', on_drag_motion)
-                        logger.info("События DragEnter/DragLeave/DragMotion привязаны для отладки")
+                        logger.info("✅ Отладочные обработчики DragEnter/DragLeave привязаны")
+                        
+                        # Проверяем, что регистрация прошла успешно
+                        if hasattr(self.app.root, 'dnd_bind'):
+                            logger.info("Drag and drop успешно зарегистрирован на root окне")
+                        else:
+                            logger.warning("Метод dnd_bind недоступен после регистрации")
                     except Exception as e:
-                        logger.warning(f"Не удалось привязать события DragEnter/DragLeave/DragMotion: {e}")
-                    
-                    # Проверяем, что регистрация прошла успешно
-                    if hasattr(self.app.root, 'dnd_bind'):
-                        logger.info("Drag and drop успешно зарегистрирован на root окне")
-                    else:
-                        logger.warning("Метод dnd_bind недоступен после регистрации")
+                        logger.error(f"Ошибка при настройке обработчиков: {e}", exc_info=True)
+                        raise
                 except Exception as e:
                     logger.error(f"Ошибка регистрации drag and drop на root: {e}", exc_info=True)
                     if not self._drag_drop_logged:
@@ -462,6 +501,10 @@ class DragDropHandler:
                 
                 # Устанавливаем флаг, что drag and drop настроен
                 self._drag_drop_setup = True
+                
+                # ВАЖНО: Не регистрируем на других виджетах - это может создавать конфликты
+                # Полагаемся только на root окно для перехвата всех событий drag and drop
+                logger.info("Drag and drop настроен только на root окне (для избежания конфликтов)")
             except Exception as e:
                 logger.error(f"Не удалось зарегистрировать drag and drop для root: {e}", exc_info=True)
                 if not self._drag_drop_logged:
@@ -470,148 +513,10 @@ class DragDropHandler:
                     self.app.root.after(1000, self.setup_drag_drop)
                     self._drag_drop_logged = True
             
-            # Регистрируем левую панель (где находится таблица)
-            # Используем сохраненную ссылку на left_panel из main_window
-            # ВАЖНО: ttk виджеты (ttk.LabelFrame, ttk.Frame) обычно НЕ поддерживают drag and drop напрямую
-            # Поэтому мы регистрируем только root окно, которое должно перехватывать все события
-            try:
-                # Пробуем зарегистрировать left_panel, но это может не сработать для ttk.LabelFrame
-                if hasattr(self.app, 'left_panel') and self.app.left_panel:
-                    left_panel = self.app.left_panel
-                    left_panel_type = type(left_panel).__name__
-                    logger.info(f"Попытка регистрации left_panel типа: {left_panel_type}")
-                    
-                    if hasattr(left_panel, 'drop_target_register'):
-                        try:
-                            left_panel.drop_target_register(DND_FILES)
-                            left_panel.dnd_bind('<<Drop>>', self._on_drop_files)
-                            try:
-                                left_panel.dnd_bind(
-                                    '<<DragEnter>>',
-                                    lambda e: logger.info(
-                                        "DragEnter на left_panel"
-                                    )
-                                )
-                                left_panel.dnd_bind(
-                                    '<<DragLeave>>',
-                                    lambda e: logger.info(
-                                        "DragLeave на left_panel"
-                                    )
-                                )
-                                left_panel.dnd_bind(
-                                    '<<DragMotion>>',
-                                    lambda e: logger.info(
-                                        "DragMotion на left_panel"
-                                    )
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    f"Не удалось привязать события "
-                                    f"DragEnter/DragLeave/DragMotion для "
-                                    f"left_panel: {e}"
-                                )
-                            logger.info("Drag and drop зарегистрирован для left_panel")
-                        except Exception as e:
-                            logger.warning(
-                                f"Не удалось зарегистрировать drag and drop "
-                                f"для left_panel ({left_panel_type}): {e}"
-                            )
-                    else:
-                        logger.info(
-                            f"left_panel ({left_panel_type}) не поддерживает "
-                            f"drop_target_register - это нормально для "
-                            f"ttk виджетов"
-                        )
-                
-                # Также пробуем зарегистрировать фрейм списка файлов
-                if hasattr(self.app, 'list_frame') and self.app.list_frame:
-                    list_frame = self.app.list_frame
-                    list_frame_type = type(list_frame).__name__
-                    logger.info(f"Попытка регистрации list_frame типа: {list_frame_type}")
-                    
-                    if hasattr(list_frame, 'drop_target_register'):
-                        try:
-                            list_frame.drop_target_register(DND_FILES)
-                            list_frame.dnd_bind('<<Drop>>', self._on_drop_files)
-                            try:
-                                list_frame.dnd_bind(
-                                    '<<DragEnter>>',
-                                    lambda e: logger.info(
-                                        "DragEnter на list_frame"
-                                    )
-                                )
-                                list_frame.dnd_bind(
-                                    '<<DragLeave>>',
-                                    lambda e: logger.info(
-                                        "DragLeave на list_frame"
-                                    )
-                                )
-                                list_frame.dnd_bind(
-                                    '<<DragMotion>>',
-                                    lambda e: logger.info(
-                                        "DragMotion на list_frame"
-                                    )
-                                )
-                            except Exception as e:
-                                logger.debug(
-                                    f"Не удалось привязать события "
-                                    f"DragEnter/DragLeave/DragMotion для "
-                                    f"list_frame: {e}"
-                                )
-                            logger.info(
-                                "Drag and drop зарегистрирован для list_frame"
-                            )
-                        except Exception as e:
-                            logger.warning(
-                            f"Не удалось зарегистрировать drag and drop "
-                            f"для list_frame ({list_frame_type}): {e}"
-                        )
-                    else:
-                        logger.info(
-                            f"list_frame ({list_frame_type}) не поддерживает "
-                            f"drop_target_register - это нормально для "
-                            f"ttk виджетов"
-                        )
-                
-                # Если tree не найден, откладываем регистрацию
-                if not hasattr(self.app, 'tree') or not self.app.tree:
-                    logger.warning("tree не найден, откладываем регистрацию для панелей")
-                    self.app.root.after(500, self.setup_drag_drop)
-            except Exception as e:
-                logger.error(f"Не удалось зарегистрировать drag and drop для панелей: {e}", exc_info=True)
-            
-            # Регистрируем таблицу для перетаскивания файлов
-            # ttk.Treeview обычно не поддерживает drag and drop напрямую, но попробуем
-            try:
-                if hasattr(self.app, 'tree') and self.app.tree:
-                    if hasattr(self.app.tree, 'drop_target_register'):
-                        self.app.tree.drop_target_register(DND_FILES)
-                        self.app.tree.dnd_bind('<<Drop>>', self._on_drop_files)
-                        try:
-                            self.app.tree.dnd_bind('<<DragEnter>>', lambda e: logger.info("DragEnter на treeview"))
-                            self.app.tree.dnd_bind('<<DragLeave>>', lambda e: logger.info("DragLeave на treeview"))
-                            self.app.tree.dnd_bind('<<DragMotion>>', lambda e: logger.info("DragMotion на treeview"))
-                        except Exception as e:
-                            logger.debug(
-                                f"Не удалось привязать события "
-                                f"DragEnter/DragLeave/DragMotion для "
-                                f"treeview: {e}"
-                            )
-                        logger.info("Drag and drop зарегистрирован для treeview")
-                    else:
-                        logger.debug(
-                            "treeview (ttk.Treeview) не поддерживает "
-                            "drop_target_register - это нормально для "
-                            "ttk виджетов"
-                        )
-            except Exception as e:
-                logger.debug(f"Не удалось зарегистрировать drag and drop для treeview: {e}")
-            
-            # Логируем успешную настройку (только при первом запуске)
-            if not self._drag_drop_logged:
-                msg = "Drag and drop файлов включен - можно перетаскивать файлы из проводника"
-                self.app.log(msg)
-                self._drag_drop_logged = True
+            # ВАЖНО: НЕ регистрируем на дочерних виджетах (ttk виджеты не поддерживают DnD)
+            # Root окно должно перехватывать все события drag and drop
+            # Регистрация на ttk виджетах может создавать конфликты и блокировать события
+            logger.info("Регистрация только на root окне - этого достаточно для работы drag and drop")
         except Exception as e:
             logger.error(f"Ошибка настройки drag and drop (tkinterdnd2): {e}", exc_info=True)
             error_msg = f"Ошибка настройки drag and drop (tkinterdnd2): {e}"
@@ -638,40 +543,11 @@ class DragDropHandler:
             logger.info("=" * 60)
             logger.info("_on_drop_files ВЫЗВАН!")
             logger.info(f"Тип события: {type(event)}")
-            logger.info(f"Событие: {event}")
             
             self.app.log("🎯 Событие drag and drop получено!")
             
-            # Получаем данные события
-            event_data = None
-            try:
-                # Пробуем разные способы получения данных
-                if hasattr(event, 'data'):
-                    event_data = event.data
-                elif hasattr(event, 'get'):
-                    event_data = event.get('data')
-                else:
-                    # Пробуем получить через строковое представление
-                    event_str = str(event)
-                    logger.info(f"Строковое представление события: {event_str[:200]}")
-            except Exception as e:
-                logger.error(f"Ошибка получения данных события: {e}", exc_info=True)
-            
-            if event_data:
-                logger.info(f"Данные события получены (длина: {len(str(event_data))})")
-                logger.info(f"Первые 500 символов: {str(event_data)[:500]}")
-                self.app.log(f"Получены данные: {str(event_data)[:100]}...")
-            else:
-                logger.warning("⚠️ Данные события пусты или недоступны")
-                self.app.log("⚠️ Предупреждение: данные события пусты")
-                # Пробуем получить данные другим способом
-                try:
-                    if hasattr(event, '__dict__'):
-                        logger.info(f"Атрибуты события: {event.__dict__}")
-                except:
-                    pass
-            
             # Используем общую функцию _on_drop_files для парсинга
+            # Она сама получит данные из события и вызовет callback
             logger.info("Вызов функции _on_drop_files для парсинга данных...")
             _on_drop_files(event, self._process_dropped_files)
             logger.info("=" * 60)
@@ -738,17 +614,30 @@ class DragDropHandler:
                 skipped += 1
         
         logger.info(f"Добавлено элементов (файлы и папки): {added}, пропущено: {skipped}")
+        self.app.log(f"Обработка завершена: добавлено {added}, пропущено {skipped}")
+        
+        # ВАЖНО: Обновляем интерфейс ПЕРЕД применением методов
+        # Это гарантирует, что файлы будут видны в списке
+        if hasattr(self.app, 'refresh_treeview'):
+            logger.info("Вызов refresh_treeview для обновления интерфейса...")
+            self.app.refresh_treeview()
+            logger.info("refresh_treeview вызван")
+            # Дополнительное обновление через небольшую задержку для надежности
+            self.app.root.after(100, self.app.refresh_treeview)
+        else:
+            logger.warning("refresh_treeview недоступен!")
         
         # Применяем методы (включая шаблон), если они есть
         if hasattr(self.app, 'methods_manager') and self.app.methods_manager.get_methods():
+            logger.info("Применяются методы переименования...")
             self.app.apply_methods()
-        else:
-            # Обновляем интерфейс после добавления всех файлов
-            if hasattr(self.app, 'refresh_treeview'):
-                self.app.refresh_treeview()
         
+        # Обновляем статус и путь
         if hasattr(self.app, 'update_status'):
             self.app.update_status()
+        
+        if hasattr(self.app, 'update_files_path'):
+            self.app.root.after_idle(self.app.update_files_path)
         
         # Подсчитываем реальное количество добавленных файлов
         files_after = len(self.app.files)
@@ -872,3 +761,54 @@ class DragDropHandler:
         self.app.drag_start_index = None
         self.app.drag_start_y = None
         self.app.is_dragging = False
+    
+    def _setup_draganddroptk(self):
+        """Настройка drag and drop с использованием библиотеки DragAndDropTk"""
+        if not HAS_DRAGANDDROPTK:
+            return False
+        
+        try:
+            logger.info("Настройка DragAndDropTk...")
+            
+            # ВАЖНО: Не создаем виджет DragAndDropTk, который покрывает все окно
+            # Это блокирует интерфейс! Вместо этого используем только tkinterdnd2
+            logger.warning("DragAndDropTk отключен - может блокировать интерфейс при размещении поверх всех виджетов")
+            return False
+            
+            # ЗАКОММЕНТИРОВАНО: создание виджета, который блокирует интерфейс
+            # self._dndtk_widget = DragAndDropTk(
+            #     self.app.root,
+            #     bg=self.app.colors.get('bg_main', '#FFFFFF')
+            # )
+            # self._dndtk_widget.place(x=0, y=0, relwidth=1, relheight=1)
+            
+            # Устанавливаем обработчик для перетаскивания файлов
+            def on_drop(files):
+                """Обработчик перетаскивания файлов"""
+                try:
+                    logger.info(f"DragAndDropTk: получено {len(files)} файлов")
+                    self.app.log(f"Получено файлов через DragAndDropTk: {len(files)}")
+                    
+                    # Обрабатываем файлы
+                    if isinstance(files, (list, tuple)):
+                        file_list = list(files)
+                    elif isinstance(files, str):
+                        # Если это строка, пробуем разделить по пробелам или другим разделителям
+                        file_list = [f.strip() for f in files.split() if f.strip()]
+                    else:
+                        file_list = [str(files)]
+                    
+                    # Обрабатываем файлы через стандартный метод
+                    self._process_dropped_files(file_list)
+                except Exception as e:
+                    logger.error(f"Ошибка в обработчике DragAndDropTk: {e}", exc_info=True)
+                    self.app.log(f"❌ Ошибка обработки файлов: {e}")
+            
+            # Код ниже не выполнится, так как мы вернули False выше
+            # Оставлено для справки
+            pass
+            
+        except Exception as e:
+            logger.error(f"Ошибка настройки DragAndDropTk: {e}", exc_info=True)
+            self.app.log(f"⚠️ Ошибка настройки DragAndDropTk: {e}")
+            return False

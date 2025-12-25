@@ -409,10 +409,12 @@ class FileListManager:
                 return False
         
         logger.info(f"Добавление файла в список: {file_path}")
+        self.app.log(f"Добавление файла: {os.path.basename(file_path)}")
         
         # Используем внутренний метод для добавления файла
         # чтобы обойти проблему с property
         files_list = self.app._get_files_list()
+        files_count_before = len(files_list)
         
         # Если state доступен, создаем FileInfo объект, иначе словарь
         if self.app.state:
@@ -435,6 +437,9 @@ class FileListManager:
                 'status': 'Готов'
             }
             files_list.append(file_data)
+        
+        files_count_after = len(files_list)
+        logger.info(f"Файл добавлен. Было файлов: {files_count_before}, стало: {files_count_after}")
         
         # Обновляем путь после добавления
         if hasattr(self.app, 'update_files_path'):
