@@ -339,7 +339,7 @@ class DragDropHandler:
                         "Для включения перетаскивания файлов установите:\n"
                         "pip install tkinterdnd2"
                     )
-                except:
+                except (tk.TclError, AttributeError, RuntimeError):
                     pass
                 self._drag_drop_logged = True
             return

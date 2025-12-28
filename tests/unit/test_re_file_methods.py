@@ -1,8 +1,8 @@
-"""Тесты для методов переименования."""
+"""Тесты для методов re-file."""
 
 import os
 import pytest
-from core.rename_methods import (
+from core.re_file_methods import (
     AddRemoveMethod,
     ReplaceMethod,
     CaseMethod,
@@ -83,7 +83,7 @@ class TestReplaceMethod:
     def test_replace_regex(self):
         """Тест: замена с использованием регулярных выражений."""
         # ReplaceMethod не поддерживает regex напрямую, используем RegexMethod
-        from core.rename_methods import RegexMethod
+        from core.re_file_methods import RegexMethod
         method = RegexMethod(pattern=r"\d+", replace="NUM")
         name, ext = method.apply("file123", ".txt", "/path/to/file123.txt")
         assert name == "fileNUM"

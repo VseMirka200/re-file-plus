@@ -15,7 +15,7 @@ python-docx>=0.8.11
 openpyxl>=3.0.0
 python-pptx>=0.6.0
 pypdf>=3.0.0
-PyPDF2>=3.0.0
+# PyPDF2 устарел, используем только pypdf
 PyMuPDF>=1.23.0
 
 # Работа с аудио/видео

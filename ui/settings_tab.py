@@ -1,7 +1,7 @@
 """Модуль для вкладки настроек.
 
 Обеспечивает интерфейс для управления настройками приложения:
-автоприменение, резервные копии, шрифты, контекстное меню и другие параметры.
+автоприменение, резервные копии, шрифты и другие параметры.
 """
 
 import logging
@@ -28,6 +28,9 @@ class SettingsTab:
     
     def create_tab(self):
         """Создание вкладки настроек на главном экране"""
+        if not hasattr(self.app, 'main_notebook') or not self.app.main_notebook:
+            return
+        
         settings_tab = tk.Frame(self.app.main_notebook, bg=self.app.colors['bg_main'])
         settings_tab.columnconfigure(0, weight=1)
         settings_tab.rowconfigure(0, weight=1)
@@ -46,6 +49,24 @@ class SettingsTab:
         
         # Используем общий метод для создания содержимого
         self.create_tab_content(settings_tab)
+    
+    def create_tab_content_for_main(self, parent):
+        """Создание содержимого вкладки настроек для главного окна (новая структура)
+        
+        Args:
+            parent: Родительский контейнер для размещения содержимого
+        """
+        # Создаем Frame для содержимого вкладки настроек
+        settings_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
+        settings_frame.grid(row=0, column=0, sticky="nsew")
+        settings_frame.columnconfigure(0, weight=1)
+        settings_frame.rowconfigure(0, weight=1)
+        
+        # Сохраняем ссылку
+        self.app.tab_contents["settings"] = settings_frame
+        
+        # Используем общий метод для создания содержимого
+        self.create_tab_content(settings_frame)
     
     def create_tab_content(self, settings_tab):
         """Создание содержимого вкладки настроек (используется и в главном окне, и в отдельном)"""
@@ -198,124 +219,6 @@ class SettingsTab:
             
             return content_frame
         
-        # Секция: Контекстное меню Windows
-        if sys.platform == 'win32':
-            context_menu_frame = create_collapsible_frame(content_frame, "Контекстное меню Windows", default_expanded=False)
-            
-            context_menu_info_label = tk.Label(context_menu_frame,
-                                             text="Добавление пункта 'Добавить в конвертер Ре-Файл+' в контекстное меню Windows. "
-                                                  "Позволяет быстро добавлять файлы в конвертер прямо из Проводника.",
-                                             font=('Robot', 9),
-                                             bg=self.app.colors['bg_card'],
-                                             fg=self.app.colors['text_secondary'],
-                                             wraplength=600,
-                                             justify=tk.LEFT)
-            context_menu_info_label.pack(anchor=tk.W, pady=(0, 15))
-            
-            # Импортируем менеджер контекстного меню
-            try:
-                from utils.context_menu import ContextMenuManager
-                context_menu_manager = ContextMenuManager()
-                
-                # Фрейм для статуса и кнопок
-                context_menu_controls = tk.Frame(context_menu_frame, bg=self.app.colors['bg_card'])
-                context_menu_controls.pack(fill=tk.X, pady=(0, 10))
-                
-                # Статус установки
-                status_label = tk.Label(context_menu_controls,
-                                       text="Статус: Проверка...",
-                                       font=('Robot', 9),
-                                       bg=self.app.colors['bg_card'],
-                                       fg=self.app.colors['text_primary'])
-                status_label.pack(side=tk.LEFT, padx=(0, 15))
-                
-                # Кнопка установки
-                def install_context_menu():
-                    """Установка контекстного меню"""
-                    success, message = context_menu_manager.install()
-                    if success:
-                        messagebox.showinfo("Успех", message)
-                    else:
-                        messagebox.showerror("Ошибка", message)
-                    update_context_menu_status()
-                
-                install_btn = self.app.create_rounded_button(
-                    context_menu_controls, "✅ Установить", install_context_menu,
-                    self.app.colors['primary'], 'white',
-                    font=('Robot', 9), padx=15, pady=8,
-                    active_bg=self.app.colors['primary_hover'])
-                install_btn.pack(side=tk.LEFT, padx=(0, 10))
-                
-                # Кнопка удаления
-                def uninstall_context_menu():
-                    """Удаление контекстного меню"""
-                    success, message = context_menu_manager.uninstall()
-                    if success:
-                        messagebox.showinfo("Успех", message)
-                    else:
-                        messagebox.showerror("Ошибка", message)
-                    update_context_menu_status()
-                
-                uninstall_btn = self.app.create_rounded_button(
-                    context_menu_controls, "❌ Удалить", uninstall_context_menu,
-                    self.app.colors['danger'], 'white',
-                    font=('Robot', 9), padx=15, pady=8,
-                    active_bg=self.app.colors['danger_hover'])
-                uninstall_btn.pack(side=tk.LEFT)
-                
-                def update_context_menu_status():
-                    """Обновление статуса контекстного меню"""
-                    if context_menu_manager.is_installed():
-                        status_label.config(text="Статус: ✓ Установлено", fg='green')
-                        # Для rounded_button изменяем команду и визуальный вид
-                        try:
-                            # Получаем canvas из фрейма кнопки
-                            install_canvas = install_btn.winfo_children()[0] if install_btn.winfo_children() else None
-                            uninstall_canvas = uninstall_btn.winfo_children()[0] if uninstall_btn.winfo_children() else None
-                            
-                            # Делаем кнопку установки неактивной
-                            if install_canvas:
-                                install_canvas.btn_command = lambda: None  # Пустая команда
-                                install_canvas.config(cursor='arrow')
-                            
-                            # Делаем кнопку удаления активной
-                            if uninstall_canvas:
-                                uninstall_canvas.btn_command = uninstall_context_menu
-                                uninstall_canvas.config(cursor='hand2')
-                        except Exception:
-                            pass
-                    else:
-                        status_label.config(text="Статус: ✗ Не установлено", fg='gray')
-                        # Обратное состояние
-                        try:
-                            install_canvas = install_btn.winfo_children()[0] if install_btn.winfo_children() else None
-                            uninstall_canvas = uninstall_btn.winfo_children()[0] if uninstall_btn.winfo_children() else None
-                            
-                            # Делаем кнопку установки активной
-                            if install_canvas:
-                                install_canvas.btn_command = install_context_menu
-                                install_canvas.config(cursor='hand2')
-                            
-                            # Делаем кнопку удаления неактивной
-                            if uninstall_canvas:
-                                uninstall_canvas.btn_command = lambda: None  # Пустая команда
-                                uninstall_canvas.config(cursor='arrow')
-                        except Exception:
-                            pass
-                
-                # Обновляем статус при создании
-                update_context_menu_status()
-            
-            except ImportError as e:
-                error_label = tk.Label(context_menu_frame,
-                                      text=f"Не удалось загрузить модуль контекстного меню: {e}",
-                                      font=('Robot', 9),
-                                      bg=self.app.colors['bg_card'],
-                                      fg='red',
-                                      wraplength=600,
-                                      justify=tk.LEFT)
-                error_label.pack(anchor=tk.W, pady=(0, 15))
-        
         # Управление ярлыками (сворачиваемая секция)
         shortcuts_frame = create_collapsible_frame(content_frame, "Ярлыки", default_expanded=False)
         
@@ -422,7 +325,7 @@ class SettingsTab:
                     # SHCNE_UPDATEITEM - обновление элемента
                     ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
                     ctypes.windll.shell32.SHChangeNotify(0x00002000, 0x0000, None, None)
-                except:
+                except (OSError, AttributeError, ctypes.ArgumentError):
                     pass
                 
                 if os.path.exists(shortcut_path):
@@ -474,7 +377,7 @@ class SettingsTab:
                     import ctypes
                     ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
                     ctypes.windll.shell32.SHChangeNotify(0x00002000, 0x0000, None, None)
-                except:
+                except (OSError, AttributeError, ctypes.ArgumentError):
                     pass
                 
                 if updated_count > 0:
@@ -543,8 +446,12 @@ class SettingsTab:
         
         def on_remove_files_change():
             """Обработчик изменения настройки удаления файлов"""
-            self.app.settings_manager.set('remove_files_after_operation', remove_files_var.get())
+            new_value = remove_files_var.get()
+            self.app.settings_manager.set('remove_files_after_operation', new_value)
             self.app.settings_manager.save_settings()
+            # Синхронизируем переменную, если она уже существует
+            if hasattr(self.app, 'remove_files_after_operation_var'):
+                self.app.remove_files_after_operation_var.set(new_value)
         
         remove_files_check = tk.Checkbutton(
             behavior_frame,

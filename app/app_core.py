@@ -50,85 +50,97 @@ def process_cli_args() -> List[str]:
     Returns:
         List[str]: Список путей к файлам из аргументов командной строки
     """
-    files_from_args = []
-    
-    if len(sys.argv) > 1:
-        logger.info(f"Аргументы командной строки: {sys.argv[1:]}")
+    try:
+        from utils.path_processing import filter_cli_args
+        if len(sys.argv) > 1:
+            logger.info(f"Аргументы командной строки: {sys.argv[1:]}")
+            files_from_args = filter_cli_args(sys.argv[1:])
+            logger.info(f"Обработано файлов из аргументов: {len(files_from_args)}")
+            return files_from_args
+    except ImportError:
+        # Fallback на старую логику, если модуль недоступен
+        logger.warning("Модуль utils.path_processing недоступен, используется fallback логика")
+        files_from_args = []
         
-        for arg in sys.argv[1:]:
-            if not arg or not arg.strip():
-                continue
+        if len(sys.argv) > 1:
+            logger.info(f"Аргументы командной строки: {sys.argv[1:]}")
             
-            # Обработка URL-формата (file://) - используется LibreOffice и другими приложениями
-            if arg.startswith('file://'):
-                try:
-                    # Удаляем префикс file:// и декодируем URL
-                    import urllib.parse
-                    file_path = urllib.parse.unquote(arg[7:])  # Убираем file://
-                    # Убираем начальный слеш для Windows путей (file:///C:/...)
-                    if sys.platform == 'win32' and file_path.startswith('/') and len(file_path) > 2:
-                        if file_path[1].isalpha() and file_path[2] == ':':
-                            file_path = file_path[1:]  # Убираем лишний слеш
-                    normalized_path = os.path.normpath(file_path)
-                    # Валидация безопасности пути
-                    if HAS_PATH_VALIDATION and not is_safe_path(normalized_path):
-                        logger.warning(f"Небезопасный URL-путь отклонен: {normalized_path}")
-                        continue
-                    if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
-                        files_from_args.append(normalized_path)
-                        logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
-                        continue
-                except Exception as e:
-                    logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
-            
-            # Обработка коротких опций (начинаются с одного дефиса)
-            if arg.startswith('-') and not arg.startswith('--'):
-                normalized_arg = os.path.normpath(arg)
-                # Проверяем, не является ли это путем к файлу, начинающимся с дефиса
-                if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                    files_from_args.append(normalized_arg)
+            for arg in sys.argv[1:]:
+                if not arg or not arg.strip():
                     continue
-                # Если это не файл, пропускаем (это опция)
-                continue
-            
-            # Обработка длинных опций (начинаются с двух дефисов)
-            if arg.startswith('--'):
-                normalized_arg = os.path.normpath(arg)
+                
+                # Обработка URL-формата (file://) - используется LibreOffice и другими приложениями
+                if arg.startswith('file://'):
+                    try:
+                        # Удаляем префикс file:// и декодируем URL
+                        import urllib.parse
+                        file_path = urllib.parse.unquote(arg[7:])  # Убираем file://
+                        # Убираем начальный слеш для Windows путей (file:///C:/...)
+                        if sys.platform == 'win32' and file_path.startswith('/') and len(file_path) > 2:
+                            if file_path[1].isalpha() and file_path[2] == ':':
+                                file_path = file_path[1:]  # Убираем лишний слеш
+                        normalized_path = os.path.normpath(file_path)
+                        # Валидация безопасности пути
+                        if HAS_PATH_VALIDATION and not is_safe_path(normalized_path):
+                            logger.warning(f"Небезопасный URL-путь отклонен: {normalized_path}")
+                            continue
+                        if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
+                            files_from_args.append(normalized_path)
+                            logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
+                            continue
+                    except Exception as e:
+                        logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
+                
+                # Обработка коротких опций (начинаются с одного дефиса)
+                if arg.startswith('-') and not arg.startswith('--'):
+                    normalized_arg = os.path.normpath(arg)
+                    # Проверяем, не является ли это путем к файлу, начинающимся с дефиса
+                    if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
+                        files_from_args.append(normalized_arg)
+                        continue
+                    # Если это не файл, пропускаем (это опция)
+                    continue
+                
+                # Обработка длинных опций (начинаются с двух дефисов)
+                if arg.startswith('--'):
+                    normalized_arg = os.path.normpath(arg)
+                    if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
+                        files_from_args.append(normalized_arg)
+                    # Пропускаем опции, которые не являются файлами
+                    continue
+                
+                # Обработка путей в кавычках (для путей с пробелами)
+                cleaned_arg = arg.strip('"').strip("'")
+                
+                # Обработка обычных путей
+                normalized_arg = os.path.normpath(cleaned_arg)
+                
+                # Валидация безопасности пути
+                if HAS_PATH_VALIDATION and not is_safe_path(normalized_arg):
+                    logger.warning(f"Небезопасный путь отклонен: {normalized_arg}")
+                    continue
+                
+                # Проверяем существование файла
                 if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
                     files_from_args.append(normalized_arg)
-                # Пропускаем опции, которые не являются файлами
-                continue
-            
-            # Обработка путей в кавычках (для путей с пробелами)
-            cleaned_arg = arg.strip('"').strip("'")
-            
-            # Обработка обычных путей
-            normalized_arg = os.path.normpath(cleaned_arg)
-            
-            # Валидация безопасности пути
-            if HAS_PATH_VALIDATION and not is_safe_path(normalized_arg):
-                logger.warning(f"Небезопасный путь отклонен: {normalized_arg}")
-                continue
-            
-            # Проверяем существование файла
-            if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                files_from_args.append(normalized_arg)
-            else:
-                # Попытка обработать как абсолютный путь
-                try:
-                    abs_path = os.path.abspath(normalized_arg)
-                    # Валидация абсолютного пути
-                    if HAS_PATH_VALIDATION and not is_safe_path(abs_path):
-                        logger.warning(f"Небезопасный абсолютный путь отклонен: {abs_path}")
-                        continue
-                    if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                        files_from_args.append(abs_path)
-                        logger.info(f"Обработан относительный путь: {arg} -> {abs_path}")
-                except (OSError, ValueError) as e:
-                    logger.debug(f"Не удалось обработать путь {arg}: {e}")
+                else:
+                    # Попытка обработать как абсолютный путь
+                    try:
+                        abs_path = os.path.abspath(normalized_arg)
+                        # Валидация абсолютного пути
+                        if HAS_PATH_VALIDATION and not is_safe_path(abs_path):
+                            logger.warning(f"Небезопасный абсолютный путь отклонен: {abs_path}")
+                            continue
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            files_from_args.append(abs_path)
+                            logger.info(f"Обработан относительный путь: {arg} -> {abs_path}")
+                    except (OSError, ValueError) as e:
+                        logger.debug(f"Не удалось обработать путь {arg}: {e}")
+        
+        logger.info(f"Обработано файлов из аргументов: {len(files_from_args)}")
+        return files_from_args
     
-    logger.info(f"Обработано файлов из аргументов: {len(files_from_args)}")
-    return files_from_args
+    return []
 
 
 class FileRenamerApp:
@@ -229,21 +241,6 @@ class FileRenamerApp:
         if self.state:
             from core.domain.file_info import FileInfo
             self.state.redo_stack = [[FileInfo.from_dict(f) for f in files] for files in value]
-    """Главный класс приложения для переименования файлов.
-    
-    Управляет всем жизненным циклом приложения, включая:
-    - Создание и управление пользовательским интерфейсом
-    - Операции с файлами (переименование, конвертация)
-    - Управление настройками и шаблонами
-    - Интеграция системы плагинов
-    
-    Attributes:
-        root: Корневое окно Tkinter
-        files: Список файлов для обработки
-        methods_manager: Менеджер методов переименования
-        settings_manager: Менеджер настроек приложения
-        colors: Цветовая схема интерфейса
-    """
     
     def __init__(self, root: 'tk.Tk', files_from_args: List[str] = None):
         """Инициализация приложения.
@@ -346,6 +343,14 @@ class FileRenamerApp:
                 active_bg, active_fg, width, expand
             )
         return None
+    
+    def create_square_icon_button(self, parent, icon, command, bg_color='#667EEA', 
+                                  fg_color='white', size=40, active_bg=None):
+        """Создание квадратной кнопки со значком"""
+        from ui.ui_components import UIComponents
+        return UIComponents.create_square_icon_button(
+            parent, icon, command, bg_color, fg_color, size, active_bg
+        )
     
     def on_window_resize(self, event=None):
         """Обработчик изменения размера окна для адаптивного масштабирования."""
@@ -480,20 +485,20 @@ class FileRenamerApp:
         if hasattr(self, 'window_management_handler'):
             self.window_management_handler.close_window(window_name)
     
-    def start_rename(self):
-        """Начало переименования файлов"""
-        if hasattr(self, 'rename_operations_handler'):
-            self.rename_operations_handler.start_rename()
+    def start_re_file(self):
+        """Начало re-file операций"""
+        if hasattr(self, 're_file_operations_handler'):
+            self.re_file_operations_handler.start_re_file()
     
-    def undo_rename(self):
-        """Отмена последнего переименования"""
-        if hasattr(self, 'rename_operations_handler'):
-            self.rename_operations_handler.undo_rename()
+    def undo_re_file(self):
+        """Отмена последней re-file операции"""
+        if hasattr(self, 're_file_operations_handler'):
+            self.re_file_operations_handler.undo_re_file()
     
-    def redo_rename(self):
-        """Повтор последнего переименования"""
-        if hasattr(self, 'rename_operations_handler'):
-            self.rename_operations_handler.redo_rename()
+    def redo_re_file(self):
+        """Повтор последней re-file операции"""
+        if hasattr(self, 're_file_operations_handler'):
+            self.re_file_operations_handler.redo_re_file()
     
     def save_template_quick(self):
         """Быстрое сохранение шаблона"""
@@ -605,8 +610,8 @@ class FileRenamerApp:
     
     def apply_methods(self):
         """Применение всех методов к файлам."""
-        if hasattr(self, 'rename_operations_handler'):
-            self.rename_operations_handler.apply_methods()
+        if hasattr(self, 're_file_operations_handler'):
+            self.re_file_operations_handler.apply_methods()
     
     def rename_complete(self, success: int, error: int, renamed_files: list = None):
         """Обработка завершения переименования.
@@ -616,8 +621,8 @@ class FileRenamerApp:
             error: Количество ошибок
             renamed_files: Список переименованных файлов
         """
-        if hasattr(self, 'rename_operations_handler'):
-            self.rename_operations_handler.rename_complete(success, error, renamed_files)
+        if hasattr(self, 're_file_operations_handler'):
+            self.re_file_operations_handler.re_file_complete(success, error, renamed_files)
     
     def _process_files_from_args(self):
         """Обработка файлов из аргументов командной строки."""

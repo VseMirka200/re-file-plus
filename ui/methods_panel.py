@@ -11,7 +11,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 
 # Локальные импорты
-from core.rename_methods import (
+from core.re_file_methods import (
     AddRemoveMethod,
     CaseMethod,
     MetadataMethod,
@@ -169,7 +169,6 @@ class MethodsPanel:
         # Настройка начального номера и количества нулей (разная ширина)
         # Используем такой же контейнер с фоном, как у переменных
         number_inputs_container = tk.Frame(self.app.numbering_settings_frame, bg=self.app.colors['bg_secondary'], 
-                                          relief='flat', borderwidth=1,
                                           highlightbackground=self.app.colors['border'],
                                           highlightthickness=1)
         number_inputs_container.pack(fill=tk.X, padx=0, pady=(0, 0))
@@ -334,7 +333,6 @@ class MethodsPanel:
         
         # Предупреждение
         warning_frame = tk.Frame(self.app.settings_frame, bg='#FEF3C7', 
-                                relief='flat', borderwidth=1,
                                 highlightbackground='#FCD34D',
                                 highlightthickness=1)
         warning_frame.pack(fill=tk.X, pady=(4, 4))
@@ -358,9 +356,8 @@ class MethodsPanel:
         # Сохраняем ссылку на variables_frame для размещения полей нумерации после списка переменных
         self.app.variables_frame = variables_frame
         
-        # Контейнер для переменных с фоном
+        # Контейнер для переменных с фоном и рамкой
         vars_container = tk.Frame(variables_frame, bg=self.app.colors['bg_secondary'], 
-                                 relief='flat', borderwidth=1,
                                  highlightbackground=self.app.colors['border'],
                                  highlightthickness=1)
         vars_container.pack(fill=tk.X, padx=0, pady=(0, 0))
@@ -370,11 +367,39 @@ class MethodsPanel:
             ("{name}", "старое имя"),
             ("{ext}", "расширение"),
             ("{n}", "номер файла"),
+            ("{filename}", "полное имя файла"),
+            ("{dirname}", "имя папки"),
+            ("{format}", "формат файла"),
+            # Даты и время
+            ("{date_created}", "дата создания (YYYY-MM-DD)"),
+            ("{date_modified}", "дата изменения (YYYY-MM-DD)"),
+            ("{date_created_time}", "дата и время создания"),
+            ("{date_modified_time}", "дата и время изменения"),
+            ("{year}", "год"),
+            ("{month}", "месяц"),
+            ("{day}", "день"),
+            ("{hour}", "час"),
+            ("{minute}", "минута"),
+            ("{second}", "секунда"),
+            # Изображения
             ("{width}x{height}", "размеры изображения"),
             ("{width}", "ширина изображения"),
             ("{height}", "высота изображения"),
-            ("{date_created}", "дата создания"),
-            ("{date_modified}", "дата изменения"),
+            ("{camera}", "модель камеры"),
+            ("{iso}", "ISO"),
+            ("{focal_length}", "фокусное расстояние"),
+            ("{aperture}", "диафрагма"),
+            ("{exposure_time}", "выдержка"),
+            # Аудио
+            ("{artist}", "исполнитель"),
+            ("{title}", "название трека"),
+            ("{album}", "альбом"),
+            ("{audio_year}", "год выпуска"),
+            ("{track}", "номер трека"),
+            ("{genre}", "жанр"),
+            ("{duration}", "длительность"),
+            ("{bitrate}", "битрейт"),
+            # Общие
             ("{file_size}", "размер файла")
         ]
         

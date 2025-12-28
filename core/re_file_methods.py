@@ -1,11 +1,11 @@
-"""Модуль методов переименования файлов.
+"""Модуль методов re-file операций.
 
-Реализует различные стратегии переименования файлов через паттерн Strategy.
-Каждый метод переименования наследуется от базового класса RenameMethod
+Реализует различные стратегии re-file операций через паттерн Strategy.
+Каждый метод re-file наследуется от базового класса ReFileMethod
 и реализует метод apply() для преобразования имени файла.
 
 Также содержит функции для работы с файлами: валидация имен,
-проверка конфликтов и переименование.
+проверка конфликтов и re-file операции.
 """
 
 # Стандартная библиотека
@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from datetime import datetime
@@ -93,13 +94,13 @@ except ImportError:
     _INVALID_CHARS = frozenset(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
 
 
-class RenameMethod(ABC):
-    """Базовый абстрактный класс для методов переименования.
+class ReFileMethod(ABC):
+    """Базовый абстрактный класс для методов re-file операций.
     
-    Все методы переименования должны наследоваться от этого класса
+    Все методы re-file должны наследоваться от этого класса
     и реализовывать метод apply() для преобразования имени файла.
     
-    Методы переименования применяются последовательно к каждому файлу
+    Методы re-file применяются последовательно к каждому файлу
     в порядке их добавления в MethodsManager.
     """
     
@@ -119,7 +120,7 @@ class RenameMethod(ABC):
         pass
 
 
-class AddRemoveMethod(RenameMethod):
+class AddRemoveMethod(ReFileMethod):
     """Метод добавления/удаления текста"""
     
     def __init__(
@@ -214,7 +215,7 @@ class AddRemoveMethod(RenameMethod):
         return name, extension
 
 
-class ReplaceMethod(RenameMethod):
+class ReplaceMethod(ReFileMethod):
     """Метод замены текста"""
     
     def __init__(self, find: str, replace: str, case_sensitive: bool = False,
@@ -270,7 +271,7 @@ class ReplaceMethod(RenameMethod):
         return new_name, extension
 
 
-class CaseMethod(RenameMethod):
+class CaseMethod(ReFileMethod):
     """Метод изменения регистра"""
     
     def __init__(self, case_type: str, apply_to: str = "name"):
@@ -310,7 +311,7 @@ class CaseMethod(RenameMethod):
         return new_name, new_ext
 
 
-class NumberingMethod(RenameMethod):
+class NumberingMethod(ReFileMethod):
     """Метод нумерации файлов"""
     
     def __init__(
@@ -357,7 +358,7 @@ class NumberingMethod(RenameMethod):
         self.current_number = self.start
 
 
-class MetadataMethod(RenameMethod):
+class MetadataMethod(ReFileMethod):
     """Метод вставки метаданных"""
     
     def __init__(self, tag: str, position: str = "end", extractor=None):
@@ -389,7 +390,7 @@ class MetadataMethod(RenameMethod):
         return new_name, extension
 
 
-class RegexMethod(RenameMethod):
+class RegexMethod(ReFileMethod):
     """Метод переименования с использованием регулярных выражений"""
     
     def __init__(self, pattern: str, replace: str):
@@ -420,7 +421,7 @@ class RegexMethod(RenameMethod):
             return name, extension
 
 
-class NewNameMethod(RenameMethod):
+class NewNameMethod(ReFileMethod):
     """Метод полной замены имени по шаблону"""
     
     def __init__(self, template: str, metadata_extractor=None, file_number: int = 1, zeros_count: int = 0):
@@ -443,9 +444,13 @@ class NewNameMethod(RenameMethod):
     def _detect_metadata_tags(self, template: str) -> set:
         """Определение используемых тегов метаданных в шаблоне"""
         metadata_tags = {
-            "{width}x{height}", "{width}", "{height}", "{date_created}", 
-            "{date_modified}", "{file_size}", "{artist}", "{title}", 
-            "{album}", "{year}", "{track}", "{genre}"
+            "{width}x{height}", "{width}", "{height}", 
+            "{date}", "{date_created}", "{date_modified}", "{date_created_time}", "{date_modified_time}",
+            "{year}", "{month}", "{day}", "{hour}", "{minute}", "{second}",
+            "{file_size}", "{filename}", "{dirname}", "{parent_dir}", "{format}",
+            "{artist}", "{title}", "{album}", "{audio_year}", "{track}", "{genre}",
+            "{duration}", "{bitrate}",
+            "{camera}", "{iso}", "{focal_length}", "{aperture}", "{exposure_time}"
         }
         found_tags = set()
         for tag in metadata_tags:
@@ -563,8 +568,13 @@ class NewNameMethod(RenameMethod):
         
         if self.metadata_extractor:
             # Подставляем метаданные
-            for tag in ["{width}", "{height}", "{date_created}", "{date_modified}", "{file_size}",
-                       "{artist}", "{title}", "{album}", "{year}", "{track}", "{genre}"]:
+            for tag in ["{width}", "{height}", "{date}", "{date_created}", "{date_modified}", 
+                       "{date_created_time}", "{date_modified_time}",
+                       "{year}", "{month}", "{day}", "{hour}", "{minute}", "{second}",
+                       "{file_size}", "{filename}", "{dirname}", "{parent_dir}", "{format}",
+                       "{artist}", "{title}", "{album}", "{audio_year}", "{track}", "{genre}",
+                       "{duration}", "{bitrate}",
+                       "{camera}", "{iso}", "{focal_length}", "{aperture}", "{exposure_time}"]:
                 if tag in result:
                     value = self.metadata_extractor.extract(tag, file_path)
                     result = result.replace(tag, value or "")
@@ -767,6 +777,8 @@ def add_file_to_list(
 def validate_filename(name: str, extension: str, path: str, index: int) -> str:
     """Валидация имени файла.
     
+    Использует новый FilenameValidator для валидации, сохраняя обратную совместимость.
+    
     Args:
         name: Имя файла без расширения
         extension: Расширение файла
@@ -774,80 +786,108 @@ def validate_filename(name: str, extension: str, path: str, index: int) -> str:
         index: Индекс файла в списке
         
     Returns:
-        Статус валидации
+        Статус валидации ("Готов" или сообщение об ошибке)
     """
     # Проверяем кеш перед выполнением валидации
     cached_result = _get_cached_validation(name, extension, path)
     if cached_result is not None:
         return cached_result
     
-    if not name or not name.strip():
-        result = "Ошибка: пустое имя"
-        _set_cached_validation(name, extension, path, result)
-        return result
-    
-    # Запрещенные символы в именах файлов Windows (используем кэш)
-    if any(char in name for char in _INVALID_CHARS):
-        # Находим первый недопустимый символ для сообщения об ошибке
-        for char in _INVALID_CHARS:
-            if char in name:
-                result = f"Ошибка: недопустимый символ '{char}'"
+    # Используем новый FilenameValidator
+    try:
+        from core.validation import FilenameValidator
+        
+        is_valid, error_msg = FilenameValidator.is_valid_filename(name, extension)
+        if not is_valid:
+            result = f"Ошибка: {error_msg}" if error_msg else "Ошибка: недопустимое имя файла"
+            _set_cached_validation(name, extension, path, result)
+            return result
+        
+        # Проверка длины пути
+        try:
+            full_path = os.path.join(os.path.dirname(path) if path else "", name + extension)
+            is_path_valid, path_error = FilenameValidator.is_valid_path_length(full_path)
+            if not is_path_valid:
+                result = f"Ошибка: {path_error}" if path_error else "Ошибка: путь слишком длинный"
                 _set_cached_validation(name, extension, path, result)
                 return result
-    
-    # Проверка на зарезервированные имена Windows (используем кэш)
-    if name.upper() in _RESERVED_NAMES:
-        result = f"Ошибка: зарезервированное имя '{name}'"
+        except Exception:
+            pass  # Если не удалось проверить путь, продолжаем
+        
+        # Если все проверки пройдены, возвращаем успех
+        result = "Готов"
         _set_cached_validation(name, extension, path, result)
         return result
-    
-    # Проверка длины имени (Windows ограничение: 255 символов для полного пути)
-    try:
-        from config.constants import (
-            WINDOWS_MAX_FILENAME_LENGTH,
-            WINDOWS_MAX_PATH_LENGTH,
-            check_windows_path_length
-        )
-        MAX_FILENAME_LEN = WINDOWS_MAX_FILENAME_LENGTH
-        MAX_PATH_LEN = WINDOWS_MAX_PATH_LENGTH
-        has_path_check = True
+        
     except ImportError:
-        MAX_FILENAME_LEN = 255
-        MAX_PATH_LEN = 260
-        has_path_check = False
-    
-    full_name = name + extension
-    if len(full_name) > MAX_FILENAME_LEN:
-        result = f"Ошибка: имя слишком длинное ({len(full_name)} > {MAX_FILENAME_LEN})"
-        _set_cached_validation(name, extension, path, result)
-        return result
-    
-    # Проверка на точки в конце имени (Windows не позволяет)
-    if name.endswith('.') or name.endswith(' '):
-        result = "Ошибка: имя не может заканчиваться точкой или пробелом"
-        _set_cached_validation(name, extension, path, result)
-        return result
-    
-    # Проверка длины полного пути для Windows
-    if sys.platform == 'win32' and path:
+        # Fallback на старую логику если новый модуль недоступен
+        if not name or not name.strip():
+            result = "Ошибка: пустое имя"
+            _set_cached_validation(name, extension, path, result)
+            return result
+        
+        # Запрещенные символы в именах файлов Windows (используем кэш)
+        if any(char in name for char in _INVALID_CHARS):
+            # Находим первый недопустимый символ для сообщения об ошибке
+            for char in _INVALID_CHARS:
+                if char in name:
+                    result = f"Ошибка: недопустимый символ '{char}'"
+                    _set_cached_validation(name, extension, path, result)
+                    return result
+        
+        # Проверка на зарезервированные имена Windows (используем кэш)
+        if name.upper() in _RESERVED_NAMES:
+            result = f"Ошибка: зарезервированное имя '{name}'"
+            _set_cached_validation(name, extension, path, result)
+            return result
+        
+        # Проверка длины имени (Windows ограничение: 255 символов для полного пути)
         try:
-            directory = os.path.dirname(path)
-            full_path = os.path.join(directory, full_name)
-            if has_path_check:
-                if not check_windows_path_length(full_path):
+            from config.constants import (
+                WINDOWS_MAX_FILENAME_LENGTH,
+                WINDOWS_MAX_PATH_LENGTH,
+                check_windows_path_length
+            )
+            MAX_FILENAME_LEN = WINDOWS_MAX_FILENAME_LENGTH
+            MAX_PATH_LEN = WINDOWS_MAX_PATH_LENGTH
+            has_path_check = True
+        except ImportError:
+            MAX_FILENAME_LEN = 255
+            MAX_PATH_LEN = 260
+            has_path_check = False
+        
+        full_name = name + extension
+        if len(full_name) > MAX_FILENAME_LEN:
+            result = f"Ошибка: имя слишком длинное ({len(full_name)} > {MAX_FILENAME_LEN})"
+            _set_cached_validation(name, extension, path, result)
+            return result
+        
+        # Проверка на точки в конце имени (Windows не позволяет)
+        if name.endswith('.') or name.endswith(' '):
+            result = "Ошибка: имя не может заканчиваться точкой или пробелом"
+            _set_cached_validation(name, extension, path, result)
+            return result
+        
+        # Проверка длины полного пути для Windows
+        if sys.platform == 'win32' and path:
+            try:
+                directory = os.path.dirname(path)
+                full_path = os.path.join(directory, full_name)
+                if has_path_check:
+                    if not check_windows_path_length(full_path):
+                        result = f"Ошибка: полный путь слишком длинный (>{MAX_PATH_LEN} символов)"
+                        _set_cached_validation(name, extension, path, result)
+                        return result
+                elif len(full_path) > MAX_PATH_LEN and not full_path.startswith('\\\\?\\'):
                     result = f"Ошибка: полный путь слишком длинный (>{MAX_PATH_LEN} символов)"
                     _set_cached_validation(name, extension, path, result)
                     return result
-            elif len(full_path) > MAX_PATH_LEN and not full_path.startswith('\\\\?\\'):
-                result = f"Ошибка: полный путь слишком длинный (>{MAX_PATH_LEN} символов)"
-                _set_cached_validation(name, extension, path, result)
-                return result
-        except (OSError, ValueError):
-            pass  # Игнорируем ошибки проверки пути
-    
-    result = "Готов"
-    _set_cached_validation(name, extension, path, result)
-    return result
+            except (OSError, ValueError):
+                pass  # Игнорируем ошибки проверки пути
+        
+        result = "Готов"
+        _set_cached_validation(name, extension, path, result)
+        return result
 
 
 def check_conflicts(files_list: List[Dict[str, Any]]) -> None:
@@ -872,7 +912,7 @@ def check_conflicts(files_list: List[Dict[str, Any]]) -> None:
                 file_data['status'] = f"Конфликт: {len(file_list)} файла с именем '{full_name}'"
 
 
-def rename_files_thread(
+def re_file_files_thread(
     files_to_rename: List[Dict],
     callback: Callable[[int, int, List[Dict]], None],
     log_callback: Optional[Callable[[str], None]] = None,
@@ -880,7 +920,7 @@ def rename_files_thread(
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
     cancel_var: Optional[threading.Event] = None
 ) -> None:
-    """Переименование файлов в отдельном потоке.
+    """Re-file операции с файлами в отдельном потоке.
     
     Args:
         files_to_rename: Список файлов для переименования
@@ -890,62 +930,97 @@ def rename_files_thread(
         progress_callback: Функция для обновления прогресса (current, total, filename)
         cancel_var: Событие для отмены операции (опционально)
     """
-    def rename_worker():
+    def re_file_worker():
         success_count = 0
         error_count = 0
         renamed_files = []
         total = len(files_to_rename)
         
-        # Создаем резервные копии, если включено
-        backups = {}
-        if backup_manager and HAS_BACKUP:
-            try:
-                backups = backup_manager.create_backups(files_to_rename)
-                if backups and log_callback:
-                    log_callback(f"Создано резервных копий: {len(backups)}")
-            except Exception as e:
-                logger.error(f"Ошибка при создании резервных копий: {e}")
-                if log_callback:
-                    log_callback(f"Предупреждение: не удалось создать резервные копии")
+        logger.info(f"re_file_worker начал работу: {total} файлов для обработки")
         
-        for i, file_data in enumerate(files_to_rename):
-            # Проверка отмены
-            if cancel_var and cancel_var.is_set():
-                if log_callback:
-                    log_callback("Операция переименования отменена пользователем")
-                break
-            old_path = None
-            new_path = None
-            try:
-                # Поддержка как словарей, так и FileInfo объектов
-                if hasattr(file_data, 'full_path'):
-                    # FileInfo объект
-                    old_path = file_data.full_path or str(file_data.path)
-                    is_folder = (file_data.metadata and file_data.metadata.get('is_folder', False)) if hasattr(file_data, 'metadata') else False
-                else:
-                    # Словарь
-                    old_path = file_data.get('full_path') or file_data.get('path')
-                    is_folder = file_data.get('is_folder', False) or (
-                        file_data.get('metadata', {}).get('is_folder', False) if isinstance(file_data.get('metadata'), dict) else False
-                    )
-                
-                if not old_path:
-                    error_msg = "Не указан путь к файлу/папке"
-                    if log_callback:
-                        log_callback(f"Ошибка: {error_msg}")
-                    if hasattr(file_data, 'set_error'):
-                        file_data.set_error(error_msg)
-                    else:
-                        file_data['status'] = f"Ошибка: {error_msg}"
-                    error_count += 1
-                    continue
-                
-                # Нормализуем путь
-                old_path = os.path.normpath(old_path)
-                
-                # Проверяем существование исходного файла/папки (объединяем проверки)
+        try:
+            # Создаем резервные копии, если включено
+            backups = {}
+            if backup_manager and HAS_BACKUP:
                 try:
-                    if not os.path.exists(old_path):
+                    backups = backup_manager.create_backups(files_to_rename)
+                    if backups and log_callback:
+                        log_callback(f"Создано резервных копий: {len(backups)}")
+                except Exception as e:
+                    logger.error(f"Ошибка при создании резервных копий: {e}")
+                    if log_callback:
+                        log_callback(f"Предупреждение: не удалось создать резервные копии")
+            
+            for i, file_data in enumerate(files_to_rename):
+                # Проверка отмены
+                if cancel_var and cancel_var.is_set():
+                    if log_callback:
+                        log_callback("Операция переименования отменена пользователем")
+                    break
+                old_path = None
+                new_path = None
+                try:
+                    # Поддержка как словарей, так и FileInfo объектов
+                    if hasattr(file_data, 'full_path'):
+                        # FileInfo объект
+                        old_path = file_data.full_path or str(file_data.path)
+                        is_folder = (file_data.metadata and file_data.metadata.get('is_folder', False)) if hasattr(file_data, 'metadata') else False
+                    else:
+                        # Словарь
+                        old_path = file_data.get('full_path') or file_data.get('path')
+                        is_folder = file_data.get('is_folder', False) or (
+                            file_data.get('metadata', {}).get('is_folder', False) if isinstance(file_data.get('metadata'), dict) else False
+                        )
+                    
+                    if not old_path:
+                        error_msg = "Не указан путь к файлу/папке"
+                        if log_callback:
+                            log_callback(f"Ошибка: {error_msg}")
+                        if hasattr(file_data, 'set_error'):
+                            file_data.set_error(error_msg)
+                        else:
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                        error_count += 1
+                        continue
+                    
+                    # Нормализуем путь
+                    old_path = os.path.normpath(old_path)
+                    
+                    # Проверяем существование исходного файла/папки (объединяем проверки)
+                    try:
+                        if not os.path.exists(old_path):
+                            item_type = "папка" if is_folder else "файл"
+                            error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path)}"
+                            if log_callback:
+                                log_callback(f"Ошибка: {error_msg}")
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                            error_count += 1
+                            continue
+                        # Проверяем, что это действительно файл или папка (но не что-то другое)
+                        if not (os.path.isfile(old_path) or os.path.isdir(old_path)):
+                            item_type = "папка" if is_folder else "файл"
+                            error_msg = f"Путь не является {item_type}: {os.path.basename(old_path)}"
+                            if log_callback:
+                                log_callback(f"Ошибка: {error_msg}")
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                            error_count += 1
+                            continue
+                        # Если это папка, но путь указывает на файл (или наоборот)
+                        if is_folder and not os.path.isdir(old_path):
+                            error_msg = f"Путь указывает на файл, а не на папку: {os.path.basename(old_path)}"
+                            if log_callback:
+                                log_callback(f"Ошибка: {error_msg}")
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                            error_count += 1
+                            continue
+                        if not is_folder and not os.path.isfile(old_path):
+                            error_msg = f"Путь указывает на папку, а не на файл: {os.path.basename(old_path)}"
+                            if log_callback:
+                                log_callback(f"Ошибка: {error_msg}")
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                            error_count += 1
+                            continue
+                    except (OSError, ValueError):
                         item_type = "папка" if is_folder else "файл"
                         error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path)}"
                         if log_callback:
@@ -953,155 +1028,175 @@ def rename_files_thread(
                         file_data['status'] = f"Ошибка: {error_msg}"
                         error_count += 1
                         continue
-                    # Проверяем, что это действительно файл или папка (но не что-то другое)
-                    if not (os.path.isfile(old_path) or os.path.isdir(old_path)):
-                        item_type = "папка" if is_folder else "файл"
-                        error_msg = f"Путь не является {item_type}: {os.path.basename(old_path)}"
-                        if log_callback:
-                            log_callback(f"Ошибка: {error_msg}")
-                        file_data['status'] = f"Ошибка: {error_msg}"
-                        error_count += 1
-                        continue
-                    # Если это папка, но путь указывает на файл (или наоборот)
-                    if is_folder and not os.path.isdir(old_path):
-                        error_msg = f"Путь указывает на файл, а не на папку: {os.path.basename(old_path)}"
-                        if log_callback:
-                            log_callback(f"Ошибка: {error_msg}")
-                        file_data['status'] = f"Ошибка: {error_msg}"
-                        error_count += 1
-                        continue
-                    if not is_folder and not os.path.isfile(old_path):
-                        error_msg = f"Путь указывает на папку, а не на файл: {os.path.basename(old_path)}"
-                        if log_callback:
-                            log_callback(f"Ошибка: {error_msg}")
-                        file_data['status'] = f"Ошибка: {error_msg}"
-                        error_count += 1
-                        continue
-                except (OSError, ValueError):
-                    item_type = "папка" if is_folder else "файл"
-                    error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path)}"
-                    if log_callback:
-                        log_callback(f"Ошибка: {error_msg}")
-                    file_data['status'] = f"Ошибка: {error_msg}"
-                    error_count += 1
-                    continue
-                
-                # Получаем new_name и extension
-                if hasattr(file_data, 'new_name'):
-                    # FileInfo объект
-                    new_name = file_data.new_name
-                    extension = '' if is_folder else file_data.extension
-                else:
-                    # Словарь
-                    new_name = file_data.get('new_name', '')
-                    extension = '' if is_folder else file_data.get('extension', '')
-                
-                # Валидация нового имени
-                if not new_name or not new_name.strip():
-                    item_type = "папки" if is_folder else "файла"
-                    error_msg = f"Пустое имя {item_type}"
-                    if log_callback:
-                        log_callback(f"Ошибка: {error_msg}")
-                    if hasattr(file_data, 'set_error'):
-                        file_data.set_error(error_msg)
+                    
+                    # Получаем new_name и extension
+                    if hasattr(file_data, 'new_name'):
+                        # FileInfo объект
+                        new_name = file_data.new_name
+                        extension = '' if is_folder else file_data.extension
                     else:
-                        file_data['status'] = f"Ошибка: {error_msg}"
-                    error_count += 1
-                    continue
-                
-                # Получаем директорию и создаем новый путь
-                directory = os.path.dirname(old_path)
-                # Для папок extension пустой, для файлов используем extension
-                new_path = os.path.join(directory, new_name + extension)
-                new_path = os.path.normpath(new_path)
-                
-                # Проверяем, что новый путь отличается от старого
-                if old_path == new_path:
-                    item_type = "папка" if is_folder else "файл"
-                    if log_callback:
-                        log_callback(f"Без изменений: '{os.path.basename(old_path)}' ({item_type})")
-                    success_count += 1
-                    continue
-                
-                # Проверяем, существует ли файл/папка с таким именем
-                try:
-                    if os.path.exists(new_path):
+                        # Словарь
+                        new_name = file_data.get('new_name', '')
+                        extension = '' if is_folder else file_data.get('extension', '')
+                    
+                    # Валидация нового имени
+                    if not new_name or not new_name.strip():
+                        item_type = "папки" if is_folder else "файла"
+                        error_msg = f"Пустое имя {item_type}"
+                        if log_callback:
+                            log_callback(f"Ошибка: {error_msg}")
+                        if hasattr(file_data, 'set_error'):
+                            file_data.set_error(error_msg)
+                        else:
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                        error_count += 1
+                        continue
+                    
+                    # Получаем директорию и создаем новый путь
+                    directory = os.path.dirname(old_path)
+                    # Для папок extension пустой, для файлов используем extension
+                    new_path = os.path.join(directory, new_name + extension)
+                    new_path = os.path.normpath(new_path)
+                    
+                    # Проверяем, что новый путь отличается от старого
+                    if old_path == new_path:
+                        item_type = "папка" if is_folder else "файл"
+                        if log_callback:
+                            log_callback(f"Без изменений: '{os.path.basename(old_path)}' ({item_type})")
+                        success_count += 1
+                        continue
+                    
+                    # Переименовываем файл/папку (os.rename работает и для папок тоже)
+                    # os.rename атомарен и сам проверит существование, поэтому объединяем проверку и переименование
+                    try:
+                        # Проверяем существование нового пути перед переименованием
+                        # Это оптимизация - избегаем лишних вызовов os.path.exists
+                        if os.path.exists(new_path):
+                            item_type = "папка" if is_folder else "файл"
+                            item_name = new_name if is_folder else new_name + extension
+                            error_msg = f"{item_type.capitalize()} '{item_name}' уже существует"
+                            if log_callback:
+                                log_callback(f"Ошибка: {error_msg}")
+                            file_data['status'] = f"Ошибка: {error_msg}"
+                            error_count += 1
+                            continue
+                        
+                        # Выполняем переименование (атомарная операция)
+                        # Если файл уже существует, это вызовет FileExistsError
+                        os.rename(old_path, new_path)
+                    except FileExistsError:
+                        # Race condition: файл был создан между проверкой и переименованием
                         item_type = "папка" if is_folder else "файл"
                         item_name = new_name if is_folder else new_name + extension
-                        error_msg = f"{item_type.capitalize()} '{item_name}' уже существует"
+                        error_msg = f"{item_type.capitalize()} '{item_name}' уже существует (race condition)"
                         if log_callback:
                             log_callback(f"Ошибка: {error_msg}")
                         file_data['status'] = f"Ошибка: {error_msg}"
                         error_count += 1
+                        logger.warning(f"Race condition при переименовании {old_path} -> {new_path}")
                         continue
-                except (OSError, ValueError):
-                    pass  # Продолжаем, если проверка не удалась
-                
-                # Переименовываем файл/папку (os.rename работает и для папок тоже)
-                try:
-                    os.rename(old_path, new_path)
-                except OSError as rename_error:
-                    # Проверяем, что исходный файл/папка все еще существует
-                    item_type = "папка" if is_folder else "файл"
-                    try:
-                        if not os.path.exists(old_path):
-                            error_msg = f"Исходный {item_type} был удален при переименовании: {os.path.basename(old_path)}"
-                        else:
+                    except OSError as rename_error:
+                        # Другие ошибки файловой системы
+                        item_type = "папка" if is_folder else "файл"
+                        # Проверяем, что исходный файл/папка все еще существует
+                        try:
+                            if not os.path.exists(old_path):
+                                error_msg = f"Исходный {item_type} был удален при переименовании: {os.path.basename(old_path)}"
+                            else:
+                                error_msg = f"Ошибка переименования: {str(rename_error)}"
+                        except (OSError, ValueError):
                             error_msg = f"Ошибка переименования: {str(rename_error)}"
-                    except (OSError, ValueError):
-                        error_msg = f"Ошибка переименования: {str(rename_error)}"
+                        if log_callback:
+                            log_callback(f"Ошибка: {error_msg}")
+                        file_data['status'] = f"Ошибка: {error_msg}"
+                        error_count += 1
+                        logger.error(f"Ошибка переименования {old_path} -> {new_path}: {rename_error}", exc_info=True)
+                        continue
+                    
+                    # Обновляем путь в данных файла/папки
+                    if hasattr(file_data, 'path'):
+                        # FileInfo объект
+                        from pathlib import Path
+                        file_data.path = Path(new_path)
+                        file_data.full_path = new_path
+                        file_data.old_name = new_name
+                    else:
+                        # Словарь
+                        file_data['path'] = new_path
+                        file_data['full_path'] = new_path
+                        file_data['old_name'] = new_name
+                    
+                    renamed_files.append(file_data)
+                    success_count += 1
+                    
+                    item_name = new_name if is_folder else new_name + extension
                     if log_callback:
-                        log_callback(f"Ошибка: {error_msg}")
+                        log_callback(f"Переименован {item_type}: '{os.path.basename(old_path)}' -> '{item_name}'")
+                        
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}", exc_info=True)
+                    if log_callback:
+                        log_callback(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}")
                     file_data['status'] = f"Ошибка: {error_msg}"
                     error_count += 1
-                    continue
-                
-                # Обновляем путь в данных файла/папки
-                if hasattr(file_data, 'path'):
-                    # FileInfo объект
-                    from pathlib import Path
-                    file_data.path = Path(new_path)
-                    file_data.full_path = new_path
-                    file_data.old_name = new_name
-                else:
-                    # Словарь
-                    file_data['path'] = new_path
-                    file_data['full_path'] = new_path
-                    file_data['old_name'] = new_name
-                
-                renamed_files.append(file_data)
-                success_count += 1
-                
-                item_name = new_name if is_folder else new_name + extension
-                if log_callback:
-                    log_callback(f"Переименован {item_type}: '{os.path.basename(old_path)}' -> '{item_name}'")
+                    # Проверяем, что исходный файл все еще существует (опционально, только для логирования)
+                    if old_path:
+                        try:
+                            if os.path.exists(old_path) and log_callback:
+                                log_callback(f"Исходный файл сохранен: {os.path.basename(old_path)}")
+                        except (OSError, ValueError):
+                            pass
                     
-            except Exception as e:
-                error_msg = str(e)
-                logger.error(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}", exc_info=True)
-                if log_callback:
-                    log_callback(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}")
-                file_data['status'] = f"Ошибка: {error_msg}"
-                error_count += 1
-                # Проверяем, что исходный файл все еще существует (опционально, только для логирования)
-                if old_path:
-                    try:
-                        if os.path.exists(old_path) and log_callback:
-                            log_callback(f"Исходный файл сохранен: {os.path.basename(old_path)}")
-                    except (OSError, ValueError):
-                        pass
-            
-            # Обновление прогресса даже при ошибке
-            if progress_callback:
+                    # Обновление прогресса даже при ошибке
+                    if progress_callback:
+                        try:
+                            progress_callback(i + 1, total, file_data.get('old_name', 'unknown'))
+                        except Exception:
+                            pass
+        except Exception as e:
+            # Критическая ошибка - логируем и продолжаем
+            logger.error(f"Критическая ошибка в re_file_worker: {e}", exc_info=True)
+            if log_callback:
+                log_callback(f"Критическая ошибка: {e}")
+        finally:
+            # Всегда вызываем callback, даже при ошибках
+            logger.info(f"re_file_worker завершает работу: успешно {success_count}, ошибок {error_count}")
+            if callback:
                 try:
-                    progress_callback(i + 1, total, file_data.get('old_name', 'unknown'))
-                except Exception:
-                    pass
-        
-        # Вызываем callback в главном потоке
-        if callback:
-            callback(success_count, error_count, renamed_files)
+                    logger.debug(f"Вызов callback с результатами: success={success_count}, error={error_count}, files={len(renamed_files)}")
+                    callback(success_count, error_count, renamed_files)
+                    logger.debug("Callback успешно выполнен")
+                except Exception as callback_error:
+                    logger.error(f"Ошибка при вызове callback: {callback_error}", exc_info=True)
+            else:
+                logger.warning("Callback не предоставлен, результат не будет передан")
     
-    thread = threading.Thread(target=rename_worker, daemon=True)
-    thread.start()
+    # Запускаем worker в отдельном потоке
+    try:
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="re_file_files")
+        future = executor.submit(re_file_worker)
+        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
+        
+        # Добавляем таймаут для защиты от зависания
+        def check_completion():
+            """Проверка завершения операции через 10 секунд"""
+            import time
+            time.sleep(10)
+            if not future.done():
+                logger.warning("Операция re_file_worker не завершилась за 10 секунд, возможно зависание")
+        
+        # Запускаем проверку в отдельном потоке (не блокируем основной)
+        import threading
+        timeout_thread = threading.Thread(target=check_completion, daemon=True)
+        timeout_thread.start()
+        
+    except Exception as e:
+        logger.error(f"Ошибка при запуске re_file_worker: {e}", exc_info=True)
+        # Если не удалось запустить worker, вызываем callback с ошибкой
+        if callback:
+            try:
+                callback(0, len(files_to_rename), [])
+            except Exception as callback_error:
+                logger.error(f"Ошибка при вызове callback после ошибки запуска: {callback_error}", exc_info=True)
 

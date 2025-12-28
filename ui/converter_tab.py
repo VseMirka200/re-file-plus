@@ -10,7 +10,7 @@ import os
 import re
 import subprocess
 import sys
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 import tkinter as tk
@@ -51,7 +51,16 @@ class ConverterTab:
         self.app = app
     
     def create_tab(self):
-        """Создание вкладки конвертации файлов на главном экране"""
+        """Создание вкладки конвертации файлов на главном экране (старый метод для обратной совместимости)"""
+        # Если используется новая структура с content_container, создаем содержимое там
+        if hasattr(self.app, 'content_container') and self.app.content_container:
+            self.create_tab_content(self.app.content_container)
+            return
+        
+        # Старая структура с Notebook (для обратной совместимости)
+        if not hasattr(self.app, 'main_notebook') or not self.app.main_notebook:
+            return
+        
         converter_tab = tk.Frame(self.app.main_notebook, bg=self.app.colors['bg_main'])
         converter_tab.columnconfigure(0, weight=1)
         converter_tab.rowconfigure(0, weight=1)
@@ -271,7 +280,6 @@ class ConverterTab:
                 "Все",
                 "Изображения",
                 "Документы",
-                "Таблицы",
                 "Презентации",
                 "Аудио",
                 "Видео"
@@ -345,13 +353,143 @@ class ConverterTab:
             active_bg=self.app.colors['success_hover'])
         btn_convert.pack(fill=tk.X)
     
+    def create_tab_content(self, parent):
+        """Создание содержимого вкладки конвертации (только правая панель с настройками).
+        Список файлов используется общий из files_container.
+        
+        Args:
+            parent: Родительский контейнер для размещения содержимого
+        """
+        # Создаем Frame для содержимого вкладки конвертации (только правая панель)
+        convert_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
+        convert_frame.grid(row=0, column=0, sticky="nsew")
+        convert_frame.columnconfigure(0, weight=1)
+        convert_frame.rowconfigure(0, weight=1)
+        
+        # Сохраняем ссылку
+        self.app.tab_contents["convert"] = convert_frame
+        
+        # Используем общий список файлов для конвертации
+        # converter_files теперь будет ссылаться на общий список файлов
+        # Используем общий tree для отображения
+        if hasattr(self.app, 'tree'):
+            self.app.converter_tree = self.app.tree
+            self.app.converter_scrollbar_y = self.app.tree_scrollbar_y
+            self.app.converter_scrollbar_x = self.app.tree_scrollbar_x
+            self.app.converter_list_frame = self.app.list_frame
+        
+        # === ПРАВАЯ ПАНЕЛЬ (настройки конвертации) ===
+        right_panel = ttk.LabelFrame(
+            convert_frame,
+            text="Настройки конвертации",
+            style='Card.TLabelframe',
+            padding=(6, 12, 6, 12)
+        )
+        right_panel.grid(row=0, column=0, sticky="nsew", padx=(2, 0), pady=(20, 20))
+        right_panel.columnconfigure(0, weight=1)
+        right_panel.rowconfigure(0, weight=1)
+        
+        # Внутренний Frame для содержимого (настройки сверху)
+        settings_frame = tk.Frame(right_panel, bg=self.app.colors['bg_card'])
+        settings_frame.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
+        
+        # Фильтр по типу файла
+        filter_label = tk.Label(settings_frame, text="Фильтр по типу:",
+                               font=('Robot', 9, 'bold'),
+                               bg=self.app.colors['bg_card'],
+                               fg=self.app.colors['text_primary'],
+                               anchor='w')
+        filter_label.pack(anchor=tk.W, pady=(0, 6))
+        
+        # Combobox для фильтра по типу файла
+        filter_var = tk.StringVar(value="Все")
+        filter_combo = ttk.Combobox(
+            settings_frame,
+            textvariable=filter_var,
+            values=[
+                "Все",
+                "Изображения",
+                "Документы",
+                "Презентации",
+                "Аудио",
+                "Видео"
+            ],
+            state='readonly',
+            width=15
+        )
+        filter_combo.pack(fill=tk.X, pady=(0, 10))
+        filter_combo.bind('<<ComboboxSelected>>', lambda e: self.filter_converter_files_by_type())
+        self.app.converter_filter_var = filter_var
+        self.app.converter_filter_combo = filter_combo
+        
+        # Применяем фильтр при инициализации
+        self.app.root.after(100, lambda: self.filter_converter_files_by_type())
+        
+        # Выбор формата
+        format_label = tk.Label(settings_frame, text="Целевой формат:",
+                               font=('Robot', 9, 'bold'),
+                               bg=self.app.colors['bg_card'],
+                               fg=self.app.colors['text_primary'],
+                               anchor='w')
+        format_label.pack(anchor=tk.W, pady=(0, 12))
+        
+        # Combobox для выбора формата
+        formats = self.app.file_converter.get_supported_formats()
+        format_var = tk.StringVar(value=formats[0] if formats else '.png')
+        format_combo = ttk.Combobox(settings_frame, textvariable=format_var,
+                                   values=formats, state='readonly', width=15)
+        format_combo.pack(fill=tk.X, pady=(0, 10))
+        self.app.converter_format_var = format_var
+        self.app.converter_format_combo = format_combo
+        
+        # Чекбокс для сжатия PDF
+        compress_pdf_var = tk.BooleanVar(value=False)
+        compress_pdf_check = tk.Checkbutton(
+            settings_frame, 
+            text="Сжимать PDF после конвертации",
+            variable=compress_pdf_var,
+            bg=self.app.colors['bg_card'],
+            fg=self.app.colors['text_primary'],
+            font=('Robot', 9),
+            anchor='w'
+        )
+        compress_pdf_check.pack(fill=tk.X, pady=(0, 10))
+        self.app.compress_pdf_var = compress_pdf_var
+        self.app.compress_pdf_check = compress_pdf_check
+        
+        # Функция для обновления видимости чекбокса сжатия
+        def update_compress_checkbox(*args):
+            target_format = format_var.get()
+            if target_format == '.pdf':
+                compress_pdf_check.pack(fill=tk.X, pady=(0, 10))
+            else:
+                compress_pdf_check.pack_forget()
+        
+        format_var.trace('w', update_compress_checkbox)
+        update_compress_checkbox()
+        
+        # Разделитель перед кнопками
+        separator_buttons = tk.Frame(right_panel, height=2, bg=self.app.colors['border'])
+        separator_buttons.pack(fill=tk.X, padx=6, pady=(6, 0))
+        
+        # Кнопки управления в правой панели (внизу)
+        buttons_frame = tk.Frame(right_panel, bg=self.app.colors['bg_card'])
+        buttons_frame.pack(fill=tk.X, padx=6, pady=(6, 0))
+        
+        btn_convert = self.app.create_rounded_button(
+            buttons_frame, "🔄 Конвертировать", self.convert_files,
+            self.app.colors['success'], 'white',
+            font=('Robot', 9, 'bold'), padx=10, pady=6,
+            active_bg=self.app.colors['success_hover'])
+        btn_convert.pack(fill=tk.X)
+    
     def process_files_from_args(self):
         """Обработка файлов из аргументов командной строки"""
         if not self.app.files_from_args:
             self.app.log("Нет файлов для обработки из аргументов")
             return
         
-        self.app.log(f"Начинаем обработку {len(self.app.files_from_args)} файлов из контекстного меню")
+        self.app.log(f"Начинаем обработку {len(self.app.files_from_args)} файлов из аргументов командной строки")
         
         # Переключаемся на вкладку конвертации
         if hasattr(self.app, 'main_notebook') and self.app.main_notebook:
@@ -423,7 +561,6 @@ class ConverterTab:
                 category_mapping = {
                     'image': 'Изображения',
                     'document': 'Документы',
-                    'spreadsheet': 'Таблицы',
                     'presentation': 'Презентации',
                     'audio': 'Аудио',
                     'video': 'Видео'
@@ -444,7 +581,7 @@ class ConverterTab:
             self.app.converter_tab_handler.filter_converter_files_by_type()
         
         added_count = len(self.app.converter_files) if hasattr(self.app, 'converter_files') else 0
-        self.app.log(f"Добавлено файлов из контекстного меню: {added_count} из {len(self.app.files_from_args)}")
+        self.app.log(f"Добавлено файлов из аргументов: {added_count} из {len(self.app.files_from_args)}")
     
     def add_files_for_conversion(self):
         """Добавление файлов для конвертации"""
@@ -455,16 +592,18 @@ class ConverterTab:
                 ("Все файлы", "*.*"),
                 (
                     "Изображения",
-                    "*.jpg *.jpeg *.png *.gif *.bmp *.webp *.tiff *.tif "
-                    "*.ico *.svg *.heic *.heif *.avif *.dng *.cr2 *.nef *.raw"
+                    "*.png *.jpg *.jpeg *.ico *.webp *.gif *.pdf"
                 ),
                 (
                     "Документы",
-                    "*.pdf *.docx *.doc *.xlsx *.xls *.pptx *.ppt *.txt "
-                    "*.rtf *.csv *.html *.htm *.odt *.ods *.odp"
+                    "*.png *.jpg *.jpeg *.pdf *.doc *.docx *.odt"
                 ),
-                ("Аудио", "*.mp3 *.wav *.flac *.aac *.ogg *.m4a *.wma *.opus"),
-                ("Видео", "*.mp4 *.avi *.mkv *.mov *.wmv *.flv *.webm *.m4v *.mpg *.mpeg *.3gp"),
+                (
+                    "Презентации",
+                    "*.pptx *.ppt *.odp"
+                ),
+                ("Аудио", "*.mp3 *.wav"),
+                ("Видео", "*.mp4 *.mov *.mkv *.gif"),
             ]
         )
         if files:
@@ -531,13 +670,15 @@ class ConverterTab:
                 self.app.converter_files.append(file_data)
             
             # Автоматически устанавливаем фильтр по типу первого добавленного файла
-            if self.app.converter_files and hasattr(self.app, 'converter_filter_var'):
-                first_file_category = self.app.converter_files[0].get('category')
+            if (hasattr(self.app, 'converter_files_metadata') and 
+                self.app.converter_files_metadata and 
+                hasattr(self.app, 'converter_filter_var')):
+                first_file_data = next(iter(self.app.converter_files_metadata.values()))
+                first_file_category = first_file_data.get('category')
                 if first_file_category and self.app.converter_filter_var.get() == "Все":
                     category_mapping = {
                         'image': 'Изображения',
                         'document': 'Документы',
-                        'spreadsheet': 'Таблицы',
                         'presentation': 'Презентации',
                         'audio': 'Аудио',
                         'video': 'Видео'
@@ -546,11 +687,13 @@ class ConverterTab:
                     if filter_name:
                         self.app.converter_filter_var.set(filter_name)
             
-            # Обновляем заголовок панели
-            if hasattr(self.app, 'converter_left_panel'):
-                count = len(self.app.converter_files)
-                self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {count})")
-            # Применяем фильтр - это обновит treeview и доступные форматы
+            # Обновляем заголовок панели (используем общий left_panel)
+            if hasattr(self.app, 'left_panel'):
+                count = len(self.app.files)
+                self.app.left_panel.config(text=f"Список файлов (Файлов: {count})")
+            # Обновляем отображение файлов в общем списке
+            self.app.refresh_treeview()
+            # Применяем фильтр - это обновит доступные форматы
             self.filter_converter_files_by_type()
             logger.info(f"Добавлено файлов в список конвертации: {added_count}, пропущено: {skipped_count}")
             self.app.log(f"Добавлено файлов для конвертации: {len(files)}")
@@ -572,7 +715,6 @@ class ConverterTab:
             "Все": None,
             "Изображения": "image",
             "Документы": "document",
-            "Таблицы": "spreadsheet",
             "Презентации": "presentation",
             "Аудио": "audio",
             "Видео": "video"
@@ -581,28 +723,22 @@ class ConverterTab:
         target_category = filter_mapping.get(filter_type)
         
         # Формируем список форматов в зависимости от типа фильтра
+        # Используем форматы напрямую из словарей, а не через get_supported_formats()
         if target_category == "image":
-            image_formats = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif',
-                           '.ico', '.svg', '.heic', '.heif', '.avif', '.dng', '.cr2', '.nef', '.raw']
-            final_formats = [f for f in all_supported_formats if f in image_formats]
+            # Для изображений показываем только форматы изображений
+            final_formats = list(self.app.file_converter.supported_image_formats.keys())
         elif target_category == "document":
-            # Для документов показываем форматы документов Word и форматы изображений (JPG, PNG)
-            doc_formats = list(self.app.file_converter.supported_document_formats.keys())
-            # Добавляем JPG и PNG для конвертации документов в изображения
-            image_formats_for_docs = ['.jpg', '.jpeg', '.png']
-            final_formats = [f for f in all_supported_formats if f in doc_formats or f in image_formats_for_docs]
-        elif target_category == "spreadsheet":
-            spreadsheet_formats = list(self.app.file_converter.supported_spreadsheet_formats.keys())
-            final_formats = [f for f in all_supported_formats if f in spreadsheet_formats]
+            # Для документов показываем все форматы документов
+            final_formats = list(self.app.file_converter.supported_document_formats.keys())
         elif target_category == "presentation":
-            presentation_formats = list(self.app.file_converter.supported_presentation_formats.keys())
-            final_formats = [f for f in all_supported_formats if f in presentation_formats]
+            # Для презентаций показываем только форматы презентаций
+            final_formats = list(self.app.file_converter.supported_presentation_formats.keys())
         elif target_category == "audio":
-            audio_formats = list(self.app.file_converter.supported_audio_formats.keys())
-            final_formats = [f for f in all_supported_formats if f in audio_formats]
+            # Для аудио показываем только форматы аудио
+            final_formats = list(self.app.file_converter.supported_audio_formats.keys())
         elif target_category == "video":
-            video_formats = list(self.app.file_converter.supported_video_formats.keys())
-            final_formats = [f for f in all_supported_formats if f in video_formats]
+            # Для видео показываем только форматы видео
+            final_formats = list(self.app.file_converter.supported_video_formats.keys())
         else:
             # Для "Все" показываем все поддерживаемые форматы
             final_formats = all_supported_formats
@@ -616,22 +752,17 @@ class ConverterTab:
             self.app.converter_format_var.set('')
     
     def filter_converter_files_by_type(self):
-        """Фильтрация файлов в конвертере по типу"""
-        if not hasattr(self.app, 'converter_tree') or not hasattr(self.app, 'converter_files'):
+        """Фильтрация файлов в конвертере по типу (использует общий список файлов)"""
+        if not hasattr(self.app, 'tree') or not hasattr(self.app, 'files'):
             return
         
-        filter_type = self.app.converter_filter_var.get()
-        
-        # Очищаем дерево
-        for item in self.app.converter_tree.get_children():
-            self.app.converter_tree.delete(item)
+        filter_type = self.app.converter_filter_var.get() if hasattr(self.app, 'converter_filter_var') else "Все"
         
         # Маппинг типов фильтра на категории
         filter_mapping = {
             "Все": None,
             "Изображения": "image",
             "Документы": "document",
-            "Таблицы": "spreadsheet",
             "Презентации": "presentation",
             "Аудио": "audio",
             "Видео": "video"
@@ -639,120 +770,31 @@ class ConverterTab:
         
         target_category = filter_mapping.get(filter_type)
         
-        # Фильтруем файлы по категории
-        visible_files = []
-        for file_data in self.app.converter_files:
-            file_category = file_data.get('category')
-            if target_category is None or file_category == target_category:
-                visible_files.append(file_data)
-        
-        # Группируем файлы по папкам (как в основном списке)
-        files_by_path = {}
-        for file_data in visible_files:
-            file_path = file_data.get('path', '')
-            if file_path:
-                # Получаем путь к папке файла
-                if os.path.exists(file_path):
-                    if os.path.isfile(file_path):
-                        folder_path = os.path.dirname(file_path)
-                    elif os.path.isdir(file_path):
-                        folder_path = file_path
-                    else:
-                        folder_path = os.path.dirname(file_path)
-                else:
-                    folder_path = os.path.dirname(file_path)
-                
-                # Нормализуем путь
-                if folder_path:
-                    folder_path = os.path.normpath(os.path.abspath(folder_path))
-                    if folder_path not in files_by_path:
-                        files_by_path[folder_path] = []
-                    files_by_path[folder_path].append(file_data)
-        
-        # Сортируем пути для консистентного отображения
-        sorted_paths = sorted(files_by_path.keys())
-        
-        # Добавляем файлы, группируя по папкам
-        visible_count = 0
-        for folder_path in sorted_paths:
-            files_in_folder = files_by_path[folder_path]
-            
-            # Вставляем строку с путем перед группой файлов
-            path_text = folder_path
-            self.app.converter_tree.insert("", tk.END, values=(path_text, ""), tags=('path_row',))
-            
-            # Добавляем файлы из этой папки
-            for file_data in files_in_folder:
-                file_name = os.path.basename(file_data['path'])
-                # Определяем тег в зависимости от статуса
-                status = file_data.get('status', 'Готов')
-                if status == 'Готов':
-                    tag = 'ready'
-                elif status == 'Конвертирован':
-                    tag = 'success'
-                elif 'Ошибка' in status or 'ошибка' in status:
-                    tag = 'error'
-                else:
-                    tag = 'ready'
-                
-                self.app.converter_tree.insert("", tk.END, values=(file_name, status), tags=(tag,))
-                visible_count += 1
-        
-        # Обновляем видимость скроллбаров после обновления содержимого
-        if hasattr(self.app, 'converter_scrollbar_y') and hasattr(self.app, 'converter_scrollbar_x'):
-            self.app.root.after_idle(lambda: self.app.update_scrollbar_visibility(
-                self.app.converter_tree, self.app.converter_scrollbar_y, 'vertical'))
-            self.app.root.after_idle(lambda: self.app.update_scrollbar_visibility(
-                self.app.converter_tree, self.app.converter_scrollbar_x, 'horizontal'))
+        # Обновляем отображение файлов в общем списке (файлы уже там)
+        # Просто обновляем доступные форматы на основе фильтра
         
         # Обновляем доступные форматы на основе фильтра типа
         if hasattr(self.app, 'converter_format_combo'):
-            # Получаем все поддерживаемые форматы
-            all_supported_formats = self.app.file_converter.get_supported_formats()
-            
             # Формируем список форматов в зависимости от типа фильтра
+            # Используем форматы напрямую из словарей, а не через get_supported_formats()
             if target_category == "image":
                 # Для изображений показываем только форматы изображений
-                image_formats = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif',
-                               '.ico', '.svg', '.heic', '.heif', '.avif', '.dng', '.cr2', '.nef', '.raw']
-                filtered_formats = [f for f in all_supported_formats if f in image_formats]
+                final_formats = list(self.app.file_converter.supported_image_formats.keys())
             elif target_category == "document":
-                # Для документов показываем форматы документов Word и форматы изображений (JPG, PNG)
-                doc_formats = list(self.app.file_converter.supported_document_formats.keys())
-                # Добавляем JPG и PNG для конвертации документов в изображения
-                image_formats_for_docs = ['.jpg', '.jpeg', '.png']
-                filtered_formats = [f for f in all_supported_formats if f in doc_formats or f in image_formats_for_docs]
-            elif target_category == "spreadsheet":
-                # Для таблиц показываем только форматы таблиц Excel
-                spreadsheet_formats = list(self.app.file_converter.supported_spreadsheet_formats.keys())
-                filtered_formats = [f for f in all_supported_formats if f in spreadsheet_formats]
+                # Для документов показываем все форматы документов
+                final_formats = list(self.app.file_converter.supported_document_formats.keys())
             elif target_category == "presentation":
-                # Для презентаций показываем только форматы презентаций PowerPoint
-                presentation_formats = list(self.app.file_converter.supported_presentation_formats.keys())
-                filtered_formats = [f for f in all_supported_formats if f in presentation_formats]
+                # Для презентаций показываем только форматы презентаций
+                final_formats = list(self.app.file_converter.supported_presentation_formats.keys())
             elif target_category == "audio":
-                # Для аудио показываем только форматы аудио (если они поддерживаются)
-                # Используем все форматы из file_converter, а не хардкод
-                audio_formats = list(self.app.file_converter.supported_audio_formats.keys())
-                filtered_formats = [f for f in all_supported_formats if f in audio_formats]
+                # Для аудио показываем только форматы аудио
+                final_formats = list(self.app.file_converter.supported_audio_formats.keys())
             elif target_category == "video":
-                # Для видео показываем только форматы видео (если они поддерживаются)
-                # Используем все форматы из file_converter, а не хардкод
-                video_formats = list(self.app.file_converter.supported_video_formats.keys())
-                filtered_formats = [f for f in all_supported_formats if f in video_formats]
+                # Для видео показываем только форматы видео
+                final_formats = list(self.app.file_converter.supported_video_formats.keys())
             else:
                 # Для "Все" показываем все поддерживаемые форматы
-                filtered_formats = all_supported_formats.copy()
-            
-            # Убираем дополнительную фильтрацию по доступным форматам файлов
-            # Всегда показываем все форматы, соответствующие выбранному фильтру типа
-            # Пользователь может выбрать любой формат, даже если он не подходит для добавленных файлов
-            if target_category is None:
-                # Для "Все" показываем все поддерживаемые форматы
-                final_formats = all_supported_formats
-            else:
-                # Для конкретного типа показываем отфильтрованные форматы (даже если пусто)
-                final_formats = filtered_formats if filtered_formats else []
+                final_formats = self.app.file_converter.get_supported_formats()
             
             self.app.converter_format_combo['values'] = final_formats
             
@@ -762,13 +804,10 @@ class ConverterTab:
             if current_value not in final_formats:
                 self.app.converter_format_var.set('')
         
-        # Обновляем заголовок панели
-        if hasattr(self.app, 'converter_left_panel'):
-            total_count = len(self.app.converter_files)
-            if filter_type == "Все":
-                self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {total_count})")
-            else:
-                self.app.converter_left_panel.config(text=f"Список файлов (Файлов: {visible_count} / {total_count})")
+        # Обновляем заголовок панели (используем общий left_panel)
+        if hasattr(self.app, 'left_panel'):
+            total_count = len(self.app.files)
+            self.app.left_panel.config(text=f"Список файлов (Файлов: {total_count})")
     
     def convert_files(self):
         """Конвертация выбранных файлов"""
@@ -776,7 +815,7 @@ class ConverterTab:
         if hasattr(self.app, '_converting_files') and self.app._converting_files:
             return
         
-        if not hasattr(self.app, 'converter_files') or not self.app.converter_files:
+        if not hasattr(self.app, 'files') or not self.app.files:
             messagebox.showwarning("Предупреждение", "Список файлов пуст")
             return
         
@@ -785,8 +824,9 @@ class ConverterTab:
             messagebox.showwarning("Предупреждение", "Выберите целевой формат")
             return
         
-        selected_items = self.app.converter_tree.selection()
-        files_to_convert = self.app.converter_files
+        selected_items = self.app.tree.selection()
+        # Получаем файлы из общего списка
+        files_to_convert = self.app.files.copy()
         
         # Если ничего не выбрано, конвертируем все
         if not selected_items:
@@ -849,19 +889,21 @@ class ConverterTab:
         
         # Инициализируем прогресс-бар
         total_files = len(files_to_convert)
-        self.app.root.after(
-            0,
-            lambda: self.app.converter_progress_bar.config(
-                maximum=total_files,
-                value=0
+        if hasattr(self.app, 'converter_progress_bar'):
+            self.app.root.after(
+                0,
+                lambda: self.app.converter_progress_bar.config(
+                    maximum=total_files,
+                    value=0
+                )
             )
-        )
-        self.app.root.after(
-            0,
-            lambda: self.app.converter_progress_label.config(
-                text=f"Обработка файлов: 0 / {total_files}"
+        if hasattr(self.app, 'converter_progress_label'):
+            self.app.root.after(
+                0,
+                lambda: self.app.converter_progress_label.config(
+                    text=f"Обработка файлов: 0 / {total_files}"
+                )
             )
-        )
         
         # Обрабатываем файлы в отдельном потоке
         def process_files():
@@ -944,9 +986,14 @@ class ConverterTab:
                     )
                     
                     # Добавляем файл в список для удаления после завершения конвертации
+                    remove_files = False
                     if hasattr(self.app, 'remove_files_after_operation_var'):
-                        if self.app.remove_files_after_operation_var.get():
-                            files_to_remove.append(file_data)
+                        remove_files = self.app.remove_files_after_operation_var.get()
+                    elif hasattr(self.app, 'settings_manager'):
+                        remove_files = self.app.settings_manager.get('remove_files_after_operation', False)
+                    
+                    if remove_files:
+                        files_to_remove.append(file_data)
                 else:
                     error_count += 1
                     log_file_action(
@@ -962,8 +1009,10 @@ class ConverterTab:
                     self.app.log(f"Ошибка при конвертации {os.path.basename(file_path)}: {message}")
             
             # Сбрасываем прогресс-бар
-            self.app.root.after(0, lambda: self.app.converter_progress_bar.config(value=0))
-            self.app.root.after(0, lambda: self.app.converter_progress_label.config(text=""))
+            if hasattr(self.app, 'converter_progress_bar'):
+                self.app.root.after(0, lambda: self.app.converter_progress_bar.config(value=0))
+            if hasattr(self.app, 'converter_progress_label'):
+                self.app.root.after(0, lambda: self.app.converter_progress_label.config(text=""))
             
             total_duration = (time.time() - start_time) * 1000  # в миллисекундах
             log_batch_action(
@@ -1014,15 +1063,18 @@ class ConverterTab:
                 logger.info(f"Конвертация завершена: успешно {success_count}, ошибок {error_count}")
                 self.app._converting_files = False
         
-        thread = threading.Thread(target=process_files, daemon=True)
-        thread.start()
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="convert_files")
+        executor.submit(process_files)
+        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
         logger.info("Поток конвертации файлов запущен")
     
     def update_converter_progress(self, current: int, total: int, filename: str):
         """Обновление прогресс-бара конвертации"""
         try:
-            self.app.converter_progress_bar['value'] = current
-            self.app.converter_progress_label.config(text=f"Обработка: {current} / {total} - {filename[:50]}")
+            if hasattr(self.app, 'converter_progress_bar'):
+                self.app.converter_progress_bar['value'] = current
+            if hasattr(self.app, 'converter_progress_label'):
+                self.app.converter_progress_label.config(text=f"Обработка: {current} / {total} - {filename[:50]}")
         except Exception:
             pass
     
@@ -1043,12 +1095,13 @@ class ConverterTab:
                 status_text = f"Ошибка: {message[:50]}"
         
         # Обновляем отображение в дереве
-        items = self.app.converter_tree.get_children()
+        items = self.app.tree.get_children()
         if 0 <= index < len(items):
             item = items[index]
             # Получаем текущие значения
-            current_values = self.app.converter_tree.item(item, 'values')
-            file_name = current_values[0] if current_values else ''
+            current_values = self.app.tree.item(item, 'values')
+            old_name = current_values[0] if current_values and len(current_values) > 0 else ''
+            new_name = current_values[1] if current_values and len(current_values) > 1 else ''
             
             # Определяем тег в зависимости от статуса
             if success:
@@ -1056,8 +1109,8 @@ class ConverterTab:
             else:
                 tag = 'error'
             
-            # Обновляем элемент с новым статусом
-            self.app.converter_tree.item(item, values=(file_name, status_text), tags=(tag,))
+            # Обновляем элемент с новым статусом (сохраняем old_name и new_name)
+            self.app.tree.item(item, values=(old_name, new_name, status_text), tags=(tag,))
             
             # Обновляем фильтр для отображения изменений
             self.filter_converter_files_by_type()
@@ -1229,7 +1282,6 @@ class ConverterTab:
                     category_mapping = {
                         'image': 'Изображения',
                         'document': 'Документы',
-                        'spreadsheet': 'Таблицы',
                         'presentation': 'Презентации',
                         'audio': 'Аудио',
                         'video': 'Видео'
@@ -1289,22 +1341,27 @@ class ConverterTab:
     
     def open_converter_file(self):
         """Открытие файла конвертации в программе по умолчанию"""
-        selected_items = self.app.converter_tree.selection()
+        selected_items = self.app.tree.selection()
         if not selected_items:
             return
         
         for item in selected_items:
-            values = self.app.converter_tree.item(item, 'values')
+            values = self.app.tree.item(item, 'values')
             if not values or len(values) < 1:
                 continue
             
-            file_name = values[0]
-            # Находим файл в списке
-            file_info = None
-            for f in self.app.converter_files:
-                if os.path.basename(f.get('path', '')) == file_name:
-                    file_info = f
+            file_name = values[0]  # old_name
+            # Находим файл в общем списке
+            file_path = None
+            for f in self.app.files:
+                if os.path.basename(f) == file_name:
+                    file_path = f
                     break
+            
+            # Получаем метаданные конвертации
+            file_info = None
+            if file_path and hasattr(self.app, 'converter_files_metadata'):
+                file_info = self.app.converter_files_metadata.get(file_path)
             
             if file_info:
                 file_path = file_info.get('path', '')
@@ -1418,33 +1475,3 @@ class ConverterTab:
         self.app.log(f"Удалено файлов из списка конвертации: {len(files_to_remove)}")
 
 
-if __name__ == "__main__":
-    """Точка входа для прямого запуска модуля."""
-    import sys
-    import os
-    
-    # Добавляем корневую директорию проекта в путь
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if project_root not in sys.path:
-        sys.path.insert(0, project_root)
-    
-    # Запускаем главное приложение
-    try:
-        # Используем importlib для импорта модуля с дефисом в имени
-        import importlib.util
-        import os
-        script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        file_path = os.path.join(script_dir, "file_re-file-plus.py")
-        spec = importlib.util.spec_from_file_location("file_re_file_plus", file_path)
-        file_re_file_plus = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(file_re_file_plus)
-        file_re_file_plus.main()
-    except (ImportError, Exception) as e:
-        print(f"Ошибка импорта: {e}")
-        print("Убедитесь, что вы запускаете из корневой директории проекта")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Ошибка при запуске: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)

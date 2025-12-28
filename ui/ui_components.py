@@ -36,6 +36,103 @@ LINUX_SCROLL_UP = 4  # Код прокрутки вверх для Linux
 LINUX_SCROLL_DOWN = 5  # Код прокрутки вниз для Linux
 
 
+class ToolTip:
+    """Класс для создания подсказок при наведении на виджеты."""
+    
+    def __init__(self, widget, text='', delay=500):
+        """
+        Инициализация tooltip.
+        
+        Args:
+            widget: Виджет, для которого создается подсказка
+            text: Текст подсказки
+            delay: Задержка перед показом подсказки (в миллисекундах)
+        """
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self.tipwindow = None
+        self.id = None
+        self.x = self.y = 0
+        
+        # Привязываем события
+        self.widget.bind('<Enter>', self.enter)
+        self.widget.bind('<Leave>', self.leave)
+        self.widget.bind('<ButtonPress>', self.leave)
+    
+    def enter(self, event=None):
+        """Показ подсказки при наведении."""
+        self.schedule()
+    
+    def leave(self, event=None):
+        """Скрытие подсказки при уходе курсора."""
+        self.unschedule()
+        self.hidetip()
+    
+    def schedule(self):
+        """Планирование показа подсказки."""
+        self.unschedule()
+        self.id = self.widget.after(self.delay, self.showtip)
+    
+    def unschedule(self):
+        """Отмена показа подсказки."""
+        id = self.id
+        self.id = None
+        if id:
+            self.widget.after_cancel(id)
+    
+    def showtip(self, event=None):
+        """Показ подсказки."""
+        if self.tipwindow or not self.text:
+            return
+        
+        # Получаем координаты виджета
+        try:
+            # Для Canvas виджетов используем winfo_rootx/y
+            if isinstance(self.widget, tk.Canvas):
+                x = self.widget.winfo_rootx() + self.widget.winfo_width() // 2
+                y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+            else:
+                # Для обычных виджетов
+                x = self.widget.winfo_rootx() + self.widget.winfo_width() // 2
+                y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        except (tk.TclError, AttributeError):
+            # Если не удалось получить координаты, используем позицию курсора
+            try:
+                x = self.widget.winfo_pointerx() + 10
+                y = self.widget.winfo_pointery() + 10
+            except (tk.TclError, AttributeError):
+                x = 100
+                y = 100
+        
+        # Создаем окно подсказки
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry("+%d+%d" % (x, y))
+        
+        # Стилизуем подсказку
+        label = tk.Label(tw, text=self.text, justify=tk.LEFT,
+                        background="#ffffe0", relief=tk.SOLID, borderwidth=1,
+                        font=('Robot', 9))
+        label.pack(ipadx=4, ipady=2)
+        
+        # Центрируем подсказку относительно виджета
+        try:
+            tw.update_idletasks()
+            tw_width = tw.winfo_width()
+            x = x - tw_width // 2
+            tw.wm_geometry("+%d+%d" % (x, y))
+        except (tk.TclError, AttributeError):
+            pass
+    
+    def hidetip(self):
+        """Скрытие подсказки."""
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
+
+
 class UIComponents:
     """Класс для создания переиспользуемых UI компонентов.
     
@@ -69,7 +166,8 @@ class UIComponents:
         active_bg: Optional[str] = None,
         active_fg: str = 'white',
         width: Optional[int] = None,
-        expand: bool = True
+        expand: bool = True,
+        tooltip: Optional[str] = None
     ) -> tk.Frame:
         """Создание кнопки с закругленными углами через Canvas.
         
@@ -134,9 +232,11 @@ class UIComponents:
         canvas.btn_command = command
         # Проверяем, что команда передана
         if command is None:
-            print("Предупреждение: команда кнопки не передана!")
+            import logging
+            logging.getLogger(__name__).warning("Команда кнопки не передана!")
         elif not callable(command):
-            print(f"Предупреждение: команда кнопки не является вызываемой: {type(command)}")
+            import logging
+            logging.getLogger(__name__).warning(f"Команда кнопки не является вызываемой: {type(command)}")
         canvas.btn_bg = bg_color
         canvas.btn_fg = fg_color
         canvas.btn_active_bg = active_bg
@@ -281,7 +381,7 @@ class UIComponents:
                 # Убираем старые привязки перед добавлением новых
                 try:
                     canvas.tag_unbind(tag, '<Button-1>')
-                except:
+                except (tk.TclError, AttributeError):
                     pass
                 try:
                     canvas.tag_bind(tag, '<Button-1>', on_click)
@@ -295,7 +395,7 @@ class UIComponents:
         # Убираем старую привязку перед добавлением новой
         try:
             canvas.unbind('<Button-1>')
-        except:
+        except (tk.TclError, AttributeError):
             pass
         canvas.bind('<Button-1>', on_click)
         canvas.bind('<Enter>', on_enter)
@@ -307,6 +407,91 @@ class UIComponents:
         
         # Привязываем события после первой отрисовки
         canvas.after(50, lambda: draw_button('normal'))
+        
+        # Добавляем tooltip с названием кнопки (используем tooltip если указан, иначе text)
+        tooltip_text = tooltip if tooltip is not None else text
+        ToolTip(canvas, text=tooltip_text)
+        ToolTip(btn_frame, text=tooltip_text)
+        
+        return btn_frame
+    
+    @staticmethod
+    def create_square_icon_button(
+        parent,
+        icon: str,
+        command: Callable,
+        bg_color: str = '#667EEA',
+        fg_color: str = 'white',
+        size: int = 40,
+        active_bg: Optional[str] = None,
+        tooltip: Optional[str] = None
+    ) -> tk.Frame:
+        """Создание квадратной кнопки со значком.
+        
+        Args:
+            parent: Родительский виджет
+            icon: Текст значка (например, "+", "-", "?", "✓")
+            command: Функция-обработчик клика
+            bg_color: Цвет фона
+            fg_color: Цвет текста/значка
+            size: Размер кнопки в пикселях (ширина и высота)
+            active_bg: Цвет фона при наведении
+            
+        Returns:
+            Frame с кнопкой внутри
+        """
+        if active_bg is None:
+            active_bg = bg_color
+        
+        # Создаем Frame с фиксированными размерами для квадратной кнопки
+        btn_frame = tk.Frame(parent, bg=parent.cget('bg'), width=size, height=size)
+        btn_frame.grid_propagate(False)  # Запрещаем изменение размера фрейма при использовании grid
+        btn_frame.pack_propagate(False)  # Запрещаем изменение размера фрейма при использовании pack
+        
+        # Создаем кнопку внутри Frame, она заполнит весь Frame
+        btn = tk.Button(
+            btn_frame,
+            text=icon,
+            font=('Arial', 12, 'bold'),
+            bg=bg_color,
+            fg=fg_color,
+            activebackground=active_bg,
+            activeforeground=fg_color,
+            relief=tk.FLAT,
+            cursor='hand2',
+            command=command,
+            borderwidth=1,
+            padx=0,
+            pady=0
+        )
+        # Используем place для точного размещения кнопки, чтобы она точно заполняла весь Frame
+        btn.place(x=0, y=0, relwidth=1.0, relheight=1.0)
+        
+        # Добавляем tooltip с названием кнопки
+        # Если tooltip указан явно, используем его, иначе создаем на основе иконки
+        if tooltip is not None:
+            tooltip_text = tooltip
+        else:
+            # Для квадратных кнопок создаем понятное название на основе иконки
+            tooltip_text = icon
+            icon_to_text = {
+                '?': 'Справка',
+                '✓': 'Применить',
+                '+': 'Добавить',
+                '➖': 'Удалить',
+                '🗑️': 'Очистить',
+                '▶️': 'Начать',
+                '⏸️': 'Пауза',
+                '⏹️': 'Остановить'
+            }
+            if icon in icon_to_text:
+                tooltip_text = icon_to_text[icon]
+            elif len(icon) > 1:
+                # Если иконка содержит текст (например, "➕ Добавить"), используем его
+                tooltip_text = icon
+        
+        ToolTip(btn, text=tooltip_text)
+        ToolTip(btn_frame, text=tooltip_text)
         
         return btn_frame
 
@@ -580,7 +765,7 @@ class StyleManager:
         
         # Стиль для Treeview
         self.style.configure('Custom.Treeview',
-                           rowheight=40,
+                           rowheight=30,
                            font=('Robot', 10),
                            background=self.colors['bg_card'],
                            foreground=self.colors['text_primary'],
@@ -884,7 +1069,7 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                                 # Освобождаем старую иконку, если она была
                                                 try:
                                                     ctypes.windll.user32.DestroyIcon(old_small)
-                                                except:
+                                                except (OSError, AttributeError, ctypes.ArgumentError):
                                                     pass
                                         
                                         # Устанавливаем большую иконку класса (для панели задач)
@@ -894,7 +1079,7 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                                 # Освобождаем старую иконку, если она была
                                                 try:
                                                     ctypes.windll.user32.DestroyIcon(old_big)
-                                                except:
+                                                except (OSError, AttributeError, ctypes.ArgumentError):
                                                     pass
                                         
                                         # Также устанавливаем иконку 48x48 для меню Пуск (если доступна)
@@ -903,7 +1088,7 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                             try:
                                                 # WM_SETICON с ICON_BIG = 1 для больших иконок
                                                 ctypes.windll.user32.SendMessageW(hwnd, 0x0080, 1, hicon_48)
-                                            except:
+                                            except (OSError, AttributeError, ctypes.ArgumentError):
                                                 pass
                                         
                                         # Устанавливаем флаг, что иконка установлена через API
@@ -925,7 +1110,7 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                         ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
                                         # Дополнительное обновление для меню Пуск
                                         ctypes.windll.shell32.SHChangeNotify(0x00002000, 0x0000, None, None)
-                                    except:
+                                    except (OSError, AttributeError, ctypes.ArgumentError):
                                         pass
                                     
                                     # Дополнительно: принудительно обновляем иконку процесса
@@ -951,9 +1136,9 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                                     ctypes.sizeof(file_info),
                                                     SHGFI_ICON | SHGFI_LARGEICON
                                                 )
-                                            except:
+                                            except (OSError, AttributeError, ctypes.ArgumentError):
                                                 pass
-                                    except:
+                                    except (OSError, AttributeError, ctypes.ArgumentError):
                                         pass
                         except Exception as api_error:
                             logger.debug(f"Ошибка установки иконки через Windows API: {api_error}")
@@ -1002,7 +1187,7 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                     except Exception as e:
                         logger.debug(f"Не удалось установить PNG иконку: {e}")
     except Exception as e:
-        print(f"Не удалось установить иконку: {e}")
+        logger.debug(f"Не удалось установить иконку: {e}")
 
 
 def bind_mousewheel(widget: tk.Widget, canvas: Optional[tk.Canvas] = None) -> None:

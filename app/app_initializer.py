@@ -162,6 +162,20 @@ class AppInitializer:
         # Инициализация менеджера методов
         self.app.methods_manager = MethodsManager(self.app.metadata_extractor)
         
+        # Инициализация сервиса переименования с DI
+        try:
+            from core.services.re_file_service import ReFileService
+            from core.error_handling import ErrorHandler
+            error_handler = getattr(self.app, 'error_handler', None) or ErrorHandler()
+            self.app.re_file_service = ReFileService(
+                metadata_extractor=self.app.metadata_extractor,
+                backup_manager=None,  # Будет установлен позже
+                error_handler=error_handler
+            )
+        except (ImportError, Exception) as e:
+            logger.debug(f"Не удалось инициализировать сервис re-file: {e}")
+            self.app.re_file_service = None
+        
         # Инициализация состояния приложения (если еще не создано)
         if not hasattr(self.app, 'state') or self.app.state is None:
             try:
@@ -180,6 +194,9 @@ class AppInitializer:
             backup_enabled = self.app.settings_manager.get('backup', False)
             if backup_enabled:
                 self.app.backup_manager = BackupManager()
+                # Обновляем сервис re-file с backup_manager
+                if hasattr(self.app, 're_file_service') and self.app.re_file_service:
+                    self.app.re_file_service.backup_manager = self.app.backup_manager
         except (ImportError, Exception) as e:
             logger.debug(f"Не удалось инициализировать менеджер резервных копий: {e}")
         
@@ -216,13 +233,16 @@ class AppInitializer:
         except (ImportError, Exception) as e:
             logger.debug(f"Не удалось инициализировать менеджер статистики: {e}")
         
-        # Обработчик ошибок
+        # Обработчик ошибок (используем новый централизованный модуль)
         self.app.error_handler = None
         try:
             try:
-                from infrastructure.system.error_handler import ErrorHandler
+                from core.error_handling import ErrorHandler
             except ImportError:
-                from utils.helpers import ErrorHandler
+                try:
+                    from infrastructure.system.error_handler import ErrorHandler
+                except ImportError:
+                    from utils.helpers import ErrorHandler
             self.app.error_handler = ErrorHandler()
         except (ImportError, Exception) as e:
             logger.debug(f"Не удалось инициализировать обработчик ошибок: {e}")
@@ -276,7 +296,7 @@ class AppInitializer:
         from ui.settings_tab import SettingsTab
         from ui.methods_window import MethodsWindow
         from ui.main_window import MainWindow
-        from ui.rename_operations import RenameOperations
+        from ui.re_file_operations import ReFileOperations
         from ui.dialogs import WindowManagement
         # FileImportExport объединен с FileListManager
         
@@ -293,7 +313,7 @@ class AppInitializer:
         self.app.settings_tab_handler = SettingsTab(self.app)
         self.app.methods_window_handler = MethodsWindow(self.app)
         self.app.main_window_handler = MainWindow(self.app)
-        self.app.rename_operations_handler = RenameOperations(self.app)
+        self.app.re_file_operations_handler = ReFileOperations(self.app)
         # FileTreeviewOperations объединен с FileListManager
         self.app.file_treeview_operations_handler = self.app.file_list_manager
         self.app.window_management_handler = WindowManagement(self.app)

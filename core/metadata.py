@@ -77,14 +77,48 @@ class MetadataExtractor:
             return self._extract_width(file_path)
         elif tag == "{height}":
             return self._extract_height(file_path)
-        elif tag == "{date_created}":
+        elif tag == "{date_created}" or tag == "{date}":
+            # {date} - алиас для {date_created} (обратная совместимость)
             return self._extract_date_created(file_path)
         elif tag == "{date_modified}":
             return self._extract_date_modified(file_path)
+        elif tag == "{date_created_time}":
+            return self._extract_date_created_time(file_path)
+        elif tag == "{date_modified_time}":
+            return self._extract_date_modified_time(file_path)
+        elif tag == "{year}":
+            return self._extract_year(file_path)
+        elif tag == "{month}":
+            return self._extract_month(file_path)
+        elif tag == "{day}":
+            return self._extract_day(file_path)
+        elif tag == "{hour}":
+            return self._extract_hour(file_path)
+        elif tag == "{minute}":
+            return self._extract_minute(file_path)
+        elif tag == "{second}":
+            return self._extract_second(file_path)
         elif tag == "{file_size}":
             return self._extract_file_size(file_path)
         elif tag == "{filename}":
             return os.path.basename(file_path)
+        elif tag == "{dirname}":
+            return os.path.basename(os.path.dirname(file_path))
+        elif tag == "{parent_dir}":
+            return os.path.dirname(file_path)
+        elif tag == "{format}":
+            return self._extract_format(file_path)
+        # Метаданные изображений (EXIF)
+        elif tag == "{camera}":
+            return self._extract_camera(file_path)
+        elif tag == "{iso}":
+            return self._extract_iso(file_path)
+        elif tag == "{focal_length}":
+            return self._extract_focal_length(file_path)
+        elif tag == "{aperture}":
+            return self._extract_aperture(file_path)
+        elif tag == "{exposure_time}":
+            return self._extract_exposure_time(file_path)
         # Метаданные аудио
         elif tag == "{artist}":
             return self._extract_audio_tag(file_path, 'artist')
@@ -92,12 +126,16 @@ class MetadataExtractor:
             return self._extract_audio_tag(file_path, 'title')
         elif tag == "{album}":
             return self._extract_audio_tag(file_path, 'album')
-        elif tag == "{year}":
+        elif tag == "{audio_year}":
             return self._extract_audio_tag(file_path, 'date')
         elif tag == "{track}":
             return self._extract_audio_tag(file_path, 'tracknumber')
         elif tag == "{genre}":
             return self._extract_audio_tag(file_path, 'genre')
+        elif tag == "{duration}":
+            return self._extract_duration(file_path)
+        elif tag == "{bitrate}":
+            return self._extract_bitrate(file_path)
         elif tag.startswith("{") and tag.endswith("}"):
             # Попытка извлечь пользовательский тег
             return self._extract_custom_tag(tag, file_path)
@@ -330,6 +368,269 @@ class MetadataExtractor:
         except Exception as e:
             logger.debug(f"Не удалось извлечь аудио тег {tag_name} из {file_path}: {e}")
             return None
+    
+    def _extract_date_created_time(self, file_path: str) -> Optional[str]:
+        """Извлечение даты и времени создания файла.
+        
+        Args:
+            file_path: Путь к файлу
+            
+        Returns:
+            Дата и время создания в формате YYYY-MM-DD_HH-MM-SS или None
+        """
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%Y-%m-%d_%H-%M-%S")
+        except Exception as e:
+            logger.debug(f"Не удалось извлечь дату и время создания {file_path}: {e}")
+            return None
+    
+    def _extract_date_modified_time(self, file_path: str) -> Optional[str]:
+        """Извлечение даты и времени изменения файла.
+        
+        Args:
+            file_path: Путь к файлу
+            
+        Returns:
+            Дата и время изменения в формате YYYY-MM-DD_HH-MM-SS или None
+        """
+        try:
+            stat = os.stat(file_path)
+            timestamp = stat.st_mtime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%Y-%m-%d_%H-%M-%S")
+        except Exception as e:
+            logger.debug(f"Не удалось извлечь дату и время изменения {file_path}: {e}")
+            return None
+    
+    def _extract_year(self, file_path: str) -> Optional[str]:
+        """Извлечение года создания файла."""
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%Y")
+        except Exception:
+            return None
+    
+    def _extract_month(self, file_path: str) -> Optional[str]:
+        """Извлечение месяца создания файла."""
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%m")
+        except Exception:
+            return None
+    
+    def _extract_day(self, file_path: str) -> Optional[str]:
+        """Извлечение дня создания файла."""
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%d")
+        except Exception:
+            return None
+    
+    def _extract_hour(self, file_path: str) -> Optional[str]:
+        """Извлечение часа создания файла."""
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%H")
+        except Exception:
+            return None
+    
+    def _extract_minute(self, file_path: str) -> Optional[str]:
+        """Извлечение минуты создания файла."""
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%M")
+        except Exception:
+            return None
+    
+    def _extract_second(self, file_path: str) -> Optional[str]:
+        """Извлечение секунды создания файла."""
+        try:
+            stat = os.stat(file_path)
+            if hasattr(stat, 'st_birthtime'):
+                timestamp = stat.st_birthtime
+            else:
+                timestamp = stat.st_ctime
+            dt = datetime.fromtimestamp(timestamp)
+            return dt.strftime("%S")
+        except Exception:
+            return None
+    
+    def _extract_format(self, file_path: str) -> Optional[str]:
+        """Извлечение формата файла (расширение без точки)."""
+        try:
+            _, ext = os.path.splitext(file_path)
+            return ext.lstrip('.').upper() if ext else None
+        except Exception:
+            return None
+    
+    def _extract_camera(self, file_path: str) -> Optional[str]:
+        """Извлечение модели камеры из EXIF данных."""
+        if not self.pillow_available:
+            return None
+        
+        image_data = self._get_image_data(file_path)
+        if image_data:
+            _, _, exifdata = image_data
+            if exifdata:
+                # EXIF теги для камеры
+                make_tag = 271  # Make
+                model_tag = 272  # Model
+                
+                make = exifdata.get(make_tag)
+                model = exifdata.get(model_tag)
+                
+                if make and model:
+                    return f"{make} {model}".strip()
+                elif make:
+                    return str(make).strip()
+                elif model:
+                    return str(model).strip()
+        
+        return None
+    
+    def _extract_iso(self, file_path: str) -> Optional[str]:
+        """Извлечение ISO из EXIF данных."""
+        if not self.pillow_available:
+            return None
+        
+        image_data = self._get_image_data(file_path)
+        if image_data:
+            _, _, exifdata = image_data
+            if exifdata:
+                # EXIF тег для ISO
+                iso_tag = 34855  # ISOSpeedRatings
+                iso = exifdata.get(iso_tag)
+                if iso:
+                    return str(iso)
+        
+        return None
+    
+    def _extract_focal_length(self, file_path: str) -> Optional[str]:
+        """Извлечение фокусного расстояния из EXIF данных."""
+        if not self.pillow_available:
+            return None
+        
+        image_data = self._get_image_data(file_path)
+        if image_data:
+            _, _, exifdata = image_data
+            if exifdata:
+                # EXIF тег для фокусного расстояния
+                focal_tag = 37386  # FocalLength
+                focal = exifdata.get(focal_tag)
+                if focal:
+                    # Может быть рациональным числом
+                    if isinstance(focal, tuple) and len(focal) == 2:
+                        return f"{focal[0]/focal[1]:.1f}mm"
+                    return f"{focal}mm"
+        
+        return None
+    
+    def _extract_aperture(self, file_path: str) -> Optional[str]:
+        """Извлечение диафрагмы из EXIF данных."""
+        if not self.pillow_available:
+            return None
+        
+        image_data = self._get_image_data(file_path)
+        if image_data:
+            _, _, exifdata = image_data
+            if exifdata:
+                # EXIF тег для диафрагмы
+                aperture_tag = 37378  # FNumber
+                aperture = exifdata.get(aperture_tag)
+                if aperture:
+                    # Может быть рациональным числом
+                    if isinstance(aperture, tuple) and len(aperture) == 2:
+                        return f"f/{aperture[0]/aperture[1]:.1f}"
+                    return f"f/{aperture}"
+        
+        return None
+    
+    def _extract_exposure_time(self, file_path: str) -> Optional[str]:
+        """Извлечение выдержки из EXIF данных."""
+        if not self.pillow_available:
+            return None
+        
+        image_data = self._get_image_data(file_path)
+        if image_data:
+            _, _, exifdata = image_data
+            if exifdata:
+                # EXIF тег для выдержки
+                exposure_tag = 33434  # ExposureTime
+                exposure = exifdata.get(exposure_tag)
+                if exposure:
+                    # Может быть рациональным числом
+                    if isinstance(exposure, tuple) and len(exposure) == 2:
+                        val = exposure[0] / exposure[1]
+                        if val < 1:
+                            return f"1/{int(1/val)}s"
+                        return f"{val:.3f}s"
+                    return f"{exposure}s"
+        
+        return None
+    
+    def _extract_duration(self, file_path: str) -> Optional[str]:
+        """Извлечение длительности аудио/видео файла."""
+        if self.mutagen_available:
+            try:
+                audio_file = self.MutagenFile(file_path)
+                if audio_file is not None:
+                    length = audio_file.info.length
+                    if length:
+                        # Форматирование в MM:SS или HH:MM:SS
+                        hours = int(length // 3600)
+                        minutes = int((length % 3600) // 60)
+                        seconds = int(length % 60)
+                        if hours > 0:
+                            return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                        return f"{minutes:02d}:{seconds:02d}"
+            except Exception as e:
+                logger.debug(f"Не удалось извлечь длительность {file_path}: {e}")
+        return None
+    
+    def _extract_bitrate(self, file_path: str) -> Optional[str]:
+        """Извлечение битрейта аудио файла."""
+        if self.mutagen_available:
+            try:
+                audio_file = self.MutagenFile(file_path)
+                if audio_file is not None and hasattr(audio_file.info, 'bitrate'):
+                    bitrate = audio_file.info.bitrate
+                    if bitrate:
+                        # Битрейт в kbps
+                        return f"{bitrate // 1000}kbps"
+            except Exception as e:
+                logger.debug(f"Не удалось извлечь битрейт {file_path}: {e}")
+        return None
     
     def _extract_custom_tag(self, tag: str, file_path: str) -> Optional[str]:
         """Извлечение пользовательского тега (расширяемая функция).

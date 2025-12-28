@@ -221,7 +221,6 @@ os.chdir(script_dir)
 try:
     # Фильтруем аргументы командной строки ПЕРЕД любыми импортами
     # Удаляем аргументы, которые выглядят как опции, но не являются файлами
-    # Это предотвращает ошибки "unknown option" при запуске через контекстное меню
     # ВАЖНО: Эта фильтрация должна происходить ДО любого импорта, который может использовать argparse
     
     # Логирование для отладки - ВСЕГДА логируем, даже если аргументов нет
@@ -237,75 +236,82 @@ try:
     
     filtered_args = [sys.argv[0]]  # Сохраняем имя скрипта
     
-    # Обрабатываем все аргументы
-    for arg in sys.argv[1:]:
-        # Пропускаем пустые аргументы
-        if not arg or not arg.strip():
-            continue
-        
-        # Обработка URL-формата (file://) - используется LibreOffice и другими приложениями
-        if arg.startswith('file://'):
-            try:
-                # Удаляем префикс file:// и декодируем URL
-                import urllib.parse
-                file_path = urllib.parse.unquote(arg[7:])  # Убираем file://
-                # Убираем начальный слеш для Windows путей (file:///C:/...)
-                if sys.platform == 'win32' and file_path.startswith('/') and len(file_path) > 2:
-                    if file_path[1].isalpha() and file_path[2] == ':':
-                        file_path = file_path[1:]  # Убираем лишний слеш
-                normalized_path = os.path.normpath(file_path)
-                if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
-                    filtered_args.append(normalized_path)
-                    logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
-                    continue
-            except Exception as e:
-                logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
-        
-        # Обработка путей в кавычках (для путей с пробелами)
-        cleaned_arg = arg.strip('"').strip("'")
-        
-        # Пропускаем аргументы, которые выглядят как опции (начинаются с -)
-        # но проверяем, не является ли это путем к файлу
-        if arg.startswith('-'):
-            # Проверяем, существует ли это как файл
-            # Сначала пробуем как есть
-            normalized_arg = os.path.normpath(arg)
+    # Используем общую функцию для обработки аргументов
+    try:
+        from utils.path_processing import filter_cli_args
+        file_paths = filter_cli_args(sys.argv[1:])
+        filtered_args.extend(file_paths)
+    except ImportError:
+        # Fallback на старую логику, если модуль недоступен
+        logger.warning("Модуль utils.path_processing недоступен, используется fallback логика")
+        for arg in sys.argv[1:]:
+            # Пропускаем пустые аргументы
+            if not arg or not arg.strip():
+                continue
             
-            # Проверяем как абсолютный путь
-            file_exists = False
-            if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                file_exists = True
-            else:
-                # Проверяем как относительный путь от текущей директории
+            # Обработка URL-формата (file://) - используется LibreOffice и другими приложениями
+            if arg.startswith('file://'):
                 try:
-                    abs_path = os.path.abspath(normalized_arg)
-                    if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                        file_exists = True
-                except (OSError, ValueError):
-                    pass
+                    # Удаляем префикс file:// и декодируем URL
+                    import urllib.parse
+                    file_path = urllib.parse.unquote(arg[7:])  # Убираем file://
+                    # Убираем начальный слеш для Windows путей (file:///C:/...)
+                    if sys.platform == 'win32' and file_path.startswith('/') and len(file_path) > 2:
+                        if file_path[1].isalpha() and file_path[2] == ':':
+                            file_path = file_path[1:]  # Убираем лишний слеш
+                    normalized_path = os.path.normpath(file_path)
+                    if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
+                        filtered_args.append(normalized_path)
+                        logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
+                        continue
+                except Exception as e:
+                    logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
             
-            # Если это файл, добавляем его
-            if file_exists:
-                filtered_args.append(arg)
-            # Иначе пропускаем (это опция, которую мы не знаем, например -state)
-        else:
-            # Обычный аргумент (не начинается с -), добавляем
-            # Проверяем, что это действительно файл (для безопасности)
-            normalized_arg = os.path.normpath(cleaned_arg)
-            if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                filtered_args.append(normalized_arg)
-            else:
-                # Пробуем как абсолютный путь
-                try:
-                    abs_path = os.path.abspath(normalized_arg)
-                    if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                        filtered_args.append(abs_path)
-                    else:
-                        # Если не файл, все равно добавляем (может быть относительный путь)
-                        filtered_args.append(arg)
-                except (OSError, ValueError):
-                    # В случае ошибки добавляем как есть
+            # Обработка путей в кавычках (для путей с пробелами)
+            cleaned_arg = arg.strip('"').strip("'")
+            
+            # Пропускаем аргументы, которые выглядят как опции (начинаются с -)
+            # но проверяем, не является ли это путем к файлу
+            if arg.startswith('-'):
+                # Проверяем, существует ли это как файл
+                # Сначала пробуем как есть
+                normalized_arg = os.path.normpath(arg)
+                
+                # Проверяем как абсолютный путь
+                file_exists = False
+                if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
+                    file_exists = True
+                else:
+                    # Проверяем как относительный путь от текущей директории
+                    try:
+                        abs_path = os.path.abspath(normalized_arg)
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            file_exists = True
+                    except (OSError, ValueError):
+                        pass
+                
+                # Если это файл, добавляем его
+                if file_exists:
                     filtered_args.append(arg)
+                # Иначе пропускаем (это опция, которую мы не знаем, например -state)
+            else:
+                # Обычный аргумент (не начинается с -), добавляем
+                # Проверяем, что это действительно файл (для безопасности)
+                normalized_arg = os.path.normpath(cleaned_arg)
+                if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
+                    filtered_args.append(normalized_arg)
+                else:
+                    # Пробуем как абсолютный путь
+                    try:
+                        abs_path = os.path.abspath(normalized_arg)
+                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
+                            filtered_args.append(abs_path)
+                        else:
+                            # Если не файл, все равно добавляем (может быть относительный путь)
+                            filtered_args.append(arg)
+                    except (OSError, ValueError):
+                        # В случае ошибки добавляем как есть
+                        filtered_args.append(arg)
     
     # Заменяем sys.argv на отфильтрованные аргументы ДО импорта
     # Это критически важно - если импорт использует argparse, он не увидит неизвестные опции

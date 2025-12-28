@@ -1,28 +1,25 @@
-"""Модуль для управления методами переименования.
+"""Модуль для управления методами re-file.
 
-Обеспечивает управление списком методов переименования, их применение
+Обеспечивает управление списком методов re-file, их применение
 к файлам и получение информации о методах для отображения в UI.
 """
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-import tkinter as tk
-from tkinter import messagebox
-
-from core.rename_methods import (
+from core.re_file_methods import (
     AddRemoveMethod,
     CaseMethod,
     MetadataMethod,
     NewNameMethod,
     NumberingMethod,
     RegexMethod,
-    RenameMethod,
+    ReFileMethod,
     ReplaceMethod,
 )
 
 
 class MethodsManager:
-    """Класс для управления методами переименования.
+    """Класс для управления методами re-file.
     
     Хранит список методов и применяет их последовательно к именам файлов.
     """
@@ -34,13 +31,13 @@ class MethodsManager:
             metadata_extractor: Экстрактор метаданных (опционально)
         """
         self.metadata_extractor = metadata_extractor
-        self.methods: List[RenameMethod] = []
+        self.methods: List[ReFileMethod] = []
     
-    def add_method(self, method: RenameMethod) -> None:
+    def add_method(self, method: ReFileMethod) -> None:
         """Добавление метода в список.
         
         Args:
-            method: Метод переименования
+            method: Метод re-file
         """
         self.methods.append(method)
     
@@ -57,17 +54,17 @@ class MethodsManager:
         """Очистка всех методов."""
         self.methods.clear()
     
-    def get_methods(self) -> List[RenameMethod]:
+    def get_methods(self) -> List[ReFileMethod]:
         """Получение списка методов.
         
         Returns:
-            Список методов переименования
+            Список методов re-file
         """
         return self.methods.copy()
     
     def reset_counters(self) -> None:
         """Сброс счетчиков нумерации перед применением."""
-        from core.rename_methods import NumberingMethod, NewNameMethod
+        from core.re_file_methods import NumberingMethod, NewNameMethod
         for method in self.methods:
             if isinstance(method, NumberingMethod):
                 method.reset()
@@ -188,11 +185,11 @@ class MethodsManager:
         """
         return NewNameMethod(template, self.metadata_extractor, file_number)
     
-    def get_method_display_name(self, method: RenameMethod) -> str:
+    def get_method_display_name(self, method: ReFileMethod) -> str:
         """Получение отображаемого имени метода.
         
         Args:
-            method: Метод переименования
+            method: Метод re-file
             
         Returns:
             Отображаемое имя метода

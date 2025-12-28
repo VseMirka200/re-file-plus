@@ -6,7 +6,7 @@
 
 import logging
 import os
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import tkinter as tk
@@ -30,6 +30,9 @@ class SorterTab:
     
     def create_tab(self):
         """Создание вкладки сортировки файлов на главном экране"""
+        if not hasattr(self.app, 'main_notebook') or not self.app.main_notebook:
+            return
+        
         sorter_tab = tk.Frame(self.app.main_notebook, bg=self.app.colors['bg_main'])
         sorter_tab.columnconfigure(0, weight=1)
         sorter_tab.rowconfigure(0, weight=1)
@@ -267,6 +270,226 @@ class SorterTab:
         # Инициализация списка фильтров
         if not self.app.sorter_filters:
             # Добавляем несколько примеров фильтров по умолчанию
+            self.add_default_filters()
+    
+    def create_tab_content(self, parent):
+        """Создание содержимого вкладки сортировки (для новой структуры с общим списком файлов)
+        
+        Args:
+            parent: Родительский контейнер для размещения содержимого
+        """
+        # Создаем Frame для содержимого вкладки сортировки
+        sort_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
+        sort_frame.grid(row=0, column=0, sticky="nsew")
+        sort_frame.columnconfigure(0, weight=1)
+        sort_frame.rowconfigure(0, weight=1)
+        
+        # Сохраняем ссылку
+        self.app.tab_contents["sort"] = sort_frame
+        
+        # Основной контейнер (вся ширина)
+        main_container = tk.Frame(sort_frame, bg=self.app.colors['bg_main'])
+        main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        main_container.columnconfigure(0, weight=1)
+        main_container.rowconfigure(0, weight=1)
+        
+        # Используем тот же код создания содержимого, что и в create_tab
+        # Но без левой панели со списком файлов - используем общий список
+        # Создаем объединенную панель с настройками и действиями
+        
+        # Панель с настройками и действиями
+        settings_panel = ttk.LabelFrame(
+            main_container,
+            text="Настройки сортировки",
+            style='Card.TLabelframe',
+            padding=10
+        )
+        settings_panel.grid(row=0, column=0, sticky="nsew")
+        settings_panel.columnconfigure(0, weight=1)
+        
+        # Выбор папки для сортировки
+        folder_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        folder_frame.pack(fill=tk.X, pady=(0, 15))
+        
+        tk.Label(folder_frame, text="Папка для сортировки:",
+                font=('Robot', 9, 'bold'),
+                bg=self.app.colors['bg_card'],
+                fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 5))
+        
+        folder_path_frame = tk.Frame(folder_frame, bg=self.app.colors['bg_card'])
+        folder_path_frame.pack(fill=tk.X)
+        
+        if not hasattr(self.app, 'sorter_folder_path'):
+            self.app.sorter_folder_path = tk.StringVar()
+            desktop_path = os.path.join(os.path.expanduser("~"), "Desktop")
+            if os.path.exists(desktop_path):
+                self.app.sorter_folder_path.set(desktop_path)
+            else:
+                desktop_path = os.path.join(os.path.expanduser("~"), "Рабочий стол")
+                if os.path.exists(desktop_path):
+                    self.app.sorter_folder_path.set(desktop_path)
+                else:
+                    self.app.sorter_folder_path.set(os.path.expanduser("~"))
+        
+        folder_entry = tk.Entry(folder_path_frame,
+                               textvariable=self.app.sorter_folder_path,
+                               font=('Robot', 9),
+                               bg='white',
+                               fg=self.app.colors['text_primary'],
+                               relief=tk.SOLID,
+                               borderwidth=1)
+        folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        btn_browse = self.app.create_rounded_button(
+            folder_path_frame, "🔍 Обзор...", self.browse_sorter_folder,
+            self.app.colors['primary'], 'white',
+            font=('Robot', 9, 'bold'), padx=10, pady=5,
+            active_bg=self.app.colors['primary_hover'], expand=False)
+        btn_browse.pack(side=tk.LEFT)
+        
+        # Фильтры
+        filters_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        filters_frame.pack(fill=tk.BOTH, expand=True)
+        filters_frame.columnconfigure(0, weight=1)
+        
+        tk.Label(filters_frame, text="Правила распределения:",
+                font=('Robot', 9, 'bold'),
+                bg=self.app.colors['bg_card'],
+                fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 10))
+        
+        # Canvas для прокрутки фильтров
+        filters_canvas = tk.Canvas(filters_frame, bg=self.app.colors['bg_card'],
+                                   highlightthickness=0)
+        filters_scrollbar = ttk.Scrollbar(filters_frame, orient="vertical",
+                                          command=filters_canvas.yview)
+        filters_scrollable = tk.Frame(filters_canvas, bg=self.app.colors['bg_card'])
+        
+        filters_scrollable.bind(
+            "<Configure>",
+            lambda e: filters_canvas.configure(scrollregion=filters_canvas.bbox("all"))
+        )
+        
+        filters_canvas_window = filters_canvas.create_window((0, 0),
+                                                             window=filters_scrollable,
+                                                             anchor="nw")
+        
+        def on_filters_canvas_configure(event):
+            if event.widget == filters_canvas:
+                canvas_width = event.width
+                filters_canvas.itemconfig(filters_canvas_window, width=canvas_width)
+        
+        filters_canvas.bind('<Configure>', on_filters_canvas_configure)
+        filters_canvas.configure(yscrollcommand=filters_scrollbar.set)
+        
+        def on_mousewheel_filters(event):
+            scroll_amount = int(-1 * (event.delta / 120))
+            filters_canvas.yview_scroll(scroll_amount, "units")
+        
+        filters_canvas.bind("<MouseWheel>", on_mousewheel_filters)
+        
+        filters_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        filters_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Контейнер для списка фильтров
+        self.app.sorter_filters_frame = filters_scrollable
+        if not hasattr(self.app, 'sorter_filters'):
+            self.app.sorter_filters = []
+        
+        # Кнопки управления фильтрами
+        filter_buttons_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        filter_buttons_frame.pack(fill=tk.X, pady=(10, 15))
+        
+        btn_add_filter = self.app.create_rounded_button(
+            filter_buttons_frame, "➕ Добавить правило", self.add_sorter_filter,
+            self.app.colors['success'], 'white',
+            font=('Robot', 9, 'bold'), padx=10, pady=6,
+            active_bg=self.app.colors['success_hover'], expand=True)
+        btn_add_filter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        btn_save_filters = self.app.create_rounded_button(
+            filter_buttons_frame, "💾 Сохранить", self.save_sorter_filters,
+            self.app.colors['info'], 'white',
+            font=('Robot', 9, 'bold'), padx=10, pady=6,
+            active_bg=self.app.colors['info_hover'], expand=True)
+        btn_save_filters.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        btn_load_filters = self.app.create_rounded_button(
+            filter_buttons_frame, "📂 Загрузить", self.load_sorter_filters,
+            self.app.colors['primary'], 'white',
+            font=('Robot', 9, 'bold'), padx=10, pady=6,
+            active_bg=self.app.colors['primary_hover'], expand=True)
+        btn_load_filters.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # Кнопки управления
+        buttons_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        buttons_frame.pack(fill=tk.X, pady=(0, 15))
+        buttons_frame.columnconfigure(0, weight=1)
+        buttons_frame.columnconfigure(1, weight=1)
+        
+        btn_preview = self.app.create_rounded_button(
+            buttons_frame, "👁️ Предпросмотр", self.preview_file_sorting,
+            self.app.colors['info'], 'white',
+            font=('Robot', 9, 'bold'), padx=12, pady=8,
+            active_bg=self.app.colors['info_hover'], expand=True)
+        btn_preview.grid(row=0, column=0, sticky="ew", padx=(0, 5))
+        
+        btn_start_sort = self.app.create_rounded_button(
+            buttons_frame, "▶️ Начать сортировку", self.start_file_sorting,
+            self.app.colors['success'], 'white',
+            font=('Robot', 9, 'bold'), padx=12, pady=8,
+            active_bg=self.app.colors['success_hover'], expand=True)
+        btn_start_sort.grid(row=0, column=1, sticky="ew")
+        
+        # Прогресс-бар
+        progress_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        progress_frame.pack(fill=tk.X, pady=(0, 15))
+        progress_frame.columnconfigure(1, weight=1)
+        
+        progress_label = tk.Label(progress_frame, text="Прогресс:",
+                                 font=('Robot', 9, 'bold'),
+                                 bg=self.app.colors['bg_card'],
+                                 fg=self.app.colors['text_primary'],
+                                 anchor='w')
+        progress_label.grid(row=0, column=0, padx=(0, 10), sticky="w")
+        
+        if not hasattr(self.app, 'sorter_progress'):
+            self.app.sorter_progress = ttk.Progressbar(progress_frame, mode='determinate')
+            self.app.sorter_progress.grid(row=0, column=1, sticky="ew")
+            self.app.sorter_progress['value'] = 0
+        
+        # Результаты
+        results_label = tk.Label(settings_panel, text="Результаты:",
+                                font=('Robot', 9, 'bold'),
+                                bg=self.app.colors['bg_card'],
+                                fg=self.app.colors['text_primary'],
+                                anchor='w')
+        results_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        results_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        results_frame.pack(fill=tk.BOTH, expand=True)
+        
+        if not hasattr(self.app, 'sorter_results_text'):
+            results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical")
+            self.app.sorter_results_text = tk.Text(
+                results_frame,
+                wrap=tk.WORD,
+                font=('Robot', 9),
+                bg='white',
+                fg=self.app.colors['text_primary'],
+                relief=tk.SOLID,
+                borderwidth=1,
+                yscrollcommand=results_scrollbar.set,
+                state=tk.DISABLED
+            )
+            results_scrollbar.config(command=self.app.sorter_results_text.yview)
+            self.app.sorter_results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+            results_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Загружаем сохраненные фильтры
+        self.load_sorter_filters()
+        
+        # Инициализация списка фильтров
+        if not self.app.sorter_filters:
             self.add_default_filters()
     
     def browse_sorter_folder(self):
@@ -653,10 +876,10 @@ class SorterTab:
                                    f"Будет обработано {len(enabled_filters)} правил(а)?"):
             return
         
-        # Запускаем сортировку в отдельном потоке
-        threading.Thread(target=self.sort_files_thread,
-                        args=(folder_path, enabled_filters),
-                        daemon=True).start()
+        # Запускаем сортировку в отдельном потоке через concurrent.futures
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sort_files")
+        executor.submit(self.sort_files_thread, folder_path, enabled_filters)
+        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
     
     def sort_files_thread(self, folder_path, filters):
         """Поток для сортировки файлов"""

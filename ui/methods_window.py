@@ -7,7 +7,7 @@
 import tkinter as tk
 from tkinter import messagebox, ttk
 
-from core.rename_methods import (
+from core.re_file_methods import (
     AddRemoveMethod,
     CaseMethod,
     MetadataMethod,

@@ -55,10 +55,16 @@ class TemplatesManager:
                 if hasattr(self.app, 'new_name_start_number'):
                     start_number = self.app.new_name_start_number.get().strip() or "1"
                 
+                # Получаем количество нулей, если есть
+                zeros_count = "0"
+                if hasattr(self.app, 'new_name_zeros_count'):
+                    zeros_count = self.app.new_name_zeros_count.get().strip() or "0"
+                
                 # Сохраняем шаблон
                 self.app.saved_templates[template_name] = {
                     'template': template,
-                    'start_number': start_number
+                    'start_number': start_number,
+                    'zeros_count': zeros_count
                 }
                 # Обновляем в менеджере шаблонов
                 self.app.templates_manager.templates = self.app.saved_templates
@@ -134,6 +140,10 @@ class TemplatesManager:
             self.app.templates_manager.templates = self.app.saved_templates
             self.app.save_templates()
             self.app.templates_manager.save_templates(self.app.saved_templates)
+            
+            # Обновляем выпадающий список шаблонов
+            if hasattr(self.app, 'refresh_rename_templates') and self.app.refresh_rename_templates:
+                self.app.refresh_rename_templates()
             
             # Показываем результат
             message = f"Загружено шаблонов: {added_count}"
@@ -246,16 +256,30 @@ class TemplatesManager:
                 if selection:
                     template_name = sorted(self.app.saved_templates.keys())[selection[0]]
                     template_data = self.app.saved_templates[template_name]
-                    template = template_data['template']
-                    start_number = template_data.get('start_number', '1')
+                    if isinstance(template_data, dict):
+                        template = template_data.get('template', '')
+                        start_number = template_data.get('start_number', '1')
+                        zeros_count = template_data.get('zeros_count', '0')
+                    else:
+                        template = str(template_data)
+                        start_number = '1'
+                        zeros_count = '0'
                     
                     # Применяем шаблон
-                    self.app.new_name_template.delete(0, tk.END)
-                    self.app.new_name_template.insert(0, template)
+                    if hasattr(self.app, 'new_name_template'):
+                        if isinstance(self.app.new_name_template, tk.StringVar):
+                            self.app.new_name_template.set(template)
+                        else:
+                            self.app.new_name_template.delete(0, tk.END)
+                            self.app.new_name_template.insert(0, template)
                     
                     if hasattr(self.app, 'new_name_start_number'):
                         self.app.new_name_start_number.delete(0, tk.END)
-                        self.app.new_name_start_number.insert(0, start_number)
+                        self.app.new_name_start_number.insert(0, str(start_number))
+                    
+                    if hasattr(self.app, 'new_name_zeros_count'):
+                        self.app.new_name_zeros_count.delete(0, tk.END)
+                        self.app.new_name_zeros_count.insert(0, str(zeros_count))
                     
                     template_window.destroy()
                     self.app.log(f"Применен сохраненный шаблон: {template_name}")
@@ -273,6 +297,9 @@ class TemplatesManager:
                         self.app.save_templates()
                         # Автосохранение шаблонов
                         self.app.templates_manager.save_templates(self.app.saved_templates)
+                        # Обновляем выпадающий список шаблонов
+                        if hasattr(self.app, 'refresh_rename_templates') and self.app.refresh_rename_templates:
+                            self.app.refresh_rename_templates()
                         listbox.delete(selection[0])
                         self.app.log(f"Шаблон '{template_name}' удален")
                         if not self.app.saved_templates:
@@ -391,7 +418,7 @@ class TemplatesManager:
     
     def apply_template_quick(self, auto=False):
         """Быстрое применение шаблона: добавление метода и применение"""
-        from core.rename_methods import NewNameMethod
+        from core.re_file_methods import NewNameMethod
         
         template = self.app.new_name_template.get().strip()
         
@@ -419,15 +446,25 @@ class TemplatesManager:
             # Создаем новый метод используя общий метод
             method = self.app._create_new_name_method(template)
             
+            # Убеждаемся, что метод "Новое имя" выбран в списке методов
+            if hasattr(self.app, 'method_var'):
+                self.app.method_var.set("Новое имя")
+            
             # Добавляем метод
             self.app.methods_manager.add_method(method)
-            self.app.methods_listbox.insert(tk.END, "Новое имя")
+            if hasattr(self.app, 'methods_listbox'):
+                self.app.methods_listbox.insert(tk.END, "Новое имя")
             
             if not auto:
                 self.app.log(f"Добавлен метод: Новое имя (шаблон: {template})")
             
             # Автоматически применяем метод
             if self.app.files:
+                # Сбрасываем счетчики всех методов перед применением
+                from core.re_file_methods import NewNameMethod, NumberingMethod
+                for m in self.app.methods_manager.get_methods():
+                    if isinstance(m, (NewNameMethod, NumberingMethod)):
+                        m.reset()
                 # Применяем методы и принудительно обновляем таблицу
                 self.app.apply_methods()
                 # Полностью обновляем таблицу для отображения изменений

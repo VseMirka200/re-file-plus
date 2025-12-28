@@ -1,7 +1,7 @@
-"""Модуль для операций переименования файлов.
+"""Модуль для re-file операций.
 
-Обеспечивает выполнение операций переименования с поддержкой:
-- Применения методов переименования к файлам
+Обеспечивает выполнение re-file операций с поддержкой:
+- Применения методов re-file к файлам
 - Валидации имен файлов
 - Отмены/повтора операций
 - Прогресса выполнения
@@ -13,16 +13,17 @@
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import tkinter as tk
 from tkinter import messagebox
 from typing import Dict, List, Optional
 
 # Локальные импорты
-from core.rename_methods import (
+from core.re_file_methods import (
     NewNameMethod,
     NumberingMethod,
     check_conflicts,
-    rename_files_thread,
+    re_file_files_thread,
     validate_filename,
 )
 
@@ -41,15 +42,15 @@ except ImportError:
         logger.info(f"[{action}] {message} (файлов: {file_count})")
 
 
-class RenameOperations:
-    """Класс для управления операциями переименования файлов.
+class ReFileOperations:
+    """Класс для управления re-file операциями.
     
-    Координирует процесс переименования, включая валидацию,
+    Координирует процесс re-file операций, включая валидацию,
     применение методов и обработку результатов.
     """
     
     def __init__(self, app) -> None:
-        """Инициализация операций переименования.
+        """Инициализация re-file операций.
         
         Args:
             app: Экземпляр главного приложения (для доступа к методам и данным)
@@ -226,8 +227,14 @@ class RenameOperations:
                         # Словарь - сохраняем как строку
                         file_data['status'] = status
                     
-                    # Обновление прогресса каждые 10 файлов или для последнего файла
-                    if (i + 1) % 10 == 0 or i == total_files - 1:
+                    # Обновление прогресса с заданным интервалом или для последнего файла
+                    try:
+                        from config.constants import PROGRESS_UPDATE_INTERVAL
+                        update_interval = PROGRESS_UPDATE_INTERVAL
+                    except ImportError:
+                        update_interval = 10  # Fallback значение
+                    
+                    if (i + 1) % update_interval == 0 or i == total_files - 1:
                         # Обновляем UI в главном потоке
                         self.app.root.after(0, lambda idx=i, cnt=applied_count, err=error_count: 
                             self._update_progress_ui(idx + 1, total_files, cnt, err))
@@ -238,15 +245,29 @@ class RenameOperations:
                 # Завершение в главном потоке
                 self.app.root.after(0, lambda: self._apply_methods_complete(
                     applied_count, error_count, method_names))
+            except (OSError, PermissionError, ValueError) as e:
+                # Ошибки файловой системы
+                error_msg = f"Ошибка файловой системы: {str(e)}"
+                logger.error(f"Ошибка в потоке применения методов: {error_msg}", exc_info=True)
+                self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
+            except (AttributeError, TypeError) as e:
+                # Ошибки доступа к атрибутам
+                error_msg = f"Ошибка доступа к данным: {str(e)}"
+                logger.error(f"Ошибка в потоке применения методов: {error_msg}", exc_info=True)
+                self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             except Exception as e:
-                logger.error(f"Ошибка в потоке применения методов: {e}", exc_info=True)
-                self.app.root.after(0, lambda: self._apply_methods_error(str(e)))
+                # Неожиданные ошибки
+                error_msg = f"Неожиданная ошибка: {str(e)}"
+                logger.error(f"Неожиданная ошибка в потоке применения методов: {error_msg}", exc_info=True)
+                self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             finally:
                 self.app._applying_methods = False
         
-        # Запускаем в отдельном потоке
-        thread = threading.Thread(target=apply_methods_worker, daemon=True)
-        thread.start()
+        # Запускаем в отдельном потоке через concurrent.futures
+        from concurrent.futures import ThreadPoolExecutor
+        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="apply_methods")
+        executor.submit(apply_methods_worker)
+        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
     
     def _update_progress_ui(self, current: int, total: int, applied: int, errors: int):
         """Обновление UI прогресса (вызывается из главного потока)."""
@@ -340,34 +361,53 @@ class RenameOperations:
         
         return len(errors) == 0, errors
     
-    def start_rename(self):
-        """Начало процесса переименования"""
+    def start_re_file(self):
+        """Начало процесса re-file операций"""
         # Защита от повторного вызова (если метод уже выполняется, игнорируем новый вызов)
-        if hasattr(self.app, '_renaming_in_progress') and self.app._renaming_in_progress:
-            logger.warning("Попытка начать переименование во время выполнения другой операции")
-            return
+        if hasattr(self.app, '_re_file_in_progress') and self.app._re_file_in_progress:
+            logger.warning("Попытка начать re-file операцию во время выполнения другой операции")
+            # Принудительно сбрасываем флаг, если прошло слишком много времени
+            # (защита от зависших операций)
+            if hasattr(self.app, '_re_file_start_time'):
+                import time
+                elapsed = time.time() - self.app._re_file_start_time
+                if elapsed > 300:  # 5 минут
+                    logger.warning(f"Принудительный сброс флага re-file операции (таймаут 5 минут, прошло {elapsed:.1f} сек)")
+                    self.app._re_file_in_progress = False
+                    delattr(self.app, '_re_file_start_time')
+                else:
+                    logger.info(f"Операция еще выполняется (прошло {elapsed:.1f} сек из 300)")
+                    return
+            else:
+                # Если нет времени начала, но флаг установлен - сбрасываем (защита от зависших флагов)
+                logger.warning("Флаг установлен, но нет времени начала - принудительный сброс")
+                self.app._re_file_in_progress = False
+                return
         
         log_action(
             logger=logger,
             level=logging.INFO,
-            action='RENAME_STARTED',
-            message="Начало процесса переименования файлов",
-            method_name='start_rename',
+            action='RE_FILE_STARTED',
+            message="Начало процесса re-file операций",
+            method_name='start_re_file',
             file_count=len(self.app.files)
         )
-        self.app._renaming_in_progress = True
+        self.app._re_file_in_progress = True
+        # Сохраняем время начала для защиты от зависших операций
+        import time
+        self.app._re_file_start_time = time.time()
         
         if not self.app.files:
             log_action(
                 logger=logger,
                 level=logging.WARNING,
-                action='RENAME_FAILED',
-                message="Попытка переименования при отсутствии файлов",
-                method_name='start_rename',
+                action='RE_FILE_FAILED',
+                message="Попытка re-file операции при отсутствии файлов",
+                method_name='start_re_file',
                 details={'reason': 'no_files'}
             )
             messagebox.showwarning("Предупреждение", "Нет файлов для переименования")
-            self.app._renaming_in_progress = False
+            self.app._re_file_in_progress = False
             return
         
         # Подсчет готовых файлов
@@ -376,9 +416,9 @@ class RenameOperations:
         log_action(
             logger=logger,
             level=logging.INFO,
-            action='RENAME_PREPARED',
-            message=f"Файлов готовых к переименованию: {len(ready_files)} из {len(self.app.files)}",
-            method_name='start_rename',
+            action='RE_FILE_PREPARED',
+            message=f"Файлов готовых к re-file операциям: {len(ready_files)} из {len(self.app.files)}",
+            method_name='start_re_file',
             file_count=len(ready_files),
             details={'total_files': len(self.app.files), 'ready_files': len(ready_files)}
         )
@@ -389,7 +429,9 @@ class RenameOperations:
                 "Предупреждение",
                 "Нет файлов готовых к переименованию"
             )
-            self.app._renaming_in_progress = False
+            self.app._re_file_in_progress = False
+            if hasattr(self.app, '_re_file_start_time'):
+                delattr(self.app, '_re_file_start_time')
             return
         
         # Валидация всех файлов перед переименованием
@@ -410,7 +452,7 @@ class RenameOperations:
         
         # Единое подтверждение
         if not messagebox.askyesno(title, confirm_msg):
-            self.app._renaming_in_progress = False
+            self.app._re_file_in_progress = False
             return
         
         # Сохранение состояния для отмены
@@ -420,10 +462,10 @@ class RenameOperations:
         self.app.redo_stack.clear()
         
         # Сброс флага отмены
-        if not hasattr(self.app, 'cancel_rename_var') or not self.app.cancel_rename_var:
-            self.app.cancel_rename_var = tk.BooleanVar(value=False)
+        if not hasattr(self.app, 'cancel_re_file_var') or not self.app.cancel_re_file_var:
+            self.app.cancel_re_file_var = tk.BooleanVar(value=False)
         else:
-            self.app.cancel_rename_var.set(False)
+            self.app.cancel_re_file_var.set(False)
         
         # Запуск переименования в отдельном потоке
         backup_mgr = None
@@ -451,8 +493,8 @@ class RenameOperations:
         
         # Периодическая проверка отмены
         def check_cancel():
-            if hasattr(self.app, 'cancel_rename_var') and self.app.cancel_rename_var:
-                if self.app.cancel_rename_var.get():
+            if hasattr(self.app, 'cancel_re_file_var') and self.app.cancel_re_file_var:
+                if self.app.cancel_re_file_var.get():
                     cancel_event.set()
                     if hasattr(self.app, 'current_file_label') and self.app.current_file_label:
                         try:
@@ -464,43 +506,60 @@ class RenameOperations:
         
         check_cancel()
         
-        rename_files_thread(
-            ready_files,
-            self.rename_complete,
-            self.app.log,
-            backup_mgr,
-            update_progress,
-            cancel_event
-        )
+        try:
+            logger.info(f"Запуск re_file_files_thread для {len(ready_files)} файлов")
+            re_file_files_thread(
+                ready_files,
+                self.re_file_complete,
+                self.app.log,
+                backup_mgr,
+                update_progress,
+                cancel_event
+            )
+            logger.debug("re_file_files_thread запущен успешно")
+        except Exception as e:
+            logger.error(f"Ошибка при запуске re_file_files_thread: {e}", exc_info=True)
+            # Сбрасываем флаг и вызываем callback вручную при ошибке запуска
+            self.re_file_complete(0, len(ready_files), [])
     
-    def rename_complete(self, success: int, error: int, renamed_files: list = None):
-        """Обработка завершения переименования.
+    def re_file_complete(self, success: int, error: int, re_filed_files: list = None):
+        """Обработка завершения re-file операций.
         
         Args:
             success: Количество успешных операций
             error: Количество ошибок
-            renamed_files: Список переименованных файлов
+            re_filed_files: Список файлов после re-file операций
         """
-        log_batch_action(
-            logger=logger,
-            action='RENAME_COMPLETED',
-            message=f"Переименование завершено: успешно {success}, ошибок {error}",
-            file_count=success + error,
-            success_count=success,
-            error_count=error,
-            method_name='rename_complete',
-            details={'renamed_files_count': len(renamed_files) if renamed_files else 0}
-        )
-        # Сбрасываем флаг выполнения переименования
-        if hasattr(self.app, '_renaming_in_progress'):
-            self.app._renaming_in_progress = False
+        try:
+            log_batch_action(
+                logger=logger,
+                action='RE_FILE_COMPLETED',
+                message=f"Переименование завершено: успешно {success}, ошибок {error}",
+                file_count=success + error,
+                success_count=success,
+                error_count=error,
+                method_name='re_file_complete',
+                details={'re_filed_files_count': len(re_filed_files) if re_filed_files else 0}
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при логировании завершения операции: {e}", exc_info=True)
+        
+        # Сбрасываем флаг выполнения re-file операций (всегда, даже при ошибках)
+        try:
+            if hasattr(self.app, '_re_file_in_progress'):
+                self.app._re_file_in_progress = False
+            # Очищаем время начала
+            if hasattr(self.app, '_re_file_start_time'):
+                delattr(self.app, '_re_file_start_time')
+        except Exception as e:
+            logger.error(f"Ошибка при сбросе флага операции: {e}", exc_info=True)
         
         # Добавляем операцию в историю
         if hasattr(self.app, 'history_manager') and self.app.history_manager:
             try:
-                files_for_history = renamed_files if renamed_files else self.app.files[:100]
+                files_for_history = re_filed_files if re_filed_files else self.app.files[:100]
                 self.app.history_manager.add_operation(
-                    'rename',
+                    're_file',
                     files_for_history,
                     success,
                     error
@@ -513,11 +572,11 @@ class RenameOperations:
             try:
                 methods_used = [type(m).__name__ for m in self.app.methods_manager.get_methods()]
                 self.app.statistics_manager.record_operation(
-                    'rename',
+                    're_file',
                     success,
                     error,
                     methods_used,
-                    renamed_files if renamed_files else []
+                    re_filed_files if re_filed_files else []
                 )
             except Exception as e:
                 logger.debug(f"Не удалось записать статистику: {e}")
@@ -537,11 +596,11 @@ class RenameOperations:
                 logger.debug(f"Не удалось показать уведомление: {e}")
         
         # Защита от дублирования сообщения
-        if not hasattr(self.app, '_rename_complete_shown'):
-            self.app._rename_complete_shown = True
+        if not hasattr(self.app, '_re_file_complete_shown'):
+            self.app._re_file_complete_shown = True
             messagebox.showinfo("Завершено", f"Переименование завершено.\nУспешно: {success}\nОшибок: {error}")
             # Сбрасываем флаг после небольшой задержки
-            self.app.root.after(100, lambda: setattr(self.app, '_rename_complete_shown', False))
+            self.app.root.after(100, lambda: setattr(self.app, '_re_file_complete_shown', False))
         self.app.progress['value'] = 0
         # Синхронизация прогресс-бара в окне действий, если оно открыто
         if hasattr(self.app, 'progress_window') and self.app.progress_window is not None:
@@ -552,13 +611,20 @@ class RenameOperations:
                 pass
         
         # Удаляем файлы из списка после переименования, если включена соответствующая настройка
-        if success > 0 and hasattr(self.app, 'remove_files_after_operation_var'):
-            if self.app.remove_files_after_operation_var.get():
-                # Удаляем только успешно переименованные файлы
-                if renamed_files:
-                    for renamed_file in renamed_files:
-                        if renamed_file in self.app.files:
-                            self.app.files.remove(renamed_file)
+        if success > 0:
+            # Используем настройки напрямую из settings_manager для актуальности
+            remove_files = False
+            if hasattr(self.app, 'remove_files_after_operation_var'):
+                remove_files = self.app.remove_files_after_operation_var.get()
+            elif hasattr(self.app, 'settings_manager'):
+                remove_files = self.app.settings_manager.get('remove_files_after_operation', False)
+            
+            if remove_files:
+                # Удаляем только успешно обработанные файлы
+                if re_filed_files:
+                    for re_filed_file in re_filed_files:
+                        if re_filed_file in self.app.files:
+                            self.app.files.remove(re_filed_file)
                     # Обновляем интерфейс
                     self.app.refresh_treeview()
                     self.app.update_status()
@@ -579,8 +645,8 @@ class RenameOperations:
         if hasattr(self.app, 'update_status'):
             self.app.update_status()
     
-    def undo_rename(self):
-        """Отмена последнего переименования"""
+    def undo_re_file(self):
+        """Отмена последней re-file операции"""
         if not self.app.undo_stack:
             messagebox.showinfo("Информация", "Нет операций для отмены")
             return
@@ -618,8 +684,8 @@ class RenameOperations:
         self.app.refresh_treeview()
         messagebox.showinfo("Отменено", "Последняя операция переименования отменена")
     
-    def redo_rename(self):
-        """Повтор последней отмененной операции"""
+    def redo_re_file(self):
+        """Повтор последней отмененной операции переименования"""
         if not self.app.redo_stack:
             messagebox.showinfo("Информация", "Нет операций для повтора")
             return

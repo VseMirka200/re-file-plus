@@ -10,7 +10,6 @@ from typing import Optional, List
 try:
     from config.constants import (
         LOG_FILE,
-        CONTEXT_MENU_WRAPPER_LOG,
         SETTINGS_FILE,
         TEMPLATES_FILE,
         WINDOWS_MAX_PATH_LENGTH
@@ -18,7 +17,6 @@ try:
 except ImportError:
     # Fallback если константы недоступны
     LOG_FILE = "re-file-plus.log"
-    CONTEXT_MENU_WRAPPER_LOG = "context_menu_wrapper.log"
     SETTINGS_FILE = "re-file-plus_settings.json"
     TEMPLATES_FILE = "re-file-plus_templates.json"
     WINDOWS_MAX_PATH_LENGTH = 260
@@ -35,17 +33,11 @@ def get_app_data_dir() -> str:
     Returns:
         Путь к директории программы
     """
-    # Определяем директорию, где находится этот файл (infrastructure/system/paths.py)
-    # Используем os.path.abspath(__file__) для получения абсолютного пути
-    # независимо от текущей рабочей директории
-    current_file = os.path.abspath(__file__)
+    # Используем pathlib для более современного подхода
+    current_file = Path(__file__).resolve()
     # Переходим от infrastructure/system/paths.py к корню проекта
-    system_dir = os.path.dirname(current_file)
-    infrastructure_dir = os.path.dirname(system_dir)
-    app_dir = os.path.dirname(infrastructure_dir)  # Корень проекта
-    # Нормализуем путь (убираем двойные слеши и т.д.)
-    app_dir = os.path.normpath(app_dir)
-    return app_dir
+    app_dir = current_file.parent.parent.parent  # infrastructure -> system -> infrastructure -> корень
+    return str(app_dir)
 
 
 def get_logs_dir() -> str:
@@ -57,21 +49,19 @@ def get_logs_dir() -> str:
     Returns:
         Путь к директории логов
     """
-    app_dir = get_app_data_dir()
-    logs_dir = os.path.join(app_dir, "logs")
-    # Нормализуем путь
-    logs_dir = os.path.normpath(logs_dir)
+    app_dir = Path(get_app_data_dir())
+    logs_dir = app_dir / "logs"
     
     # Создаём директорию, если её нет
-    if not os.path.exists(logs_dir):
+    if not logs_dir.exists():
         try:
-            os.makedirs(logs_dir, exist_ok=True)
+            logs_dir.mkdir(parents=True, exist_ok=True)
             # Проверяем, что директория действительно создана
-            if not os.path.exists(logs_dir):
+            if not logs_dir.exists():
                 # Логируем предупреждение, если логгер уже настроен
                 try:
                     logger.warning(f"Не удалось создать директорию логов: {logs_dir}")
-                except:
+                except (AttributeError, NameError):
                     # Если логгер еще не настроен, выводим в консоль
                     print(f"Предупреждение: Не удалось создать директорию логов: {logs_dir}")
         except (OSError, PermissionError) as e:
@@ -83,20 +73,19 @@ def get_logs_dir() -> str:
             
             # Пробуем использовать временную директорию как fallback
             try:
-                temp_logs_dir = os.path.join(tempfile.gettempdir(), "re-file-plus-logs")
-                temp_logs_dir = os.path.normpath(temp_logs_dir)
-                os.makedirs(temp_logs_dir, exist_ok=True)
+                temp_logs_dir = Path(tempfile.gettempdir()) / "re-file-plus-logs"
+                temp_logs_dir.mkdir(parents=True, exist_ok=True)
                 try:
                     logger.info(f"Используется временная директория для логов: {temp_logs_dir}")
                 except:
                     print(f"Информация: Используется временная директория для логов: {temp_logs_dir}")
-                return temp_logs_dir
+                return str(temp_logs_dir)
             except Exception as temp_e:
                 try:
                     logger.error(f"Не удалось создать временную директорию для логов: {temp_e}")
                 except:
                     print(f"Ошибка: Не удалось создать временную директорию для логов: {temp_e}")
-    return logs_dir
+    return str(logs_dir)
 
 
 def get_data_dir() -> str:
@@ -111,22 +100,17 @@ def get_data_dir() -> str:
 
 def get_log_file_path() -> str:
     """Получение полного пути к файлу основного лога."""
-    return os.path.join(get_logs_dir(), LOG_FILE)
-
-
-def get_context_menu_wrapper_log_path() -> str:
-    """Получение полного пути к файлу лога обёртки контекстного меню."""
-    return os.path.join(get_logs_dir(), CONTEXT_MENU_WRAPPER_LOG)
+    return str(Path(get_logs_dir()) / LOG_FILE)
 
 
 def get_settings_file_path() -> str:
     """Получение полного пути к файлу настроек."""
-    return os.path.join(get_data_dir(), SETTINGS_FILE)
+    return str(Path(get_data_dir()) / SETTINGS_FILE)
 
 
 def get_templates_file_path() -> str:
     """Получение полного пути к файлу шаблонов."""
-    return os.path.join(get_data_dir(), TEMPLATES_FILE)
+    return str(Path(get_data_dir()) / TEMPLATES_FILE)
 
 
 def ensure_directory_exists(path: str) -> bool:
@@ -139,7 +123,7 @@ def ensure_directory_exists(path: str) -> bool:
         True если директория существует или была создана, False в противном случае
     """
     try:
-        os.makedirs(path, exist_ok=True)
+        Path(path).mkdir(parents=True, exist_ok=True)
         return True
     except (OSError, PermissionError) as e:
         logger.error(f"Не удалось создать директорию {path}: {e}")
@@ -149,6 +133,8 @@ def ensure_directory_exists(path: str) -> bool:
 def is_safe_path(path: str, allowed_dirs: Optional[List[str]] = None) -> bool:
     """Проверка безопасности пути.
     
+    Использует новый PathValidator для валидации, сохраняя обратную совместимость.
+    
     Args:
         path: Путь к файлу для проверки
         allowed_dirs: Список разрешенных директорий (опционально)
@@ -157,34 +143,57 @@ def is_safe_path(path: str, allowed_dirs: Optional[List[str]] = None) -> bool:
         True если путь безопасен, False в противном случае
     """
     try:
-        # Проверка типа
-        if not isinstance(path, str):
+        # Используем новый PathValidator если доступен
+        from core.validation import PathValidator
+        return PathValidator.is_safe_path(
+            path,
+            allowed_dirs=allowed_dirs,
+            must_exist=True,
+            must_be_file=True
+        )
+    except ImportError:
+        # Fallback на старую логику если новый модуль недоступен
+        try:
+            # Проверка типа
+            if not isinstance(path, str):
+                return False
+            if not path or not path.strip():
+                return False
+            
+            # Проверка на NULL байты (могут использоваться для обхода проверок)
+            if '\0' in path:
+                return False
+            
+            # Улучшенная проверка на path traversal
+            # Проверяем, что '..' не является частью пути (не в имени файла)
+            path_parts = path.split(os.sep)
+            if '..' in path_parts or path.startswith('~'):
+                return False
+            
+            # Проверка на абсолютные пути с символами подстановки
+            if os.path.isabs(path):
+                # Проверяем на использование символов подстановки в пути
+                if '*' in path or '?' in path:
+                    return False
+            
+            # Нормализуем путь
+            abs_path = os.path.abspath(path)
+            
+            # Проверяем, что это файл
+            if not os.path.isfile(abs_path):
+                return False
+            
+            # Если указаны разрешенные директории, проверяем
+            if allowed_dirs:
+                for allowed_dir in allowed_dirs:
+                    allowed_abs = os.path.abspath(allowed_dir)
+                    if abs_path.startswith(allowed_abs):
+                        return True
+                return False
+            
+            return True
+        except (OSError, ValueError, TypeError):
             return False
-        if not path or not path.strip():
-            return False
-        
-        # Проверяем на path traversal
-        if '..' in path or path.startswith('~'):
-            return False
-        
-        # Нормализуем путь
-        abs_path = os.path.abspath(path)
-        
-        # Проверяем, что это файл
-        if not os.path.isfile(abs_path):
-            return False
-        
-        # Если указаны разрешенные директории, проверяем
-        if allowed_dirs:
-            for allowed_dir in allowed_dirs:
-                allowed_abs = os.path.abspath(allowed_dir)
-                if abs_path.startswith(allowed_abs):
-                    return True
-            return False
-        
-        return True
-    except (OSError, ValueError, TypeError):
-        return False
 
 
 def check_windows_path_length(full_path: str) -> bool:

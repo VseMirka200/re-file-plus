@@ -2,6 +2,7 @@
 
 Обеспечивает конвертацию файлов между различными форматами:
 - Изображения: JPG, PNG, BMP, TIFF, WEBP и др. (через Pillow)
+- Изображения в PDF и PDF в изображения (через PyMuPDF и Pillow)
 - Документы: DOCX в PDF, PDF в DOCX, PDF в изображения
   (через COM или специализированные библиотеки)
 - Аудио: MP3, WAV, FLAC и др. (через pydub)
@@ -426,36 +427,31 @@ class FileConverter:
             from PIL import Image
             self.Image = Image
             self.pillow_available = True
+            logger.info("Pillow доступен для работы с изображениями")
         except ImportError:
             self.pillow_available = False
+            logger.debug("Pillow не найден. Для работы с изображениями установите: pip install Pillow")
+            # Пробуем установить автоматически
+            logger.info("Попытка автоматической установки Pillow...")
+            if _install_package("Pillow"):
+                try:
+                    from PIL import Image
+                    self.Image = Image
+                    self.pillow_available = True
+                    logger.info("Pillow успешно установлен и доступен")
+                except ImportError:
+                    logger.warning("Pillow установлен, но все еще недоступен. Может потребоваться перезапуск программы.")
+                    self.pillow_available = False
         
         # Поддерживаемые форматы изображений для конвертации
         self.supported_image_formats = {
+            '.png': 'PNG',
             '.jpg': 'JPEG',
             '.jpeg': 'JPEG',
-            '.png': 'PNG',
-            '.bmp': 'BMP',
-            '.tiff': 'TIFF',
-            '.tif': 'TIFF',
+            '.ico': 'ICO',
             '.webp': 'WEBP',
             '.gif': 'GIF',
-            '.ico': 'ICO',
-            '.jfif': 'JPEG',
-            '.jp2': 'JPEG2000',
-            '.jpx': 'JPEG2000',
-            '.j2k': 'JPEG2000',
-            '.j2c': 'JPEG2000',
-            '.pcx': 'PCX',
-            '.ppm': 'PPM',
-            '.pgm': 'PGM',
-            '.pbm': 'PBM',
-            '.pnm': 'PNM',
-            '.psd': 'PSD',
-            '.xbm': 'XBM',
-            '.xpm': 'XPM',
-            '.heic': 'HEIC',
-            '.heif': 'HEIF',
-            '.avif': 'AVIF'
+            '.pdf': 'PDF'
         }
         
         # Попытка импортировать python-docx для работы с Word документами
@@ -631,23 +627,37 @@ class FileConverter:
         except ImportError:
             pass
         
-        # Попытка импортировать PyMuPDF (fitz) для конвертации PDF в изображения
+        # Попытка импортировать PyMuPDF (fitz) для конвертации PDF в изображения и изображений в PDF
         self.pymupdf_available = False
         self.fitz = None
         try:
             import fitz  # PyMuPDF
             self.fitz = fitz
             self.pymupdf_available = True
-            logger.info("PyMuPDF (fitz) доступен для конвертации PDF в изображения")
+            logger.info("PyMuPDF (fitz) доступен для конвертации PDF в изображения и изображений в PDF")
         except ImportError:
-            logger.debug("PyMuPDF (fitz) не найден. Для конвертации PDF в изображения установите: pip install PyMuPDF")
+            logger.debug("PyMuPDF (fitz) не найден. Для конвертации PDF в изображения и изображений в PDF установите: pip install PyMuPDF")
             self.pymupdf_available = False
+            # Пробуем установить автоматически
+            logger.info("Попытка автоматической установки PyMuPDF...")
+            if _install_package("PyMuPDF"):
+                try:
+                    import fitz  # PyMuPDF
+                    self.fitz = fitz
+                    self.pymupdf_available = True
+                    logger.info("PyMuPDF успешно установлен и доступен")
+                except ImportError:
+                    logger.warning("PyMuPDF установлен, но все еще недоступен. Может потребоваться перезапуск программы.")
+                    self.pymupdf_available = False
         
         # Поддерживаемые форматы документов (Word)
         self.supported_document_formats = {
-            '.docx': 'DOCX',
-            '.doc': 'DOC',  # Формат Word (поддержка через COM)
+            '.png': 'PNG',
+            '.jpg': 'JPEG',
+            '.jpeg': 'JPEG',
             '.pdf': 'PDF',
+            '.doc': 'DOC',  # Формат Word (поддержка через COM)
+            '.docx': 'DOCX',
             '.odt': 'ODT'  # LibreOffice Writer
         }
         
@@ -702,24 +712,7 @@ class FileConverter:
         # Поддерживаемые форматы аудио для конвертации
         self.supported_audio_formats = {
             '.mp3': 'mp3',
-            '.wav': 'wav',
-            '.flac': 'flac',
-            '.aac': 'aac',
-            '.ogg': 'ogg',
-            '.m4a': 'm4a',
-            '.wma': 'wma',
-            '.opus': 'opus',
-            '.aiff': 'aiff',
-            '.au': 'au',
-            '.mp2': 'mp2',
-            '.ac3': 'ac3',
-            '.3gp': '3gp',
-            '.amr': 'amr',
-            '.ra': 'ra',
-            '.ape': 'ape',
-            '.mpc': 'mpc',
-            '.tta': 'tta',
-            '.wv': 'wv'
+            '.wav': 'wav'
         }
         
         # Попытка импортировать moviepy для конвертации видео
@@ -737,27 +730,9 @@ class FileConverter:
         # Поддерживаемые форматы видео для конвертации
         self.supported_video_formats = {
             '.mp4': 'mp4',
-            '.avi': 'avi',
-            '.mkv': 'mkv',
             '.mov': 'mov',
-            '.wmv': 'wmv',
-            '.flv': 'flv',
-            '.webm': 'webm',
-            '.m4v': 'm4v',
-            '.mpg': 'mpg',
-            '.mpeg': 'mpeg',
-            '.3gp': '3gp',
-            '.ogv': 'ogv',
-            '.ts': 'ts',
-            '.mts': 'mts',
-            '.m2ts': 'm2ts',
-            '.f4v': 'f4v',
-            '.asf': 'asf',
-            '.rm': 'rm',
-            '.rmvb': 'rmvb',
-            '.vob': 'vob',
-            '.divx': 'divx',
-            '.xvid': 'xvid'
+            '.mkv': 'mkv',
+            '.gif': 'gif'
         }
     
     def _check_libreoffice_available(self) -> bool:
@@ -824,9 +799,17 @@ class FileConverter:
             return False
         
         # Проверяем конвертацию изображений
-        if source_ext in self.supported_image_formats and target_ext in self.supported_image_formats:
-            if self.pillow_available:
-                return True
+        if source_ext in self.supported_image_formats:
+            # Изображения в изображения (через Pillow)
+            if target_ext in self.supported_image_formats:
+                if self.pillow_available:
+                    return True
+            # Изображения в PDF (через PyMuPDF)
+            elif target_ext == '.pdf':
+                result = self.pymupdf_available and self.pillow_available
+                if not result:
+                    logger.debug(f"Конвертация {source_ext} в {target_ext} недоступна: pymupdf={self.pymupdf_available}, pillow={self.pillow_available}")
+                return result
         
         # Проверяем конвертацию документов Word
         if source_ext in self.supported_document_formats:
@@ -981,14 +964,10 @@ class FileConverter:
             Список расширений форматов (с точкой)
         """
         formats = list(self.supported_image_formats.keys())
-        if self.docx_available:
-            formats.extend(list(self.supported_document_formats.keys()))
-        # Всегда включаем форматы таблиц и презентаций (LibreOffice может быть установлен)
-        formats.extend(list(self.supported_spreadsheet_formats.keys()))
+        # Всегда включаем форматы документов (png, jpg, jpeg, pdf, doc, docx, odt)
+        formats.extend(list(self.supported_document_formats.keys()))
+        # Всегда включаем форматы презентаций (LibreOffice может быть установлен)
         formats.extend(list(self.supported_presentation_formats.keys()))
-        if self.docx2pdf_available:
-            if '.pdf' not in formats:
-                formats.append('.pdf')
         # Всегда включаем аудио и видео форматы (библиотеки могут быть установлены позже)
         formats.extend(list(self.supported_audio_formats.keys()))
         formats.extend(list(self.supported_video_formats.keys()))
@@ -1012,25 +991,17 @@ class FileConverter:
         
         # Изображения (только популярные)
         image_extensions = {
-            '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif',
-            '.ico', '.svg', '.heic', '.heif', '.avif'
+            '.png', '.jpg', '.jpeg', '.ico', '.webp', '.gif', '.pdf'
         }
         if ext in image_extensions:
             return 'image'
         
         # Документы Word
         document_extensions = {
-            '.pdf', '.docx', '.doc', '.txt', '.rtf', '.html', '.htm', '.odt'
+            '.png', '.jpg', '.jpeg', '.pdf', '.doc', '.docx', '.odt'
         }
         if ext in document_extensions:
             return 'document'
-        
-        # Таблицы Excel
-        spreadsheet_extensions = {
-            '.xlsx', '.xls', '.csv', '.ods'
-        }
-        if ext in spreadsheet_extensions:
-            return 'spreadsheet'
         
         # Презентации PowerPoint
         presentation_extensions = {
@@ -1069,7 +1040,24 @@ class FileConverter:
             return False, "Файл не найден", None
         
         if not self.can_convert(file_path, target_format):
-            return False, "Конвертация в этот формат не поддерживается", None
+            source_ext = os.path.splitext(file_path)[1].lower()
+            target_ext = target_format.lower()
+            
+            # Формируем более информативное сообщение об ошибке
+            error_msg = "Конвертация в этот формат не поддерживается"
+            if source_ext in self.supported_image_formats and target_ext == '.pdf':
+                missing_libs = []
+                if not self.pymupdf_available:
+                    missing_libs.append("PyMuPDF")
+                if not self.pillow_available:
+                    missing_libs.append("Pillow")
+                if missing_libs:
+                    error_msg = f"Для конвертации изображений в PDF необходимо установить: {', '.join(missing_libs)}. Установите: pip install {' '.join(missing_libs)}"
+            
+            logger.warning(f"Конвертация {source_ext} в {target_ext} не поддерживается. "
+                         f"pymupdf={self.pymupdf_available}, pillow={self.pillow_available}, "
+                         f"source_ext in image_formats={source_ext in self.supported_image_formats}")
+            return False, error_msg, None
         
         source_ext = os.path.splitext(file_path)[1].lower()
         target_ext = target_format.lower()
@@ -1086,6 +1074,69 @@ class FileConverter:
         
         try:
             # Проверяем тип файла и конвертируем соответственно
+            # Сначала проверяем, не является ли это конвертация изображения
+            # PNG, JPG, JPEG могут быть как в supported_image_formats, так и в supported_document_formats
+            # Поэтому обрабатываем их как изображения в первую очередь
+            if source_ext in ('.png', '.jpg', '.jpeg') and source_ext in self.supported_image_formats:
+                # Конвертация изображений
+                if not self.pillow_available:
+                    return False, "Pillow не установлен", None
+                
+                # Конвертация изображений в PDF
+                if target_ext == '.pdf':
+                    if not self.pymupdf_available:
+                        return False, "PyMuPDF не установлен. Для конвертации изображений в PDF установите: pip install PyMuPDF", None
+                    return self._convert_image_to_pdf(file_path, output_path, quality, compress_pdf)
+                
+                # Конвертация изображений в другие форматы изображений
+                if target_ext in self.supported_image_formats:
+                    # Открываем изображение
+                    with self.Image.open(file_path) as img:
+                        # Конвертируем в RGB для форматов, которые не поддерживают прозрачность
+                        if target_ext in ('.jpg', '.jpeg') and img.mode in ('RGBA', 'LA', 'P'):
+                            # Создаем белый фон для прозрачных изображений
+                            background = self.Image.new('RGB', img.size, (255, 255, 255))
+                            if img.mode == 'P':
+                                img = img.convert('RGBA')
+                            if img.mode == 'RGBA':
+                                background.paste(img, mask=img.split()[-1])
+                            else:
+                                background.paste(img)
+                            img = background
+                        elif img.mode == 'P' and target_ext not in ('.png', '.gif', '.webp'):
+                            # Для палитровых изображений конвертируем в RGB, если целевой формат не поддерживает палитру
+                            img = img.convert('RGB')
+                        
+                        # Получаем имя формата для сохранения
+                        format_name = self.supported_image_formats.get(target_ext, 'PNG')
+                        
+                        # Параметры сохранения
+                        save_kwargs = {}
+                        if format_name == 'JPEG':
+                            save_kwargs['quality'] = quality
+                            save_kwargs['optimize'] = True
+                        elif format_name == 'PNG':
+                            save_kwargs['optimize'] = True
+                        elif format_name == 'WEBP':
+                            save_kwargs['quality'] = quality
+                        
+                        # Сохраняем в новом формате
+                        try:
+                            img.save(output_path, format=format_name, **save_kwargs)
+                        except Exception as e:
+                            # Если формат не поддерживается, пробуем PNG
+                            if format_name not in ('PNG', 'JPEG'):
+                                format_name = 'PNG'
+                                output_path = os.path.splitext(output_path)[0] + '.png'
+                                img.save(output_path, format='PNG', optimize=True)
+                                logger.warning(f"Формат {target_ext} не поддерживается, сохранено как PNG")
+                            else:
+                                raise
+                    
+                    return True, "Файл успешно конвертирован", output_path
+                else:
+                    return False, "Неподдерживаемый формат файла", None
+            
             if source_ext in self.supported_document_formats:
                 # Конвертация документов Word в PDF
                 if (source_ext == '.docx' or source_ext == '.doc') and target_ext == '.pdf':
@@ -1145,6 +1196,38 @@ class FileConverter:
                                 word_result = self._convert_odt_with_word(file_path, temp_pdf, '.pdf')
                                 if word_result[0]:
                                     pdf_result = word_result
+                        elif source_ext in ('.png', '.jpg', '.jpeg'):
+                            # PNG, JPG, JPEG должны обрабатываться как изображения, а не как документы
+                            # Если мы попали сюда, значит что-то пошло не так в начале метода
+                            # Пробуем обработать как изображение напрямую
+                            if self.pillow_available and target_ext in self.supported_image_formats:
+                                with self.Image.open(file_path) as img:
+                                    # Конвертируем в RGB для форматов, которые не поддерживают прозрачность
+                                    if target_ext in ('.jpg', '.jpeg') and img.mode in ('RGBA', 'LA', 'P'):
+                                        background = self.Image.new('RGB', img.size, (255, 255, 255))
+                                        if img.mode == 'P':
+                                            img = img.convert('RGBA')
+                                        if img.mode == 'RGBA':
+                                            background.paste(img, mask=img.split()[-1])
+                                        else:
+                                            background.paste(img)
+                                        img = background
+                                    elif img.mode == 'P' and target_ext not in ('.png', '.gif', '.webp'):
+                                        img = img.convert('RGB')
+                                    
+                                    format_name = self.supported_image_formats.get(target_ext, 'PNG')
+                                    save_kwargs = {}
+                                    if format_name == 'JPEG':
+                                        save_kwargs['quality'] = quality
+                                        save_kwargs['optimize'] = True
+                                    elif format_name == 'PNG':
+                                        save_kwargs['optimize'] = True
+                                    elif format_name == 'WEBP':
+                                        save_kwargs['quality'] = quality
+                                    
+                                    img.save(output_path, format=format_name, **save_kwargs)
+                                    return True, "Файл успешно конвертирован", output_path
+                            return False, f"Конвертация {source_ext} в {target_ext} не поддерживается", None
                         else:
                             return False, f"Конвертация {source_ext} в изображения не поддерживается", None
                         
@@ -1175,6 +1258,10 @@ class FileConverter:
                 # Конвертация изображений
                 if not self.pillow_available:
                     return False, "Pillow не установлен", None
+                
+                # Конвертация изображений в PDF
+                if target_ext == '.pdf':
+                    return self._convert_image_to_pdf(file_path, output_path, quality, compress_pdf)
                 
                 # Открываем изображение
                 with self.Image.open(file_path) as img:
@@ -1387,6 +1474,85 @@ class FileConverter:
         except Exception as e:
             logger.error(f"Ошибка при конвертации PDF в изображение {file_path}: {e}", exc_info=True)
             return False, f"Ошибка конвертации PDF: {str(e)}", None
+    
+    def _convert_image_to_pdf(self, file_path: str, output_path: str, quality: int = 95, compress_pdf: bool = False) -> Tuple[bool, str, Optional[str]]:
+        """Конвертация изображения в PDF.
+        
+        Args:
+            file_path: Путь к изображению
+            output_path: Путь для сохранения PDF
+            quality: Качество для JPEG (1-100), используется для оптимизации изображения перед вставкой в PDF
+            compress_pdf: Сжимать ли PDF после конвертации
+            
+        Returns:
+            Tuple[успех, сообщение, путь к выходному файлу]
+        """
+        if not self.pymupdf_available or not self.fitz:
+            return False, "PyMuPDF не установлен. Установите: pip install PyMuPDF", None
+        
+        if not self.pillow_available:
+            return False, "Pillow не установлен", None
+        
+        try:
+            # Открываем изображение через Pillow
+            with self.Image.open(file_path) as img:
+                # Конвертируем в RGB если нужно
+                if img.mode in ('RGBA', 'LA', 'P'):
+                    # Создаем белый фон для прозрачных изображений
+                    background = self.Image.new('RGB', img.size, (255, 255, 255))
+                    if img.mode == 'P':
+                        img = img.convert('RGBA')
+                    if img.mode == 'RGBA':
+                        background.paste(img, mask=img.split()[-1])
+                    else:
+                        background.paste(img)
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Получаем размеры изображения
+                width, height = img.size
+                
+                # Создаем новый PDF документ
+                pdf_document = self.fitz.open()  # Создаем пустой PDF
+                
+                # Создаем страницу с размерами изображения (в точках, 1 точка = 1/72 дюйма)
+                # Конвертируем пиксели в точки (используем DPI = 72, стандарт для PDF)
+                dpi = 72.0
+                page_width = width * 72.0 / dpi
+                page_height = height * 72.0 / dpi
+                
+                # Создаем страницу
+                page = pdf_document.new_page(width=page_width, height=page_height)
+                
+                # Конвертируем изображение в байты для вставки в PDF
+                # Сохраняем изображение во временный буфер
+                img_buffer = io.BytesIO()
+                img.save(img_buffer, format='PNG', optimize=True)
+                img_buffer.seek(0)
+                
+                # Вставляем изображение на страницу
+                # Создаем прямоугольник для изображения (на всю страницу)
+                rect = self.fitz.Rect(0, 0, page_width, page_height)
+                
+                # Вставляем изображение
+                page.insert_image(rect, stream=img_buffer.getvalue())
+                
+                # Сохраняем PDF
+                pdf_document.save(output_path)
+                pdf_document.close()
+            
+            # Если нужно сжать PDF
+            if compress_pdf and os.path.exists(output_path):
+                compress_result = self._compress_pdf(output_path)
+                if compress_result[0]:
+                    return True, "Изображение успешно конвертировано в PDF (PDF сжат)", output_path
+            
+            return True, "Изображение успешно конвертировано в PDF", output_path
+            
+        except Exception as e:
+            logger.error(f"Ошибка при конвертации изображения в PDF {file_path}: {e}", exc_info=True)
+            return False, f"Ошибка конвертации изображения в PDF: {str(e)}", None
     
     def convert_batch(self, file_paths: List[str], target_format: str, 
                      output_dir: Optional[str] = None, quality: int = 95,

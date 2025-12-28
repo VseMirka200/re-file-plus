@@ -14,29 +14,26 @@ PACKAGE_INSTALL_TIMEOUT = 300  # 5 минут для установки паке
 COM_OPERATION_DELAY = 0.5  # Задержка после COM операций (секунды)
 
 # Размеры окна
-DEFAULT_WINDOW_WIDTH = 900
-DEFAULT_WINDOW_HEIGHT = 650
+DEFAULT_WINDOW_WIDTH = 800
+DEFAULT_WINDOW_HEIGHT = 520
 MIN_WINDOW_WIDTH = 800  # Минимальная ширина для комфортной работы
 MIN_WINDOW_HEIGHT = 500  # Минимальная высота для комфортной работы
 
 # Форматы файлов (только популярные)
 SUPPORTED_IMAGE_FORMATS = {
-    '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.tif',
-    '.ico', '.svg', '.heic', '.heif', '.avif', '.dng', '.cr2', '.nef', '.raw'
+    '.png', '.jpg', '.jpeg', '.ico', '.webp', '.gif', '.pdf'
 }
 
 SUPPORTED_DOCUMENT_FORMATS = {
-    '.pdf', '.docx', '.doc', '.xlsx', '.xls', '.pptx', '.ppt',
-    '.txt', '.rtf', '.csv', '.html', '.htm', '.odt', '.ods', '.odp'
+    '.png', '.jpg', '.jpeg', '.pdf', '.doc', '.docx', '.odt'
 }
 
 SUPPORTED_AUDIO_FORMATS = {
-    '.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma', '.opus'
+    '.mp3', '.wav'
 }
 
 SUPPORTED_VIDEO_FORMATS = {
-    '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v',
-    '.mpg', '.mpeg', '.3gp'
+    '.mp4', '.mov', '.mkv', '.gif'
 }
 
 # Качество по умолчанию
@@ -48,9 +45,11 @@ MAX_UNDO_STACK_SIZE = 50
 MAX_PATH_CACHE_SIZE = 10000  # Максимальный размер кеша путей
 WINDOWS_MAX_FILENAME_LENGTH = 255  # Максимальная длина имени файла в Windows
 WINDOWS_MAX_PATH_LENGTH = 260  # Максимальная длина пути в Windows (MAX_PATH)
-CONTEXT_MENU_DELAY = 0.8  # Задержка для сбора файлов из контекстного меню (секунды)
 FILE_OPERATION_DELAY = 0.5  # Задержка для операций с файлами (секунды)
 MIN_PYTHON_VERSION = (3, 7)  # Минимальная версия Python
+
+# Интервалы обновления UI
+PROGRESS_UPDATE_INTERVAL = 10  # Обновлять прогресс каждые N файлов
 
 # Зарезервированные имена Windows
 WINDOWS_RESERVED_NAMES = frozenset(
@@ -64,7 +63,6 @@ INVALID_FILENAME_CHARS = frozenset(['<', '>', ':', '"', '/', '\\', '|', '?', '*'
 
 # Имена файлов конфигурации и логов
 LOG_FILE = "re-file-plus.log"
-CONTEXT_MENU_WRAPPER_LOG = "context_menu_wrapper.log"
 SETTINGS_FILE = "re-file-plus_settings.json"
 TEMPLATES_FILE = "re-file-plus_templates.json"
 STATS_FILE = ".re_file_plus_stats.json"  # Файл статистики (хранится в домашней директории)
@@ -77,7 +75,6 @@ try:
         get_logs_dir,
         get_data_dir,
         get_log_file_path,
-        get_context_menu_wrapper_log_path,
         get_settings_file_path,
         get_templates_file_path,
         ensure_directory_exists,
@@ -86,6 +83,13 @@ try:
     )
 except ImportError:
     # Fallback для обратной совместимости (если infrastructure еще не создан)
+    # В этом случае функции должны быть определены в infrastructure/system/paths.py
+    # Если они недоступны, это критическая ошибка инициализации
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.error("Критическая ошибка: не удалось импортировать функции из infrastructure.system.paths")
+    
+    # Минимальные fallback функции для предотвращения полного краха
     import os
     import tempfile
     from typing import Optional, List
@@ -114,15 +118,12 @@ except ImportError:
         if not os.path.exists(data_dir):
             try:
                 os.makedirs(data_dir, exist_ok=True)
-            except Exception:
+            except (OSError, PermissionError):
                 pass
         return data_dir
     
     def get_log_file_path():
         return os.path.join(get_logs_dir(), LOG_FILE)
-    
-    def get_context_menu_wrapper_log_path():
-        return os.path.join(get_logs_dir(), CONTEXT_MENU_WRAPPER_LOG)
     
     def get_settings_file_path():
         return os.path.join(get_data_dir(), SETTINGS_FILE)
@@ -137,11 +138,22 @@ except ImportError:
         except (OSError, PermissionError):
             return False
     
+    # is_safe_path и check_windows_path_length должны быть импортированы из infrastructure/system/paths.py
+    # Здесь не определяем их, чтобы избежать дублирования
     def is_safe_path(path: str, allowed_dirs: Optional[List[str]] = None) -> bool:
+        """Fallback версия - должна использоваться только в крайнем случае."""
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("Используется fallback версия is_safe_path - рекомендуется исправить импорты")
         try:
             if not isinstance(path, str) or not path or not path.strip():
                 return False
-            if '..' in path or path.startswith('~'):
+            # Улучшенная проверка на path traversal
+            path_parts = path.split(os.sep)
+            if '..' in path_parts or path.startswith('~'):
+                return False
+            # Проверка на NULL байты
+            if '\0' in path:
                 return False
             abs_path = os.path.abspath(path)
             if not os.path.isfile(abs_path):

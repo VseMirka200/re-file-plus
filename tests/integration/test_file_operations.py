@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from core.rename_methods import validate_filename, RenameMethod
+from core.re_file_methods import validate_filename, ReFileMethod
 from core.methods_manager import MethodsManager
 
 
@@ -29,7 +29,7 @@ class TestFileOperations:
         manager = MethodsManager(None)  # metadata_extractor не нужен для базовых тестов
         
         # Добавляем методы
-        from core.rename_methods import AddRemoveMethod, ReplaceMethod
+        from core.re_file_methods import AddRemoveMethod, ReplaceMethod
         
         manager.add_method(AddRemoveMethod(operation="add", text="prefix_", position="before"))
         manager.add_method(ReplaceMethod(find="old", replace="new"))

@@ -11,21 +11,6 @@
 для прямого запуска. Запускайте приложение через файл Запуск.pyw или file_re-file-plus.py
 """
 
-# Защита от прямого запуска модуля (должна быть ДО импортов локальных модулей)
-import sys
-if __name__ == "__main__":
-    print("=" * 60)
-    print("ОШИБКА: Этот модуль не предназначен для прямого запуска.")
-    print("=" * 60)
-    print("\nЭтот файл является частью пакета приложения.")
-    print("Запускайте приложение через один из следующих файлов:")
-    print("  - Запуск.pyw (рекомендуется)")
-    print("  - file_re-file-plus.py")
-    print("\nПример команды:")
-    print("  python Запуск.pyw")
-    print("=" * 60)
-    sys.exit(1)
-
 # Стандартная библиотека
 import csv
 import json
@@ -33,12 +18,13 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 # Локальные импорты
-from core.rename_methods import check_conflicts
+from core.re_file_methods import check_conflicts
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +139,7 @@ class FileListManager:
             
             # Вставляем строку с путем перед группой файлов
             path_text = folder_path
-            self.app.tree.insert("", tk.END, values=(path_text, ""), tags=('path_row',))
+            self.app.tree.insert("", tk.END, values=(path_text, "", ""), tags=('path_row',))
             
             # Добавляем файлы из этой папки
             for file_data in files_in_folder:
@@ -217,9 +203,17 @@ class FileListManager:
                 old_display_name = f"{old_full_name}{folder_label}"
                 new_display_name = new_full_name  # Новое имя без метки
                 
+                # Получаем статус из метаданных конвертации, если есть
+                status = ""
+                if hasattr(self.app, 'converter_files_metadata') and self.app.converter_files_metadata:
+                    file_metadata = self.app.converter_files_metadata.get(full_path)
+                    if file_metadata:
+                        status = file_metadata.get('status', '')
+                
                 self.app.tree.insert("", tk.END, values=(
                     old_display_name,
-                    new_display_name
+                    new_display_name,
+                    status
                 ), tags=tags)
         
         # Обновляем видимость скроллбаров после обновления содержимого
@@ -251,22 +245,23 @@ class FileListManager:
                 ("Все файлы", "*.*"),
                 (
                     "Изображения",
-                    "*.jpg *.jpeg *.png *.gif *.bmp *.webp *.tiff *.tif "
-                    "*.ico *.svg *.heic *.heif *.avif *.dng *.cr2 *.nef *.raw"
+                    "*.png *.jpg *.jpeg *.ico *.webp *.gif *.pdf"
                 ),
                 (
                     "Документы",
-                    "*.pdf *.docx *.doc *.xlsx *.xls *.pptx *.ppt *.txt "
-                    "*.rtf *.csv *.html *.htm *.odt *.ods *.odp"
+                    "*.png *.jpg *.jpeg *.pdf *.doc *.docx *.odt"
+                ),
+                (
+                    "Презентации",
+                    "*.pptx *.ppt *.odp"
                 ),
                 (
                     "Аудио",
-                    "*.mp3 *.wav *.flac *.aac *.ogg *.m4a *.wma *.opus"
+                    "*.mp3 *.wav"
                 ),
                 (
                     "Видео",
-                    "*.mp4 *.avi *.mkv *.mov *.wmv *.flv *.webm *.m4v "
-                    "*.mpg *.mpeg *.3gp"
+                    "*.mp4 *.mov *.mkv *.gif"
                 ),
             ]
         )
@@ -605,7 +600,7 @@ class FileListManager:
         # Применяем методы только к выбранным файлам
         for file_data in selected_files:
             try:
-                from core.rename_methods import validate_filename
+                from core.re_file_methods import validate_filename
                 
                 new_name, extension = self.app.methods_manager.apply_methods(
                     file_data.get('old_name', ''),

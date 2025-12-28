@@ -302,12 +302,97 @@ class TemplatesManager:
                 templates_file = os.path.join(data_dir, "re-file-plus_templates.json")
         self.templates_file = templates_file
         self.templates = self.load_templates()
+        # Инициализируем шаблоны по умолчанию, если файл пустой
+        if not self.templates:
+            self._init_default_templates()
+    
+    def _init_default_templates(self) -> None:
+        """Инициализация шаблонов по умолчанию при первом запуске."""
+        default_templates = {
+            "Нумерация": {
+                "template": "{n}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Нумерация с префиксом": {
+                "template": "Файл_{n}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Дата и имя": {
+                "template": "{date_created}_{name}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Имя и дата": {
+                "template": "{name}_{date_created}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Дата и нумерация": {
+                "template": "{date_created}_{n}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Префикс, дата и номер": {
+                "template": "IMG_{date_created}_{n}",
+                "start_number": "1",
+                "zeros_count": "3"
+            },
+            "Год-месяц-день и номер": {
+                "template": "{year}-{month}-{day}_{n}",
+                "start_number": "1",
+                "zeros_count": "3"
+            },
+            "Дата и время с именем": {
+                "template": "{date_created_time}_{name}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Папка и номер": {
+                "template": "{dirname}_{n}",
+                "start_number": "1",
+                "zeros_count": "3"
+            },
+            "Фото: камера и ISO": {
+                "template": "{camera}_ISO{iso}_{n}",
+                "start_number": "1",
+                "zeros_count": "3"
+            },
+            "Фото: размеры и номер": {
+                "template": "{width}x{height}_{n}",
+                "start_number": "1",
+                "zeros_count": "3"
+            },
+            "Аудио: исполнитель - трек": {
+                "template": "{artist} - {title}",
+                "start_number": "1",
+                "zeros_count": "0"
+            },
+            "Аудио: альбом - номер трека": {
+                "template": "{album}_{track}",
+                "start_number": "1",
+                "zeros_count": "2"
+            },
+            "Формат и номер": {
+                "template": "{format}_{n}",
+                "start_number": "1",
+                "zeros_count": "3"
+            }
+        }
+        self.templates = default_templates
+        self.save_templates()
+        logger.info(f"Инициализировано {len(default_templates)} шаблонов по умолчанию")
     
     def load_templates(self) -> Dict[str, Any]:
         """Загрузка сохраненных шаблонов из файла.
         
+        Поддерживает два формата:
+        - Старый формат: строка -> строка (шаблон)
+        - Новый формат: строка -> dict {'template': строка, 'start_number': строка}
+        
         Returns:
-            Словарь с шаблонами
+            Словарь с шаблонами (в новом формате - словарь, для обратной совместимости - строка)
         """
         templates = {}
         try:
@@ -315,13 +400,19 @@ class TemplatesManager:
                 with open(self.templates_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
                     if isinstance(loaded, dict):
-                        # Валидируем шаблоны (должны быть строками)
-                        # Валидируем шаблоны (должны быть строками)
                         for key, value in loaded.items():
-                            if isinstance(key, str) and isinstance(value, str):
-                                templates[key] = value
+                            if isinstance(key, str):
+                                # Поддерживаем оба формата: строку и словарь
+                                if isinstance(value, str):
+                                    # Старый формат (строка) - оставляем как есть для обратной совместимости
+                                    templates[key] = value
+                                elif isinstance(value, dict):
+                                    # Новый формат (словарь с ключом 'template')
+                                    templates[key] = value
+                                else:
+                                    logger.warning(f"Неверный формат шаблона '{key}': ожидается строка или словарь")
                             else:
-                                logger.warning(f"Неверный формат шаблона '{key}': ожидается строка")
+                                logger.warning(f"Неверный ключ шаблона '{key}': ожидается строка")
                     else:
                         logger.warning(f"Файл шаблонов содержит неверный формат: {self.templates_file}")
         except json.JSONDecodeError as e:

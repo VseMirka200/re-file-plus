@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 try:
-    from core.rename_methods import (
+    from core.re_file_methods import (
         AddRemoveMethod,
         CaseMethod,
         MetadataMethod,
@@ -34,7 +34,7 @@ except ImportError:
     logger.error("Не удалось импортировать основные модули")
 
 
-def rename_files_cli(files: List[str], methods: List[object], dry_run: bool = False) -> Dict[str, Any]:
+def re_file_files_cli(files: List[str], methods: List[object], dry_run: bool = False) -> Dict[str, Any]:
     """Переименование файлов через CLI.
     
     Args:
@@ -189,7 +189,7 @@ def main():
         sys.exit(1)
     
     # Переименовываем файлы
-    results = rename_files_cli(args.files, methods, args.dry_run)
+    results = re_file_files_cli(args.files, methods, args.dry_run)
     
     # Выводим результаты
     if args.dry_run:
