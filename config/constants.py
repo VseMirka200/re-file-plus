@@ -14,10 +14,10 @@ PACKAGE_INSTALL_TIMEOUT = 300  # 5 минут для установки паке
 COM_OPERATION_DELAY = 0.5  # Задержка после COM операций (секунды)
 
 # Размеры окна
-DEFAULT_WINDOW_WIDTH = 800
-DEFAULT_WINDOW_HEIGHT = 520
-MIN_WINDOW_WIDTH = 800  # Минимальная ширина для комфортной работы
-MIN_WINDOW_HEIGHT = 500  # Минимальная высота для комфортной работы
+DEFAULT_WINDOW_WIDTH = 700
+DEFAULT_WINDOW_HEIGHT = 450
+MIN_WINDOW_WIDTH = 600  # Минимальная ширина для комфортной работы
+MIN_WINDOW_HEIGHT = 400  # Минимальная высота для комфортной работы
 
 # Форматы файлов (только популярные)
 SUPPORTED_IMAGE_FORMATS = {

@@ -21,9 +21,9 @@ if sys.version_info < (3, 7):
     sys.exit(1)
 
 # Настройка логирования
-# Используем INFO для расширенного логирования всех действий программы
-# DEBUG только если установлена переменная окружения
-log_level = logging.DEBUG if os.getenv('DEBUG', '').lower() == 'true' else logging.INFO
+# Упрощенное логирование: только WARNING и выше по умолчанию
+# INFO только если установлена переменная окружения
+log_level = logging.INFO if os.getenv('VERBOSE', '').lower() == 'true' else logging.WARNING
 
 # Получаем путь к файлу лога из констант
 # Важно: используем абсолютный путь к файлу скрипта, чтобы работать корректно
@@ -148,16 +148,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Логируем информацию о настройке логирования
+# Упрощенное логирование: логируем только ошибки при настройке
 if log_file_path:
-    # Пробуем записать тестовое сообщение и проверить, что файл создан
     try:
-        # Логируем информацию о путях для отладки (особенно важно при запуске через ярлык)
-        logger.info(f"Логирование настроено. Файл лога: {log_file_path}")
-        logger.debug(f"Рабочая директория: {os.getcwd()}")
-        logger.debug(f"Директория скрипта: {script_dir}")
-        logger.debug(f"Директория логов: {logs_dir}")
-        
         # Принудительно сбрасываем буферы всех обработчиков
         for handler in handlers:
             if hasattr(handler, 'flush'):
@@ -317,37 +310,18 @@ try:
     # Это критически важно - если импорт использует argparse, он не увидит неизвестные опции
     sys.argv = filtered_args
     
-    # Логирование для отладки - ВСЕГДА логируем результат фильтрации
-    try:
-        debug_msg = f"Отфильтрованные аргументы (всего {len(filtered_args)}): {filtered_args}"
-        logger.info(debug_msg)
-        if len(filtered_args) > 1:
-            logger.info(f"Файлы для передачи в программу: {filtered_args[1:]}")
-        else:
-            logger.info("После фильтрации файлов не осталось")
-    except (OSError, AttributeError) as e:
-        logger.error(f"Ошибка при логировании отфильтрованных аргументов: {e}")
+    # Упрощенное логирование: убрано
     
-    # Логируем перед импортом
-    logger.info("Начинаем импорт file_re-file-plus...")
+    # Импортируем главную функцию из единой точки входа
     try:
-        # Используем importlib для импорта модуля с дефисом в имени
-        import importlib.util
-        file_path = os.path.join(script_dir, "file_re-file-plus.py")
-        spec = importlib.util.spec_from_file_location("file_re_file_plus", file_path)
-        file_re_file_plus = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(file_re_file_plus)
-        main = file_re_file_plus.main
-        logger.info("Импорт file_re-file-plus успешен")
+        from app.entry_point import main
     except Exception as import_error:
-        logger.error(f"Ошибка при импорте file_re-file-plus: {import_error}", exc_info=True)
+        logger.error(f"Ошибка при импорте app.entry_point: {import_error}", exc_info=True)
         raise
     
     if __name__ == "__main__":
-        logger.info("Запуск функции main()...")
         try:
             main()
-            logger.info("Функция main() завершена")
         except Exception as main_error:
             logger.error(f"Ошибка при выполнении main(): {main_error}", exc_info=True)
             raise

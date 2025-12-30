@@ -95,11 +95,24 @@ class ReFileService:
                     new_names_map[new_full_name] = []
                 new_names_map[new_full_name].append(file)
                 
-            except Exception as e:
+            except (ValueError, TypeError, AttributeError) as e:
+                # Ошибки данных или доступа к атрибутам
                 error_msg = f"Ошибка обработки файла: {str(e)}"
                 file.set_error(error_msg)
                 result.add_error(file, error_msg)
                 logger.error(f"Ошибка обработки файла {file.path}: {e}", exc_info=True)
+            except (OSError, PermissionError) as e:
+                # Ошибки файловой системы
+                error_msg = f"Ошибка доступа к файлу: {str(e)}"
+                file.set_error(error_msg)
+                result.add_error(file, error_msg)
+                logger.error(f"Ошибка доступа к файлу {file.path}: {e}", exc_info=True)
+            except Exception as e:
+                # Неожиданные ошибки
+                error_msg = f"Неожиданная ошибка обработки файла: {str(e)}"
+                file.set_error(error_msg)
+                result.add_error(file, error_msg)
+                logger.error(f"Неожиданная ошибка обработки файла {file.path}: {e}", exc_info=True)
         
         # Проверяем конфликты имен
         for new_full_name, conflicting_files in new_names_map.items():
@@ -140,20 +153,6 @@ class ReFileService:
                             result.add_error(file, app_error.message)
                             continue
                         
-                        # Проверяем, не существует ли уже файл с таким именем
-                        # Это может измениться между проверкой и re-file операцией,
-                        # поэтому обрабатываем это в блоке except
-                        if new_path.exists():
-                            app_error = AppError(
-                                ErrorType.FILE_EXISTS,
-                                f"Файл '{file.new_full_name}' уже существует",
-                                {'new_path': str(new_path)}
-                            )
-                            self.error_handler.handle_error(app_error)
-                            file.set_error(app_error.message)
-                            result.add_error(file, app_error.message)
-                            continue
-                        
                         # Создаем резервную копию, если нужно
                         if self.backup_manager:
                             try:
@@ -168,8 +167,22 @@ class ReFileService:
                                 self.error_handler.handle_error(app_error)
                         
                         # Выполняем re-file операции (атомарная операция)
+                        # os.rename/path.rename атомарны и сами проверят существование
+                        # Это уменьшает вероятность race condition
                         # Если файл уже существует, это вызовет FileExistsError
-                        file.path.rename(new_path)
+                        try:
+                            file.path.rename(new_path)
+                        except FileExistsError:
+                            # Файл уже существует (возможна race condition)
+                            app_error = AppError(
+                                ErrorType.FILE_EXISTS,
+                                f"Файл '{file.new_full_name}' уже существует",
+                                {'new_path': str(new_path)}
+                            )
+                            self.error_handler.handle_error(app_error)
+                            file.set_error(app_error.message)
+                            result.add_error(file, app_error.message)
+                            continue
                         file.path = new_path
                         file.set_ready()
                         

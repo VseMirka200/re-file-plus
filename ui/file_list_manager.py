@@ -80,7 +80,25 @@ class FileListManager:
                 use_regex = False
         
         # Группируем файлы по папкам
+        # Оптимизация: используем кеш для проверок существования путей
         files_by_path = {}
+        path_cache = {}  # Кеш для проверок os.path.exists/isfile/isdir
+        
+        def get_path_info(path: str) -> Tuple[bool, bool, bool]:
+            """Получает информацию о пути с кешированием.
+            
+            Returns:
+                Tuple[exists, isfile, isdir]
+            """
+            if path not in path_cache:
+                exists = os.path.exists(path)
+                path_cache[path] = (
+                    exists,
+                    os.path.isfile(path) if exists else False,
+                    os.path.isdir(path) if exists else False
+                )
+            return path_cache[path]
+        
         for file_data in self.app.files:
             # Получаем путь к папке файла
             folder_path = None
@@ -89,14 +107,16 @@ class FileListManager:
             if hasattr(file_data, 'old_name'):
                 # FileInfo объект
                 full_path = file_data.full_path or str(file_data.path)
-                if os.path.exists(full_path):
-                    if os.path.isfile(full_path):
+                exists, isfile, isdir = get_path_info(full_path)
+                if exists:
+                    if isfile:
                         folder_path = os.path.dirname(full_path)
-                    elif os.path.isdir(full_path):
+                    elif isdir:
                         folder_path = full_path
                 else:
                     path = str(file_data.path.parent) if hasattr(file_data.path, 'parent') else str(file_data.path)
-                    folder_path = os.path.dirname(path) if os.path.isfile(path) else path
+                    _, path_isfile, _ = get_path_info(path)
+                    folder_path = os.path.dirname(path) if path_isfile else path
             else:
                 # Словарь
                 full_path = file_data.get('full_path', '')
@@ -137,19 +157,20 @@ class FileListManager:
         for folder_path in sorted_paths:
             files_in_folder = files_by_path[folder_path]
             
-            # Вставляем строку с путем перед группой файлов
-            path_text = folder_path
-            self.app.tree.insert("", tk.END, values=(path_text, "", ""), tags=('path_row',))
-            
             # Добавляем файлы из этой папки
             for file_data in files_in_folder:
                 # Получаем данные файла/папки
                 if hasattr(file_data, 'old_name'):
                     # FileInfo объект
-                    old_name = file_data.old_name
-                    new_name = file_data.new_name
-                    extension = file_data.extension
-                    full_path = file_data.full_path or str(file_data.path)
+                    old_name = file_data.old_name or ''
+                    # Проверяем, был ли new_name установлен явно
+                    if hasattr(file_data, 'new_name') and file_data.new_name is not None:
+                        new_name = file_data.new_name
+                    else:
+                        # new_name не был установлен, используем old_name
+                        new_name = old_name
+                    extension = file_data.extension or ''
+                    full_path = file_data.full_path or str(file_data.path) if hasattr(file_data, 'path') else ''
                     # Проверяем, является ли это папкой
                     is_folder = (file_data.metadata and file_data.metadata.get('is_folder', False)) or (
                         not extension and os.path.isdir(full_path) if os.path.exists(full_path) else False
@@ -186,13 +207,25 @@ class FileListManager:
                             search_lower not in extension_lower):
                             continue
                 
-                # Убрана подцветка статуса - теги не используются
-                tags = ()
-                
                 # Формируем полные имена с расширениями для отображения
-                # Если new_name не установлен, используем old_name
+                # Если new_name не установлен или пустой, используем old_name
+                # Но только если new_name действительно не был установлен
                 if not new_name:
-                    new_name = old_name
+                    # Для FileInfo проверяем, был ли new_name установлен явно
+                    if hasattr(file_data, 'old_name'):
+                        # FileInfo объект - проверяем, был ли new_name установлен
+                        # Если new_name равен None или не установлен, используем old_name
+                        if not hasattr(file_data, 'new_name') or file_data.new_name is None or file_data.new_name == '':
+                            new_name = old_name
+                        else:
+                            # new_name был установлен, используем его
+                            new_name = file_data.new_name
+                    else:
+                        # Словарь - если new_name не установлен, используем old_name
+                        if 'new_name' not in file_data or not file_data.get('new_name'):
+                            new_name = old_name
+                        else:
+                            new_name = file_data.get('new_name', old_name)
                 
                 # Для папок добавляем метку [Папка]
                 folder_label = " [Папка]" if is_folder else ""
@@ -203,18 +236,21 @@ class FileListManager:
                 old_display_name = f"{old_full_name}{folder_label}"
                 new_display_name = new_full_name  # Новое имя без метки
                 
-                # Получаем статус из метаданных конвертации, если есть
-                status = ""
-                if hasattr(self.app, 'converter_files_metadata') and self.app.converter_files_metadata:
-                    file_metadata = self.app.converter_files_metadata.get(full_path)
-                    if file_metadata:
-                        status = file_metadata.get('status', '')
+                # Формируем строку для отображения в первой колонке (без статуса в тексте)
+                if old_display_name != new_display_name:
+                    display_text = f"{old_display_name} → {new_display_name}"
+                else:
+                    display_text = old_display_name
                 
-                self.app.tree.insert("", tk.END, values=(
-                    old_display_name,
-                    new_display_name,
-                    status
-                ), tags=tags)
+                # Получаем путь к файлу для второй колонки
+                file_path_display = folder_path
+                
+                # Не устанавливаем теги при простом добавлении файлов
+                # Цветовая индикация будет применяться только при операциях (конвертация, переименование)
+                # через методы _set_file_in_progress, _set_file_ready, _set_file_error
+                tags = ()
+                
+                self.app.tree.insert("", tk.END, values=(display_text, file_path_display), tags=tags)
         
         # Обновляем видимость скроллбаров после обновления содержимого
         if (hasattr(self.app, 'tree_scrollbar_y') and
@@ -238,7 +274,7 @@ class FileListManager:
     
     def add_files(self) -> None:
         """Добавление файлов через диалог выбора."""
-        logger.info("Открыт диалог выбора файлов")
+        # Упрощенное логирование: убрано
         files = filedialog.askopenfilenames(
             title="Выберите файлы",
             filetypes=[
@@ -266,13 +302,6 @@ class FileListManager:
             ]
         )
         if files:
-            log_batch_action(
-                logger=logger,
-                action='FILES_SELECTED',
-                message=f"Выбрано файлов для добавления: {len(files)}",
-                file_count=len(files),
-                method_name='add_files'
-            )
             files_before = len(self.app.files)
             added_files = []
             for file_path in files:
@@ -280,28 +309,18 @@ class FileListManager:
                     added_files.append(file_path)
             # Применяем методы (включая шаблон), если они есть
             if self.app.methods_manager.get_methods():
-                log_action(
-                    logger=logger,
-                    level=logging.INFO,
-                    action='METHODS_APPLIED',
-                    message="Применяются методы переименования к добавленным файлам",
-                    method_name='add_files',
-                    file_count=len(added_files)
-                )
                 self.app.apply_methods()
             else:
+                # Если есть шаблон в поле, но нет метода, применяем шаблон
+                if hasattr(self.app, 'new_name_template'):
+                    template = self.app.new_name_template.get().strip()
+                    if template:
+                        if hasattr(self.app, 'templates_manager'):
+                            self.app.templates_manager.apply_template_quick(auto=True)
                 # Обновляем интерфейс
                 self.refresh_treeview()
             self.update_status()
             actual_count = len(self.app.files) - files_before
-            log_batch_action(
-                logger=logger,
-                action='FILES_ADDED',
-                message=f"Добавлено файлов в список: {actual_count}",
-                file_count=actual_count,
-                method_name='add_files',
-                success_count=actual_count
-            )
             self.app.log(f"Добавлено файлов: {actual_count}")
     
     def add_folder(self) -> None:
@@ -328,9 +347,6 @@ class FileListManager:
             True если папка добавлена, False иначе
         """
         if not os.path.isdir(folder_path):
-            logger.debug(
-                f"Попытка добавить несуществующую папку: {folder_path}"
-            )
             return False
         
         # Нормализуем путь для проверки дубликатов
@@ -360,9 +376,6 @@ class FileListManager:
                 continue
             if existing_path == folder_path:
                 # Папка уже есть в списке, пропускаем
-                logger.debug(
-                    f"Папка уже в списке, пропущена: {folder_path}"
-                )
                 return False
         
         logger.info(f"Добавление папки в список: {folder_path}")
@@ -414,9 +427,6 @@ class FileListManager:
             True если файл добавлен, False иначе
         """
         if not os.path.isfile(file_path):
-            logger.debug(
-                f"Попытка добавить несуществующий файл: {file_path}"
-            )
             return False
         
         # Нормализуем путь для проверки дубликатов
@@ -426,9 +436,10 @@ class FileListManager:
         files_list_check = self.app._get_files_list()
         for existing_file in files_list_check:
             # Поддержка как FileInfo, так и словарей
+            existing_path = None
             if hasattr(existing_file, 'full_path'):
                 # FileInfo объект
-                existing_path = existing_file.full_path
+                existing_path = existing_file.full_path or (str(existing_file.path) if hasattr(existing_file, 'path') else None)
             elif isinstance(existing_file, dict):
                 # Словарь
                 existing_path = (
@@ -439,67 +450,62 @@ class FileListManager:
                 continue
             
             if existing_path:
-                existing_path = os.path.normpath(
-                    os.path.abspath(existing_path)
-                )
-            else:
-                continue
-            if existing_path == file_path:
-                # Файл уже есть в списке, пропускаем
-                logger.debug(
-                    f"Файл уже в списке, пропущен: {file_path}"
-                )
-                return False
+                try:
+                    existing_path_normalized = os.path.normpath(os.path.abspath(existing_path))
+                    if existing_path_normalized == file_path:
+                        # Файл уже есть в списке, пропускаем
+                        return False
+                except (OSError, ValueError):
+                    # Если не удалось нормализовать путь, пропускаем этот файл
+                    continue
         
-        logger.info(f"Добавление файла в список: {file_path}")
+        # Упрощенное логирование: убрано
         self.app.log(f"Добавление файла: {os.path.basename(file_path)}")
         
-        # Используем внутренний метод для добавления файла
-        # чтобы обойти проблему с property
-        files_list = self.app._get_files_list()
-        files_count_before = len(files_list)
-        
-        # Если state доступен, создаем FileInfo объект, иначе словарь
-        if self.app.state:
-            from core.domain.file_info import FileInfo
-            file_info = FileInfo.from_path(file_path)
-            files_list.append(file_info)
-        else:
-            # Fallback для обратной совместимости
-            path_obj = Path(file_path)
-            old_name = path_obj.stem
-            extension = path_obj.suffix
-            path = str(path_obj.parent)
+        try:
+            # Используем внутренний метод для добавления файла
+            # чтобы обойти проблему с property
+            files_list = self.app._get_files_list()
+            files_count_before = len(files_list)
             
-            file_data = {
-                'path': path,
-                'old_name': old_name,
-                'new_name': old_name,
-                'extension': extension,
-                'full_path': file_path,
-                'status': 'Готов'
-            }
-            files_list.append(file_data)
-        
-        files_count_after = len(files_list)
-        logger.info(f"Файл добавлен. Было файлов: {files_count_before}, стало: {files_count_after}")
-        
-        # Пути теперь вставляются прямо в refresh_treeview, дополнительное обновление не нужно
-        
-        return True
+            # Если state доступен, создаем FileInfo объект, иначе словарь
+            if self.app.state:
+                from core.domain.file_info import FileInfo
+                file_info = FileInfo.from_path(file_path)
+                files_list.append(file_info)
+            else:
+                # Fallback для обратной совместимости
+                path_obj = Path(file_path)
+                old_name = path_obj.stem
+                extension = path_obj.suffix
+                path = str(path_obj.parent)
+                
+                file_data = {
+                    'path': path,
+                    'old_name': old_name,
+                    'new_name': old_name,
+                    'extension': extension,
+                    'full_path': file_path,
+                    'status': 'Готов'
+                }
+                files_list.append(file_data)
+            
+            files_count_after = len(files_list)
+            # Упрощенное логирование: убрано
+            
+            # Пути теперь вставляются прямо в refresh_treeview, дополнительное обновление не нужно
+            
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении файла {file_path}: {e}", exc_info=True)
+            self.app.log(f"Ошибка при добавлении файла {os.path.basename(file_path)}: {e}")
+            return False
     
     def clear_files(self) -> None:
         """Очистка списка файлов."""
         if self.app.files:
             if messagebox.askyesno("Подтверждение", "Очистить список файлов?"):
                 files_count = len(self.app.files)
-                log_batch_action(
-                    logger=logger,
-                    action='FILES_CLEARED',
-                    message=f"Очистка списка файлов",
-                    file_count=files_count,
-                    method_name='clear_files'
-                )
                 # ВАЖНО: Очищаем state.files напрямую, а не через property
                 # так как property возвращает копию списка, и clear() очищает только копию
                 if hasattr(self.app, 'state') and self.app.state:
@@ -525,53 +531,33 @@ class FileListManager:
     def delete_selected(self) -> None:
         """Удаление выбранных файлов из списка."""
         selected = self.app.tree.selection()
-        if selected:
-            # Фильтруем строку с путем (нельзя удалять)
-            selected = [item for item in selected 
-                       if 'path_row' not in self.app.tree.item(item, 'tags')]
+        if not selected:
+            return
+        
+        deleted_files = []
+        # Сортируем индексы в обратном порядке для корректного удаления
+        indices = sorted(
+            [self.app.tree.index(item) for item in selected],
+            reverse=True
+        )
+        for index in indices:
+            if index >= 0 and index < len(self.app.files):
+                file_data = self.app.files[index]
+                deleted_files.append(file_data.get('path', ''))
+                self.app.files.pop(index)
             
-            if not selected:
-                return
-            
-            deleted_files = []
-            # Сортируем индексы в обратном порядке для корректного удаления
-            indices = sorted(
-                [self.app.tree.index(item) for item in selected],
-                reverse=True
-            )
-            for index in indices:
-                # Учитываем, что строка с путем всегда на позиции 0
-                # Корректируем индекс для списка файлов
-                file_index = index - 1 if index > 0 else 0
-                
-                if file_index >= 0 and file_index < len(self.app.files):
-                    file_data = self.app.files[file_index]
-                    deleted_files.append(file_data.get('path', ''))
-                    self.app.files.pop(file_index)
-                
-                # Удаляем из дерева
-                item = selected[indices.index(index)]
-                self.app.tree.delete(item)
+            # Удаляем из дерева
+            item = selected[indices.index(index)]
+            self.app.tree.delete(item)
             self.refresh_treeview()
             self.update_status()
             # Пути теперь вставляются прямо в refresh_treeview, дополнительное обновление не нужно
-            log_batch_action(
-                logger=logger,
-                action='FILES_DELETED',
-                message=f"Удалено файлов из списка: {len(selected)}",
-                file_count=len(selected),
-                method_name='delete_selected',
-                details={'deleted_files': deleted_files[:5]}
-            )
             self.app.log(f"Удалено файлов: {len(selected)}")
     
     def select_all(self) -> None:
         """Выделение всех файлов."""
-        # Исключаем строку с путем из выделения
         all_items = self.app.tree.get_children()
-        items_to_select = [item for item in all_items 
-                          if 'path_row' not in self.app.tree.item(item, 'tags')]
-        self.app.tree.selection_set(items_to_select)
+        self.app.tree.selection_set(all_items)
     
     def deselect_all(self) -> None:
         """Снятие выделения со всех файлов."""
@@ -629,11 +615,6 @@ class FileListManager:
         if not item:
             return
         
-        # Игнорируем строку с путем (не показываем меню)
-        tags = self.app.tree.item(item, 'tags')
-        if tags and 'path_row' in tags:
-            return
-        
         # Выделяем элемент, если он не выделен
         if item not in self.app.tree.selection():
             self.app.tree.selection_set(item)
@@ -642,7 +623,7 @@ class FileListManager:
         context_menu = tk.Menu(
             self.app.root,
             tearoff=0,
-            bg=self.app.colors.get('bg_card', '#ffffff'),
+            bg=self.app.colors.get('bg_main', '#ffffff'),
             fg=self.app.colors.get('text_primary', '#000000'),
             activebackground=self.app.colors.get('primary', '#4a90e2'),
             activeforeground='white'
@@ -667,25 +648,12 @@ class FileListManager:
         if not selected_items:
             return
         
-        # Фильтруем строку с путем
-        selected_items = [item for item in selected_items 
-                        if 'path_row' not in self.app.tree.item(item, 'tags')]
-        
-        if not selected_items:
-            return
-        
         for item in selected_items:
-            values = self.app.tree.item(item, 'values')
-            if not values or len(values) < 1:
+            item_index = self.app.tree.index(item)
+            if item_index < 0 or item_index >= len(self.app.files):
                 continue
             
-            old_name = values[0]
-            # Находим файл в списке
-            file_info = None
-            for f in self.app.files:
-                if f.get('old_name') == old_name:
-                    file_info = f
-                    break
+            file_info = self.app.files[item_index]
             
             if file_info:
                 # Используем full_path если есть, иначе собираем путь из компонентов
@@ -716,20 +684,11 @@ class FileListManager:
         if not selected:
             return
         
-        # Фильтруем строку с путем
-        selected = [item for item in selected 
-                   if 'path_row' not in self.app.tree.item(item, 'tags')]
-        
-        if not selected:
-            return
-        
         try:
             import platform
             
             item = selected[0]
-            index = self.app.tree.index(item)
-            # Учитываем, что строка с путем всегда на позиции 0
-            file_index = index - 1 if index > 0 else 0
+            file_index = self.app.tree.index(item)
             if file_index >= 0 and file_index < len(self.app.files):
                 file_data = self.app.files[file_index]
                 file_path = file_data.get('full_path') or file_data.get('path', '')
@@ -752,9 +711,7 @@ class FileListManager:
             return
         
         item = selected[0]
-        index = self.app.tree.index(item)
-        # Учитываем, что строка с путем всегда на позиции 0
-        file_index = index - 1 if index > 0 else 0
+        file_index = self.app.tree.index(item)
         if file_index < 0 or file_index >= len(self.app.files):
             return
         
@@ -781,18 +738,9 @@ class FileListManager:
         if not selected:
             return
         
-        # Фильтруем строку с путем
-        selected = [item for item in selected 
-                   if 'path_row' not in self.app.tree.item(item, 'tags')]
-        
-        if not selected:
-            return
-        
         try:
             item = selected[0]
-            index = self.app.tree.index(item)
-            # Учитываем, что строка с путем всегда на позиции 0
-            file_index = index - 1 if index > 0 else 0
+            file_index = self.app.tree.index(item)
             if file_index >= 0 and file_index < len(self.app.files):
                 file_data = self.app.files[file_index]
                 file_path = file_data.get('full_path') or file_data.get('path', '')
@@ -989,28 +937,32 @@ class FileListManager:
         """Сортировка по колонке.
         
         Args:
-            col: Имя колонки для сортировки
+            col: Имя колонки для сортировки ("files" или "path")
         """
         if not hasattr(self.app, 'tree') or not self.app.tree:
             return
         
-        # Находим и сохраняем строку с путем
-        path_item = None
-        for item in self.app.tree.get_children(""):
-            tags = self.app.tree.item(item, 'tags')
-            if tags and 'path_row' in tags:
-                path_item = item
-                break
+        # Определяем колонку для сортировки
+        if col in ("files", "path"):
+            sort_col = col
+        else:
+            sort_col = "files"  # По умолчанию сортируем по первой колонке
         
-        # Получаем все элементы кроме строки с путем
+        # Получаем все элементы
         items = [
-            (self.app.tree.set(item, col), item)
+            (self.app.tree.set(item, sort_col), item)
             for item in self.app.tree.get_children("")
-            if item != path_item
         ]
-        items.sort()
         
-        # Перемещаем элементы, начиная с индекса 1 (после строки с путем)
-        start_index = 1 if path_item else 0
+        # Переключаем порядок сортировки
+        if self.app.sort_column_name == sort_col:
+            self.app.sort_reverse = not self.app.sort_reverse
+        else:
+            self.app.sort_column_name = sort_col
+            self.app.sort_reverse = False
+        
+        items.sort(reverse=self.app.sort_reverse)
+        
+        # Перемещаем элементы
         for index, (val, item) in enumerate(items):
-            self.app.tree.move(item, "", start_index + index)
+            self.app.tree.move(item, "", index)

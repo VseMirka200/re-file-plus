@@ -1,14 +1,13 @@
 """Основной класс приложения для переименования файлов.
 
-Содержит главный класс FileRenamerApp и функцию обработки аргументов командной строки.
+Содержит главный класс ReFilePlusApp и функцию обработки аргументов командной строки.
 Использует модульную архитектуру с делегированием ответственности специализированным обработчикам.
 """
 
 # Стандартная библиотека
 import logging
 import os
-import sys
-from typing import Dict, List, TYPE_CHECKING
+from typing import Callable, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     import tkinter as tk
@@ -17,17 +16,6 @@ if TYPE_CHECKING:
 from app.app_initializer import AppInitializer
 
 logger = logging.getLogger(__name__)
-
-# Импорт функции валидации путей
-try:
-    try:
-        from infrastructure.system.paths import is_safe_path
-    except ImportError:
-        from config.constants import is_safe_path
-    HAS_PATH_VALIDATION = True
-except ImportError:
-    HAS_PATH_VALIDATION = False
-    logger.warning("Функция is_safe_path недоступна, валидация путей отключена")
 
 # Импорт структурированного логирования
 try:
@@ -40,111 +28,12 @@ except ImportError:
         logger.info(f"[{action}] {message} (файлов: {file_count})")
 
 
-def process_cli_args() -> List[str]:
-    """Обработка аргументов командной строки.
-    
-    Фильтрует аргументы командной строки, оставляя только существующие файлы.
-    Игнорирует опции (аргументы, начинающиеся с -), если они не являются путями к файлам.
-    Поддерживает различные форматы путей, включая URL-формат (file://) и пути в кавычках.
-    
-    Returns:
-        List[str]: Список путей к файлам из аргументов командной строки
-    """
-    try:
-        from utils.path_processing import filter_cli_args
-        if len(sys.argv) > 1:
-            logger.info(f"Аргументы командной строки: {sys.argv[1:]}")
-            files_from_args = filter_cli_args(sys.argv[1:])
-            logger.info(f"Обработано файлов из аргументов: {len(files_from_args)}")
-            return files_from_args
-    except ImportError:
-        # Fallback на старую логику, если модуль недоступен
-        logger.warning("Модуль utils.path_processing недоступен, используется fallback логика")
-        files_from_args = []
-        
-        if len(sys.argv) > 1:
-            logger.info(f"Аргументы командной строки: {sys.argv[1:]}")
-            
-            for arg in sys.argv[1:]:
-                if not arg or not arg.strip():
-                    continue
-                
-                # Обработка URL-формата (file://) - используется LibreOffice и другими приложениями
-                if arg.startswith('file://'):
-                    try:
-                        # Удаляем префикс file:// и декодируем URL
-                        import urllib.parse
-                        file_path = urllib.parse.unquote(arg[7:])  # Убираем file://
-                        # Убираем начальный слеш для Windows путей (file:///C:/...)
-                        if sys.platform == 'win32' and file_path.startswith('/') and len(file_path) > 2:
-                            if file_path[1].isalpha() and file_path[2] == ':':
-                                file_path = file_path[1:]  # Убираем лишний слеш
-                        normalized_path = os.path.normpath(file_path)
-                        # Валидация безопасности пути
-                        if HAS_PATH_VALIDATION and not is_safe_path(normalized_path):
-                            logger.warning(f"Небезопасный URL-путь отклонен: {normalized_path}")
-                            continue
-                        if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
-                            files_from_args.append(normalized_path)
-                            logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
-                            continue
-                    except Exception as e:
-                        logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
-                
-                # Обработка коротких опций (начинаются с одного дефиса)
-                if arg.startswith('-') and not arg.startswith('--'):
-                    normalized_arg = os.path.normpath(arg)
-                    # Проверяем, не является ли это путем к файлу, начинающимся с дефиса
-                    if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                        files_from_args.append(normalized_arg)
-                        continue
-                    # Если это не файл, пропускаем (это опция)
-                    continue
-                
-                # Обработка длинных опций (начинаются с двух дефисов)
-                if arg.startswith('--'):
-                    normalized_arg = os.path.normpath(arg)
-                    if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                        files_from_args.append(normalized_arg)
-                    # Пропускаем опции, которые не являются файлами
-                    continue
-                
-                # Обработка путей в кавычках (для путей с пробелами)
-                cleaned_arg = arg.strip('"').strip("'")
-                
-                # Обработка обычных путей
-                normalized_arg = os.path.normpath(cleaned_arg)
-                
-                # Валидация безопасности пути
-                if HAS_PATH_VALIDATION and not is_safe_path(normalized_arg):
-                    logger.warning(f"Небезопасный путь отклонен: {normalized_arg}")
-                    continue
-                
-                # Проверяем существование файла
-                if os.path.exists(normalized_arg) and os.path.isfile(normalized_arg):
-                    files_from_args.append(normalized_arg)
-                else:
-                    # Попытка обработать как абсолютный путь
-                    try:
-                        abs_path = os.path.abspath(normalized_arg)
-                        # Валидация абсолютного пути
-                        if HAS_PATH_VALIDATION and not is_safe_path(abs_path):
-                            logger.warning(f"Небезопасный абсолютный путь отклонен: {abs_path}")
-                            continue
-                        if os.path.exists(abs_path) and os.path.isfile(abs_path):
-                            files_from_args.append(abs_path)
-                            logger.info(f"Обработан относительный путь: {arg} -> {abs_path}")
-                    except (OSError, ValueError) as e:
-                        logger.debug(f"Не удалось обработать путь {arg}: {e}")
-        
-        logger.info(f"Обработано файлов из аргументов: {len(files_from_args)}")
-        return files_from_args
-    
-    return []
+# Импорт process_cli_args из cli_utils для обратной совместимости
+from app.cli_utils import process_cli_args
 
 
-class FileRenamerApp:
-    """Главный класс приложения для переименования файлов.
+class ReFilePlusApp:
+    """Главный класс приложения Ре-Файл+.
     
     Управляет всем жизненным циклом приложения, включая:
     - Создание и управление пользовательским интерфейсом
@@ -251,15 +140,9 @@ class FileRenamerApp:
         """
         import logging
         logger = logging.getLogger(__name__)
-        log_action(
-            logger=logger,
-            level=logging.INFO,
-            action='APP_STARTED',
-            message="Запуск приложения Ре-Файл+",
-            method_name='__init__',
-            file_count=len(files_from_args) if files_from_args else 0,
-            details={'files_from_args': len(files_from_args) if files_from_args else 0}
-        )
+        # Упрощенное логирование: только важные события
+        if files_from_args:
+            logger.info(f"Запуск приложения. Файлов из аргументов: {len(files_from_args)}")
         
         # Состояние приложения (используем новую модель)
         try:
@@ -297,22 +180,8 @@ class FileRenamerApp:
         
         # Инициализация приложения через AppInitializer
         self.files_from_args = files_from_args or []
-        log_action(
-            logger=logger,
-            level=logging.INFO,
-            action='APP_INIT_STARTED',
-            message="Начало инициализации компонентов приложения",
-            method_name='__init__'
-        )
         initializer = AppInitializer(self)
         initializer.initialize(root, files_from_args)
-        log_action(
-            logger=logger,
-            level=logging.INFO,
-            action='APP_INIT_COMPLETED',
-            message="Инициализация приложения завершена",
-            method_name='__init__'
-        )
     
     def _check_updates_background(self):
         """Проверка обновлений в фоновом режиме."""
@@ -328,14 +197,22 @@ class FileRenamerApp:
             except Exception as e:
                 logger.debug(f"Ошибка проверки обновлений: {e}")
     
-    def bind_mousewheel(self, widget, canvas=None):
-        """Привязка прокрутки колесом мыши к виджету."""
+    def bind_mousewheel(self, widget: 'tk.Widget', canvas: Optional['tk.Canvas'] = None) -> None:
+        """Привязка прокрутки колесом мыши к виджету.
+        
+        Args:
+            widget: Виджет для привязки прокрутки
+            canvas: Опциональный canvas для прокрутки
+        """
         from ui.ui_components import bind_mousewheel
         bind_mousewheel(widget, canvas)
     
-    def create_rounded_button(self, parent, text, command, bg_color, fg_color='white', 
-                             font=('Robot', 10, 'bold'), padx=16, pady=10, 
-                             active_bg=None, active_fg='white', width=None, expand=True):
+    def create_rounded_button(self, parent: 'tk.Widget', text: str, command: Callable, 
+                             bg_color: str, fg_color: str = 'white', 
+                             font: Tuple[str, int, str] = ('Robot', 10, 'bold'), 
+                             padx: int = 16, pady: int = 10, 
+                             active_bg: Optional[str] = None, active_fg: str = 'white', 
+                             width: Optional[int] = None, expand: bool = True) -> Optional['tk.Widget']:
         """Создание кнопки с закругленными углами через Canvas"""
         if hasattr(self, 'ui_components'):
             return self.ui_components.create_rounded_button(
@@ -344,15 +221,85 @@ class FileRenamerApp:
             )
         return None
     
-    def create_square_icon_button(self, parent, icon, command, bg_color='#667EEA', 
-                                  fg_color='white', size=40, active_bg=None):
-        """Создание квадратной кнопки со значком"""
+    def create_square_icon_button(self, parent: 'tk.Widget', icon: str, command: Callable, 
+                                  bg_color: str = '#667EEA', fg_color: str = 'white', 
+                                  size: int = 40, active_bg: Optional[str] = None, 
+                                  tooltip: Optional[str] = None) -> Optional['tk.Widget']:
+        """Создание квадратной кнопки со значком.
+        
+        Args:
+            parent: Родительский виджет
+            icon: Эмодзи или символ для иконки
+            command: Функция-обработчик клика
+            bg_color: Цвет фона
+            fg_color: Цвет текста
+            size: Размер кнопки
+            active_bg: Цвет фона при наведении
+            tooltip: Текст подсказки
+            
+        Returns:
+            Созданный виджет кнопки или None
+        """
         from ui.ui_components import UIComponents
         return UIComponents.create_square_icon_button(
-            parent, icon, command, bg_color, fg_color, size, active_bg
+            parent, icon, command, bg_color, fg_color, size, active_bg, tooltip
         )
     
-    def on_window_resize(self, event=None):
+    def create_rounded_icon_button(self, parent: 'tk.Widget', icon: str, command: Callable,
+                                   bg_color: str = '#667EEA', fg_color: str = 'white', 
+                                   size: int = 40, active_bg: Optional[str] = None, 
+                                   tooltip: Optional[str] = None, radius: int = 8) -> Optional['tk.Widget']:
+        """Создание округлой кнопки со значком.
+        
+        Args:
+            parent: Родительский виджет
+            icon: Эмодзи или символ для иконки
+            command: Функция-обработчик клика
+            bg_color: Цвет фона
+            fg_color: Цвет текста
+            size: Размер кнопки
+            active_bg: Цвет фона при наведении
+            tooltip: Текст подсказки
+            radius: Радиус скругления
+            
+        Returns:
+            Созданный виджет кнопки или None
+        """
+        from ui.ui_components import UIComponents
+        return UIComponents.create_rounded_icon_button(
+            parent, icon, command, bg_color, fg_color, size, active_bg, tooltip, radius
+        )
+    
+    def create_rounded_top_tab_button(self, parent: 'tk.Widget', text: str, command: Callable, 
+                                      bg_color: str, fg_color: str = '#1A202C',
+                                      font: Tuple[str, int, str] = ('Robot', 11, 'bold'), 
+                                      padx: int = 20, pady: int = 1, 
+                                      active_bg: Optional[str] = None, active_fg: str = 'white', 
+                                      radius: int = 8) -> Optional['tk.Widget']:
+        """Создание кнопки вкладки с закругленными верхними углами.
+        
+        Args:
+            parent: Родительский виджет
+            text: Текст кнопки
+            command: Функция-обработчик клика
+            bg_color: Цвет фона
+            fg_color: Цвет текста
+            font: Кортеж (шрифт, размер, стиль)
+            padx: Горизонтальный отступ
+            pady: Вертикальный отступ
+            active_bg: Цвет фона при наведении
+            active_fg: Цвет текста при наведении
+            radius: Радиус скругления
+            
+        Returns:
+            Созданный виджет кнопки или None
+        """
+        from ui.ui_components import UIComponents
+        return UIComponents.create_rounded_top_tab_button(
+            parent, text, command, bg_color, fg_color, font, padx, pady, active_bg, active_fg, radius
+        )
+    
+    def on_window_resize(self, event: Optional['tk.Event'] = None) -> None:
         """Обработчик изменения размера окна для адаптивного масштабирования."""
         if hasattr(self, 'main_window_handler'):
             self.main_window_handler.on_window_resize(event)
@@ -366,37 +313,65 @@ class FileRenamerApp:
                     except (AttributeError, Exception):
                         pass
     
-    def load_settings(self):
-        """Загрузка настроек из файла."""
+    def load_settings(self) -> Dict:
+        """Загрузка настроек из файла.
+        
+        Returns:
+            Словарь с настройками
+        """
         if hasattr(self, 'settings_tab_handler'):
             return self.settings_tab_handler.load_settings()
         return self.settings_manager.load_settings()
     
-    def save_settings(self, settings_dict):
-        """Сохранение настроек в файл."""
+    def save_settings(self, settings_dict: Dict) -> bool:
+        """Сохранение настроек в файл.
+        
+        Args:
+            settings_dict: Словарь с настройками для сохранения
+            
+        Returns:
+            True если сохранение успешно, False иначе
+        """
         if hasattr(self, 'settings_tab_handler'):
             return self.settings_tab_handler.save_settings(settings_dict)
         return self.settings_manager.save_settings(settings_dict)
     
-    def load_templates(self):
-        """Загрузка сохраненных шаблонов из файла"""
+    def load_templates(self) -> List[Dict]:
+        """Загрузка сохраненных шаблонов из файла.
+        
+        Returns:
+            Список сохраненных шаблонов
+        """
         return self.templates_manager.load_templates()
     
-    def save_templates(self):
-        """Сохранение шаблонов в файл"""
+    def save_templates(self) -> bool:
+        """Сохранение шаблонов в файл.
+        
+        Returns:
+            True если сохранение успешно, False иначе
+        """
         return self.templates_manager.save_templates(self.saved_templates)
     
-    def setup_window_resize_handler(self, window, canvas=None, canvas_window=None):
-        """Настройка обработчика изменения размера для окна с canvas"""
+    def setup_window_resize_handler(self, window: 'tk.Toplevel', 
+                                   canvas: Optional['tk.Canvas'] = None, 
+                                   canvas_window: Optional['tk.Widget'] = None) -> None:
+        """Настройка обработчика изменения размера для окна с canvas.
+        
+        Args:
+            window: Окно для обработки изменения размера
+            canvas: Опциональный canvas
+            canvas_window: Опциональное окно canvas
+        """
         from ui.ui_components import setup_window_resize_handler
         setup_window_resize_handler(window, canvas, canvas_window)
     
-    def update_tree_columns(self):
+    def update_tree_columns(self) -> None:
         """Обновление размеров колонок таблицы в соответствии с размером окна."""
         if hasattr(self, 'main_window_handler'):
             self.main_window_handler.update_tree_columns()
     
-    def update_scrollbar_visibility(self, widget, scrollbar, orientation='vertical'):
+    def update_scrollbar_visibility(self, widget: 'tk.Widget', scrollbar: 'tk.Scrollbar', 
+                                   orientation: str = 'vertical') -> None:
         """Автоматическое управление видимостью скроллбара.
         
         Args:
@@ -420,83 +395,95 @@ class FileRenamerApp:
     # сохранить существующий API при рефакторинге внутренней структуры.
     # ============================================================================
     
-    def add_files(self):
-        """Добавление файлов через диалог выбора"""
+    def add_files(self) -> None:
+        """Добавление файлов через диалог выбора."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.add_files()
     
-    def add_folder(self):
-        """Добавление папки с рекурсивным поиском"""
+    def add_folder(self) -> None:
+        """Добавление папки с рекурсивным поиском."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.add_folder()
     
-    def add_file(self, file_path: str):
-        """Добавление одного файла в список"""
+    def add_file(self, file_path: str) -> None:
+        """Добавление одного файла в список.
+        
+        Args:
+            file_path: Путь к файлу для добавления
+        """
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.add_file(file_path)
     
-    def delete_selected(self):
-        """Удаление выбранных файлов из списка"""
+    def delete_selected(self) -> None:
+        """Удаление выбранных файлов из списка."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.delete_selected()
     
-    def clear_files(self):
-        """Очистка списка файлов"""
+    def clear_files(self) -> None:
+        """Очистка списка файлов."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.clear_files()
     
-    def refresh_treeview(self):
-        """Обновление таблицы для синхронизации с списком файлов"""
+    def refresh_treeview(self) -> None:
+        """Обновление таблицы для синхронизации с списком файлов."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.refresh_treeview()
     
-    def update_status(self):
-        """Обновление статусной строки"""
+    def update_status(self) -> None:
+        """Обновление статусной строки."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.update_status()
     
-    def focus_search(self):
-        """Фокус на поле поиска (Ctrl+F)"""
+    def focus_search(self) -> None:
+        """Фокус на поле поиска (Ctrl+F)."""
         if hasattr(self, 'search_handler'):
             self.search_handler.focus_search()
     
-    def clear_search(self):
-        """Очистка поля поиска"""
+    def clear_search(self) -> None:
+        """Очистка поля поиска."""
         if hasattr(self, 'search_handler'):
             self.search_handler.clear_search()
     
-    def select_all(self):
-        """Выделение всех файлов"""
+    def select_all(self) -> None:
+        """Выделение всех файлов."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.select_all()
     
-    def deselect_all(self):
-        """Снятие выделения со всех файлов"""
+    def deselect_all(self) -> None:
+        """Снятие выделения со всех файлов."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.deselect_all()
     
-    def show_file_context_menu(self, event):
-        """Показ контекстного меню для файла"""
+    def show_file_context_menu(self, event: 'tk.Event') -> None:
+        """Показ контекстного меню для файла.
+        
+        Args:
+            event: Событие мыши
+        """
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.show_file_context_menu(event)
     
-    def close_window(self, window_name: str):
-        """Закрытие окна по имени"""
+    def close_window(self, window_name: str) -> None:
+        """Закрытие окна по имени.
+        
+        Args:
+            window_name: Имя окна для закрытия
+        """
         if hasattr(self, 'window_management_handler'):
             self.window_management_handler.close_window(window_name)
     
-    def start_re_file(self):
-        """Начало re-file операций"""
+    def start_re_file(self) -> None:
+        """Начало re-file операций."""
         if hasattr(self, 're_file_operations_handler'):
             self.re_file_operations_handler.start_re_file()
     
-    def undo_re_file(self):
-        """Отмена последней re-file операции"""
+    def undo_re_file(self) -> None:
+        """Отмена последней re-file операции."""
         if hasattr(self, 're_file_operations_handler'):
             self.re_file_operations_handler.undo_re_file()
     
-    def redo_re_file(self):
-        """Повтор последней re-file операции"""
+    def redo_re_file(self) -> None:
+        """Повтор последней re-file операции."""
         if hasattr(self, 're_file_operations_handler'):
             self.re_file_operations_handler.redo_re_file()
     
@@ -524,6 +511,11 @@ class FileRenamerApp:
         """Отложенное применение шаблона"""
         if hasattr(self, 'ui_templates_manager'):
             self.ui_templates_manager._apply_template_delayed()
+    
+    def _apply_template_debounced(self):
+        """Применение шаблона с задержкой (debounce)"""
+        if hasattr(self, 'ui_templates_manager'):
+            self.ui_templates_manager._apply_template_debounced()
     
     def _create_new_name_method(self, template: str):
         """Создание метода нового имени из шаблона"""
@@ -566,18 +558,9 @@ class FileRenamerApp:
         )
         support_tab.create_tab()
     
-    def _create_help_tab(self, notebook):
-        """Создание вкладки 'Справка' в notebook"""
-        from ui.help_tab import HelpTab
-        help_tab = HelpTab(
-            notebook,
-            self.colors,
-            self.bind_mousewheel
-        )
-        help_tab.create_tab()
     
     
-    def update_scroll_region(self):
+    def update_scroll_region(self) -> None:
         """Обновление области прокрутки.
         
         Примечание: Этот метод создается динамически в main_window.create_widgets().
@@ -585,8 +568,8 @@ class FileRenamerApp:
         """
         pass
     
-    def remove_method(self):
-        """Удаление метода из списка"""
+    def remove_method(self) -> None:
+        """Удаление метода из списка."""
         if hasattr(self, 'methods_listbox') and hasattr(self, 'methods_manager'):
             import tkinter as tk
             selection = self.methods_listbox.curselection()
@@ -598,8 +581,8 @@ class FileRenamerApp:
                 # Автоматически применяем методы после удаления
                 self.apply_methods()
     
-    def clear_methods(self):
-        """Очистка всех методов"""
+    def clear_methods(self) -> None:
+        """Очистка всех методов."""
         if hasattr(self, 'methods_manager') and hasattr(self, 'methods_listbox'):
             from tkinter import messagebox
             if self.methods_manager.get_methods():
@@ -608,12 +591,12 @@ class FileRenamerApp:
                     self.methods_listbox.delete(0, 'end')
                     self.log("Все методы очищены")
     
-    def apply_methods(self):
+    def apply_methods(self) -> None:
         """Применение всех методов к файлам."""
         if hasattr(self, 're_file_operations_handler'):
             self.re_file_operations_handler.apply_methods()
     
-    def rename_complete(self, success: int, error: int, renamed_files: list = None):
+    def rename_complete(self, success: int, error: int, renamed_files: Optional[List[Dict]] = None) -> None:
         """Обработка завершения переименования.
         
         Args:
@@ -624,16 +607,18 @@ class FileRenamerApp:
         if hasattr(self, 're_file_operations_handler'):
             self.re_file_operations_handler.re_file_complete(success, error, renamed_files)
     
-    def _process_files_from_args(self):
+    def _process_files_from_args(self) -> None:
         """Обработка файлов из аргументов командной строки."""
         if not self.files_from_args:
             return
         
         # Добавляем файлы в основной список файлов
+        # Оптимизация: проверяем существование один раз
         if hasattr(self, 'file_list_manager'):
             files_before = len(self.files)
             for file_path in self.files_from_args:
-                if os.path.exists(file_path) and os.path.isfile(file_path):
+                # Оптимизация: os.path.isfile уже проверяет существование
+                if os.path.isfile(file_path):
                     self.file_list_manager.add_file(file_path)
             
             # Применяем методы, если они есть

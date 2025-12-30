@@ -25,7 +25,7 @@ class AboutTab:
         """Инициализация вкладки 'О программе'.
         
         Args:
-            notebook: Notebook виджет для добавления вкладки
+            notebook: Notebook виджет для добавления вкладки (может быть None)
             colors: Словарь с цветами интерфейса
             bind_mousewheel_func: Функция для привязки прокрутки колесом мыши
             icon_photos_list: Список для хранения ссылок на изображения
@@ -88,28 +88,47 @@ class AboutTab:
         content_frame.columnconfigure(0, weight=1)
         scrollable_frame.configure(padx=20, pady=20)
         
+        # Создаем содержимое
+        self._create_content(content_frame)
+    
+    def create_content(self, parent_frame):
+        """Создание содержимого вкладки 'О программе' на переданном Frame.
+        
+        Args:
+            parent_frame: Родительский Frame для размещения содержимого
+        """
+        parent_frame.configure(padx=20, pady=20)
+        parent_frame.columnconfigure(0, weight=1)
+        self._create_content(parent_frame)
+    
+    def _create_content(self, content_frame):
+        """Внутренний метод для создания содержимого вкладки.
+        
+        Args:
+            content_frame: Frame для размещения содержимого
+        """
         # Описание программы - карточка
         about_card = ttk.LabelFrame(content_frame, text="О программе", 
                                     style='Card.TLabelframe', padding=20)
-        about_card.pack(fill=tk.X, pady=(10, 20))
+        about_card.pack(fill=tk.X, pady=(10, 10))
         
         # Контейнер для двух столбцов (изображение, описание)
-        about_content_frame = tk.Frame(about_card, bg=self.colors['bg_card'])
+        about_content_frame = tk.Frame(about_card, bg=self.colors['bg_main'])
         about_content_frame.pack(fill=tk.BOTH, expand=True)
         about_content_frame.columnconfigure(0, weight=0)  # Левый столбец (изображение) - фиксированная ширина
         about_content_frame.columnconfigure(1, weight=1)  # Средний столбец (описание) - растягивается
         about_content_frame.rowconfigure(0, weight=1)  # Растягиваем строку по высоте
         
         # Левый столбец: контейнер для изображения, названия и версии
-        left_container = tk.Frame(about_content_frame, bg=self.colors['bg_card'])
+        left_container = tk.Frame(about_content_frame, bg=self.colors['bg_main'])
         left_container.grid(row=0, column=0, sticky="nsew", padx=(0, 20))
         
         # Внутренний контейнер для центрирования содержимого по вертикали
-        left_inner = tk.Frame(left_container, bg=self.colors['bg_card'])
+        left_inner = tk.Frame(left_container, bg=self.colors['bg_main'])
         left_inner.pack(expand=True, fill=tk.BOTH)
         
         # Изображение программы с рамкой
-        image_frame = tk.Frame(left_inner, bg=self.colors['bg_card'], 
+        image_frame = tk.Frame(left_inner, bg=self.colors['bg_main'], 
                                highlightbackground=self.colors['border'],
                                highlightthickness=1,
                                relief=tk.FLAT)
@@ -142,7 +161,7 @@ class AboutTab:
                 photo = ImageTk.PhotoImage(img)
                 self._about_icons.append(photo)
                 self.icon_photos_list.append(photo)  # Сохраняем в общий список
-                image_label = tk.Label(image_frame, image=photo, bg=self.colors['bg_card'])
+                image_label = tk.Label(image_frame, image=photo, bg=self.colors['bg_main'])
                 image_label.pack(anchor=tk.CENTER)
             elif not HAS_PIL:
                 logger.warning("PIL (Pillow) не установлен, изображение приложения не может быть загружено")
@@ -155,7 +174,7 @@ class AboutTab:
         app_name_label = tk.Label(left_inner,
                                  text="Ре-Файл+",
                                  font=('Robot', 22, 'bold'),
-                                 bg=self.colors['bg_card'],
+                                 bg=self.colors['bg_main'],
                                  fg=self.colors['primary'])
         app_name_label.pack(anchor=tk.CENTER, pady=(0, 8))
         
@@ -163,13 +182,14 @@ class AboutTab:
         version_label = tk.Label(left_inner,
                                 text=f"Версия {APP_VERSION}",
                                 font=('Robot', 9),
-                                bg=self.colors['bg_card'],
+                                bg=self.colors['bg_main'],
                                 fg=self.colors['text_secondary'])
         version_label.pack(anchor=tk.CENTER)
         
         # Средний столбец: описание программы
-        desc_frame = tk.Frame(about_content_frame, bg=self.colors['bg_card'])
+        desc_frame = tk.Frame(about_content_frame, bg=self.colors['bg_main'])
         desc_frame.grid(row=0, column=1, sticky="nsew")
+        desc_frame.columnconfigure(0, weight=1)
         
         desc_text = """Ре-Файл+ - это современная и мощная программа для массового переименования файлов с расширенными возможностями.
 
@@ -188,12 +208,35 @@ class AboutTab:
         desc_label = tk.Label(desc_frame, 
                               text=desc_text,
                               font=('Robot', 10),
-                              bg=self.colors['bg_card'], 
+                              bg=self.colors['bg_main'], 
                               fg=self.colors['text_primary'],
                               justify=tk.LEFT,
                               anchor=tk.NW,
-                              wraplength=500)
-        desc_label.pack(anchor=tk.NW)
+                              wraplength=400)
+        desc_label.grid(row=0, column=0, sticky="nw")
+        
+        # Функция для обновления wraplength при изменении размера
+        def update_desc_wraplength(event=None):
+            try:
+                # Получаем ширину desc_frame
+                desc_frame.update_idletasks()
+                frame_width = desc_frame.winfo_width()
+                if frame_width > 1:
+                    # Вычитаем отступы (padx внутри desc_frame)
+                    new_wraplength = max(frame_width - 20, 200)
+                    desc_label.config(wraplength=new_wraplength)
+            except (AttributeError, tk.TclError):
+                pass
+        
+        # Привязываем обновление к изменению размера desc_frame
+        desc_frame.bind('<Configure>', update_desc_wraplength)
+        # Также обновляем при изменении размера about_content_frame
+        about_content_frame.bind('<Configure>', lambda e: update_desc_wraplength())
+        # Обновляем при изменении размера about_card
+        about_card.bind('<Configure>', lambda e: update_desc_wraplength())
+        # Устанавливаем начальное значение после создания виджетов
+        content_frame.after_idle(update_desc_wraplength)
+        content_frame.after(100, update_desc_wraplength)  # Дополнительное обновление через 100мс
         
         # Разработчики - карточка
         self._create_developers_card(content_frame)
@@ -214,71 +257,55 @@ class AboutTab:
         """Создание карточки с информацией о разработчиках"""
         dev_card = ttk.LabelFrame(parent, text="Команда разработчиков", 
                                   style='Card.TLabelframe', padding=20)
-        dev_card.pack(fill=tk.X, pady=(0, 20))
+        dev_card.pack(fill=tk.X, pady=(0, 10))
         
         # Ведущий разработчик
-        lead_dev_frame = tk.Frame(dev_card, bg=self.colors['bg_card'])
+        lead_dev_frame = tk.Frame(dev_card, bg=self.colors['bg_main'])
         lead_dev_frame.pack(anchor=tk.W, pady=(0, 8))
         
         def open_lead_dev_profile(event):
             import webbrowser
             webbrowser.open("https://github.com/VseMirka200")
         
-        lead_dev_prefix = tk.Label(lead_dev_frame, 
-                            text="Ведущий разработчик: ",
-                            font=('Robot', 10),
-                            bg=self.colors['bg_card'], 
-                            fg=self.colors['text_primary'],
-                            justify=tk.LEFT)
-        lead_dev_prefix.pack(side=tk.LEFT)
-        
         lead_dev_name = tk.Label(lead_dev_frame, 
                             text="VseMirka200",
                             font=('Robot', 10),
-                            bg=self.colors['bg_card'], 
+                            bg=self.colors['bg_main'], 
                             fg=self.colors['primary'],
                             cursor='hand2',
                             justify=tk.LEFT)
-        lead_dev_name.pack(side=tk.LEFT, padx=(0, 0))
+        lead_dev_name.pack(side=tk.LEFT)
         lead_dev_name.bind("<Button-1>", open_lead_dev_profile)
         
         # Разработчик
-        dev_frame = tk.Frame(dev_card, bg=self.colors['bg_card'])
+        dev_frame = tk.Frame(dev_card, bg=self.colors['bg_main'])
         dev_frame.pack(anchor=tk.W)
         
         def open_dev_profile(event):
             import webbrowser
             webbrowser.open("https://github.com/ZipFile45")
         
-        dev_prefix = tk.Label(dev_frame, 
-                            text="Разработчик: ",
-                            font=('Robot', 10),
-                            bg=self.colors['bg_card'], 
-                            fg=self.colors['text_primary'],
-                            justify=tk.LEFT)
-        dev_prefix.pack(side=tk.LEFT)
-        
         dev_name_label = tk.Label(dev_frame, 
                                  text="ZipFile45",
                                  font=('Robot', 10),
-                                 bg=self.colors['bg_card'], 
+                                 bg=self.colors['bg_main'], 
                                  fg=self.colors['primary'],
                                  cursor='hand2',
                                  justify=tk.LEFT)
-        dev_name_label.pack(side=tk.LEFT, padx=(0, 0))
+        dev_name_label.pack(side=tk.LEFT)
         dev_name_label.bind("<Button-1>", open_dev_profile)
     
     def _create_social_card(self, parent):
         """Создание карточки с нашими сообществами"""
         social_card = ttk.LabelFrame(parent, text="Наши сообщества", 
                                      style='Card.TLabelframe', padding=20)
-        social_card.pack(fill=tk.X, pady=(0, 20))
+        social_card.pack(fill=tk.X, pady=(0, 10))
         
         def open_vk_social(event):
             import webbrowser
             webbrowser.open("https://vk.com/urban_solution")
         
-        vk_frame = tk.Frame(social_card, bg=self.colors['bg_card'])
+        vk_frame = tk.Frame(social_card, bg=self.colors['bg_main'])
         vk_frame.pack(anchor=tk.W, fill=tk.X, pady=(0, 3))
         
         try:
@@ -289,7 +316,7 @@ class AboutTab:
                 vk_photo = ImageTk.PhotoImage(vk_img)
                 self._about_icons.append(vk_photo)
                 self.icon_photos_list.append(vk_photo)
-                vk_icon_label = tk.Label(vk_frame, image=vk_photo, bg=self.colors['bg_card'], cursor='hand2')
+                vk_icon_label = tk.Label(vk_frame, image=vk_photo, bg=self.colors['bg_main'], cursor='hand2')
                 vk_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 vk_icon_label.bind("<Button-1>", open_vk_social)
         except Exception as e:
@@ -298,7 +325,7 @@ class AboutTab:
         vk_label = tk.Label(vk_frame, 
                            text="Группа ВКонтакте",
                            font=('Robot', 10),
-                           bg=self.colors['bg_card'], 
+                           bg=self.colors['bg_main'], 
                            fg=self.colors['primary'],
                            cursor='hand2',
                            justify=tk.LEFT)
@@ -309,7 +336,7 @@ class AboutTab:
             import webbrowser
             webbrowser.open("https://t.me/+n1JeH5DS-HQ2NjYy")
         
-        tg_frame = tk.Frame(social_card, bg=self.colors['bg_card'])
+        tg_frame = tk.Frame(social_card, bg=self.colors['bg_main'])
         tg_frame.pack(anchor=tk.W, fill=tk.X)
         
         try:
@@ -320,7 +347,7 @@ class AboutTab:
                 tg_photo = ImageTk.PhotoImage(tg_img)
                 self._about_icons.append(tg_photo)
                 self.icon_photos_list.append(tg_photo)
-                tg_icon_label = tk.Label(tg_frame, image=tg_photo, bg=self.colors['bg_card'], cursor='hand2')
+                tg_icon_label = tk.Label(tg_frame, image=tg_photo, bg=self.colors['bg_main'], cursor='hand2')
                 tg_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 tg_icon_label.bind("<Button-1>", open_tg_channel)
         except Exception as e:
@@ -329,7 +356,7 @@ class AboutTab:
         tg_label = tk.Label(tg_frame, 
                            text="Телеграм-канал",
                            font=('Robot', 10),
-                           bg=self.colors['bg_card'], 
+                           bg=self.colors['bg_main'], 
                            fg=self.colors['primary'],
                            cursor='hand2',
                            justify=tk.LEFT)
@@ -338,15 +365,15 @@ class AboutTab:
     
     def _create_github_card(self, parent):
         """Создание карточки с GitHub"""
-        github_card = ttk.LabelFrame(parent, text="Посмотреть код", 
+        github_card = ttk.LabelFrame(parent, text="Открыть исходный код", 
                                      style='Card.TLabelframe', padding=20)
-        github_card.pack(fill=tk.X, pady=(0, 20))
+        github_card.pack(fill=tk.X, pady=(0, 10))
         
         def open_github(event):
             import webbrowser
             webbrowser.open("https://github.com/VseMirka200/re-file-plus")
         
-        github_frame = tk.Frame(github_card, bg=self.colors['bg_card'])
+        github_frame = tk.Frame(github_card, bg=self.colors['bg_main'])
         github_frame.pack(anchor=tk.W, fill=tk.X)
         
         try:
@@ -357,7 +384,7 @@ class AboutTab:
                 github_photo = ImageTk.PhotoImage(github_img)
                 self._about_icons.append(github_photo)
                 self.icon_photos_list.append(github_photo)
-                github_icon_label = tk.Label(github_frame, image=github_photo, bg=self.colors['bg_card'], cursor='hand2')
+                github_icon_label = tk.Label(github_frame, image=github_photo, bg=self.colors['bg_main'], cursor='hand2')
                 github_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 github_icon_label.bind("<Button-1>", open_github)
         except Exception as e:
@@ -366,7 +393,7 @@ class AboutTab:
         github_label = tk.Label(github_frame, 
                                text="GitHub",
                                font=('Robot', 10),
-                               bg=self.colors['bg_card'], 
+                               bg=self.colors['bg_main'], 
                                fg=self.colors['primary'],
                                cursor='hand2',
                                justify=tk.LEFT)
@@ -375,90 +402,108 @@ class AboutTab:
     
     def _create_contact_card(self, parent):
         """Создание карточки с контактами"""
-        contact_card = ttk.LabelFrame(parent, text="Связаться с разработчиками", 
+        contact_card = ttk.LabelFrame(parent, text="Техническая поддержка", 
                                       style='Card.TLabelframe', padding=20)
-        contact_card.pack(fill=tk.X, pady=(0, 20))
+        contact_card.pack(fill=tk.X, pady=(0, 10))
         
         def open_email(event):
             import webbrowser
             webbrowser.open("mailto:urban-solution@ya.ru")
         
-        contact_frame = tk.Frame(contact_card, bg=self.colors['bg_card'])
-        contact_frame.pack(anchor=tk.W, fill=tk.X)
-        
-        email_icon_label = tk.Label(contact_frame, 
-                                    text="📧",
-                                    font=('Robot', 10),
-                                    bg=self.colors['bg_card'],
-                                    fg=self.colors['primary'])
-        email_icon_label.pack(side=tk.LEFT, padx=(0, 4))
+        # Email
+        contact_frame = tk.Frame(contact_card, bg=self.colors['bg_main'])
+        contact_frame.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
         
         contact_label = tk.Label(contact_frame, 
                                 text="urban-solution@ya.ru",
                                 font=('Robot', 10),
-                                bg=self.colors['bg_card'], 
+                                bg=self.colors['bg_main'], 
                                 fg=self.colors['primary'],
                                 cursor='hand2',
                                 justify=tk.LEFT)
         contact_label.pack(side=tk.LEFT)
         contact_label.bind("<Button-1>", open_email)
+        
+        # VK
+        def open_vk_contact(event):
+            import webbrowser
+            webbrowser.open("https://vk.com/im?entrypoint=community_page&media=&sel=-233390810")
+        
+        vk_contact_frame = tk.Frame(contact_card, bg=self.colors['bg_main'])
+        vk_contact_frame.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
+        
+        try:
+            vk_icon_path = os.path.join(os.path.dirname(__file__), "..", "materials", "icon", "ВКонтакте.png")
+            if os.path.exists(vk_icon_path) and HAS_PIL:
+                vk_contact_img = Image.open(vk_icon_path)
+                vk_contact_img = vk_contact_img.resize((24, 24), Image.Resampling.LANCZOS)
+                vk_contact_photo = ImageTk.PhotoImage(vk_contact_img)
+                self._about_icons.append(vk_contact_photo)
+                self.icon_photos_list.append(vk_contact_photo)
+                vk_contact_icon_label = tk.Label(vk_contact_frame, image=vk_contact_photo, bg=self.colors['bg_main'], cursor='hand2')
+                vk_contact_icon_label.pack(side=tk.LEFT, padx=(0, 8))
+                vk_contact_icon_label.bind("<Button-1>", open_vk_contact)
+        except Exception as e:
+            logger.error(f"Ошибка загрузки иконки VK для контактов: {e}", exc_info=True)
+        
+        vk_contact_label = tk.Label(vk_contact_frame, 
+                                   text="ВКонтакте",
+                                   font=('Robot', 10),
+                                   bg=self.colors['bg_main'], 
+                                   fg=self.colors['primary'],
+                                   cursor='hand2',
+                                   justify=tk.LEFT)
+        vk_contact_label.pack(side=tk.LEFT)
+        vk_contact_label.bind("<Button-1>", open_vk_contact)
+        
+        # Telegram
+        def open_tg_contact(event):
+            import webbrowser
+            webbrowser.open("https://t.me/urbanSOL2?direct")
+        
+        tg_contact_frame = tk.Frame(contact_card, bg=self.colors['bg_main'])
+        tg_contact_frame.pack(anchor=tk.W, fill=tk.X)
+        
+        try:
+            tg_icon_path = os.path.join(os.path.dirname(__file__), "..", "materials", "icon", "Telegram.png")
+            if os.path.exists(tg_icon_path) and HAS_PIL:
+                tg_contact_img = Image.open(tg_icon_path)
+                tg_contact_img = tg_contact_img.resize((24, 24), Image.Resampling.LANCZOS)
+                tg_contact_photo = ImageTk.PhotoImage(tg_contact_img)
+                self._about_icons.append(tg_contact_photo)
+                self.icon_photos_list.append(tg_contact_photo)
+                tg_contact_icon_label = tk.Label(tg_contact_frame, image=tg_contact_photo, bg=self.colors['bg_main'], cursor='hand2')
+                tg_contact_icon_label.pack(side=tk.LEFT, padx=(0, 8))
+                tg_contact_icon_label.bind("<Button-1>", open_tg_contact)
+        except Exception as e:
+            logger.error(f"Ошибка загрузки иконки Telegram для контактов: {e}", exc_info=True)
+        
+        tg_contact_label = tk.Label(tg_contact_frame, 
+                                   text="Telegram",
+                                   font=('Robot', 10),
+                                   bg=self.colors['bg_main'], 
+                                   fg=self.colors['primary'],
+                                   cursor='hand2',
+                                   justify=tk.LEFT)
+        tg_contact_label.pack(side=tk.LEFT)
+        tg_contact_label.bind("<Button-1>", open_tg_contact)
     
     def _create_support_card(self, parent):
-        """Создание карточки с информацией о поддержке проекта"""
-        support_card = ttk.LabelFrame(parent, text="Поддержать проект", 
-                                     style='Card.TLabelframe', padding=20)
-        support_card.pack(fill=tk.X, pady=(0, 20))
-        
-        # Первый параграф
-        desc_text1 = "Если вам нравится эта программа и она помогает вам в работе,\nвы можете поддержать её развитие!"
-        
-        desc_label1 = tk.Label(support_card, 
-                             text=desc_text1,
-                             font=('Robot', 10),
-                             bg=self.colors['bg_card'], 
-                             fg=self.colors['text_primary'],
-                             justify=tk.LEFT,
-                             anchor=tk.W)
-        desc_label1.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
-        
-        # Заголовок списка
-        support_heading = tk.Label(support_card, 
-                                  text="Ваша поддержка поможет:",
-                                  font=('Robot', 10),
-                                  bg=self.colors['bg_card'], 
-                                  fg=self.colors['text_primary'],
-                                  justify=tk.LEFT,
-                                  anchor=tk.W)
-        support_heading.pack(anchor=tk.W, fill=tk.X, pady=(0, 3))
-        
-        # Маркированный список
-        support_list = """- Добавлять новые функции
-- Улучшать существующие возможности
-- Исправлять ошибки
-- Поддерживать проект активным"""
-        
-        support_list_label = tk.Label(support_card, 
-                                     text=support_list,
-                                     font=('Robot', 10),
-                                     bg=self.colors['bg_card'], 
-                                     fg=self.colors['text_primary'],
-                                     justify=tk.LEFT,
-                                     anchor=tk.W)
-        support_list_label.pack(anchor=tk.W, fill=tk.X, pady=(0, 12))
-        
+        """Создание кнопки для поддержки проекта"""
         # Ссылка на донат
         def open_donation(event):
             import webbrowser
             webbrowser.open("https://pay.cloudtips.ru/p/1fa22ea5")
         
-        donation_label = tk.Label(support_card, 
-                                 text="Поддержать проект",
-                                 font=('Robot', 10),
-                                 bg=self.colors['bg_card'], 
-                                 fg=self.colors['primary'],
-                                 cursor='hand2',
-                                 justify=tk.LEFT)
-        donation_label.pack(anchor=tk.W, pady=(8, 0))
+        donation_label = tk.Label(parent, 
+                                text="Поддержать проект",
+                                font=('Robot', 16, 'bold'),
+                                bg=self.colors['bg_main'], 
+                                fg=self.colors['primary'],
+                                cursor='hand2',
+                                justify=tk.CENTER)
+        donation_label.pack(anchor=tk.CENTER, pady=(0, 10))
+        
         donation_label.bind("<Button-1>", open_donation)
 
 
@@ -501,19 +546,19 @@ class SupportTab:
         desc_text1 = "Если вам нравится эта программа и она помогает вам в работе,\nвы можете поддержать её развитие!"
         
         desc_label1 = tk.Label(desc_card, 
-                               text=desc_text1,
-                               font=('Robot', 10),
-                               bg=self.colors['bg_card'], 
-                               fg=self.colors['text_primary'],
-                               justify=tk.LEFT,
-                               anchor=tk.W)
+                             text=desc_text1,
+                             font=('Robot', 10),
+                             bg=self.colors['bg_main'], 
+                             fg=self.colors['text_primary'],
+                             justify=tk.LEFT,
+                             anchor=tk.W)
         desc_label1.pack(anchor=tk.W, fill=tk.X, pady=(0, 8))
         
         # Заголовок списка
         support_heading = tk.Label(desc_card, 
                                   text="Ваша поддержка поможет:",
                                   font=('Robot', 10),
-                                  bg=self.colors['bg_card'], 
+                                  bg=self.colors['bg_main'], 
                                   fg=self.colors['text_primary'],
                                   justify=tk.LEFT,
                                   anchor=tk.W)
@@ -528,7 +573,7 @@ class SupportTab:
         support_list_label = tk.Label(desc_card, 
                                      text=support_list,
                                      font=('Robot', 10),
-                                     bg=self.colors['bg_card'], 
+                                     bg=self.colors['bg_main'], 
                                      fg=self.colors['text_primary'],
                                      justify=tk.LEFT,
                                      anchor=tk.W)
@@ -540,11 +585,12 @@ class SupportTab:
             webbrowser.open("https://pay.cloudtips.ru/p/1fa22ea5")
         
         donation_label = tk.Label(desc_card, 
-                                 text="Поддержать проект",
-                                 font=('Robot', 10),
-                                 bg=self.colors['bg_card'], 
-                                 fg=self.colors['primary'],
-                                 cursor='hand2',
-                                 justify=tk.LEFT)
-        donation_label.pack(anchor=tk.W, pady=(8, 0))
+                                text="💳 Поддержать проект",
+                                font=('Robot', 16, 'bold'),
+                                bg=self.colors['bg_main'], 
+                                fg=self.colors['primary'],
+                                cursor='hand2',
+                                justify=tk.CENTER)
+        donation_label.pack(anchor=tk.CENTER, fill=tk.X)
+        
         donation_label.bind("<Button-1>", open_donation)

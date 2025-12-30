@@ -48,7 +48,7 @@ class MethodsWindow:
         window.title("Методы переименования")
         window.geometry("500x650")
         window.minsize(450, 550)
-        window.configure(bg=self.app.colors['bg_card'])
+        window.configure(bg=self.app.colors['bg_main'])
         try:
             set_window_icon(window, self.app._icon_photos)
         except Exception:
@@ -59,22 +59,22 @@ class MethodsWindow:
         self.app.windows['methods'] = window
         
         # Основной контейнер
-        main_frame = tk.Frame(window, bg=self.app.colors['bg_card'])
+        main_frame = tk.Frame(window, bg=self.app.colors['bg_main'])
         main_frame.grid(row=0, column=0, sticky="nsew", padx=12, pady=12)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
         
         # Заголовок
-        header_frame = tk.Frame(main_frame, bg=self.app.colors['bg_card'])
+        header_frame = tk.Frame(main_frame, bg=self.app.colors['bg_main'])
         header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         
         title_label = tk.Label(header_frame, text="Методы переименования", 
                               font=('Robot', 12, 'bold'),
-                              bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'])
+                              bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
         title_label.pack(anchor=tk.W)
         
         # Кнопки управления (вертикально, с названиями)
-        header_buttons = tk.Frame(header_frame, bg=self.app.colors['bg_card'])
+        header_buttons = tk.Frame(header_frame, bg=self.app.colors['bg_main'])
         header_buttons.pack(fill=tk.X, pady=(10, 0))
         header_buttons.columnconfigure(0, weight=1)
         
@@ -100,7 +100,7 @@ class MethodsWindow:
         btn_clear.grid(row=2, column=0, sticky="ew")
         
         # Контент с двумя панелями
-        content_frame = tk.Frame(main_frame, bg=self.app.colors['bg_card'])
+        content_frame = tk.Frame(main_frame, bg=self.app.colors['bg_main'])
         content_frame.grid(row=1, column=0, sticky="nsew")
         content_frame.columnconfigure(0, weight=1)
         content_frame.columnconfigure(1, weight=2)
@@ -113,7 +113,7 @@ class MethodsWindow:
         list_panel.columnconfigure(0, weight=1)
         list_panel.rowconfigure(0, weight=1)
         
-        list_scroll = tk.Frame(list_panel, bg=self.app.colors['bg_card'])
+        list_scroll = tk.Frame(list_panel, bg=self.app.colors['bg_main'])
         list_scroll.grid(row=0, column=0, sticky="nsew")
         list_scroll.columnconfigure(0, weight=1)
         list_scroll.rowconfigure(0, weight=1)
@@ -167,12 +167,12 @@ class MethodsWindow:
                          lambda e: self.on_method_type_selected_in_window())
         
         # Область настроек
-        settings_canvas = tk.Canvas(settings_panel, bg=self.app.colors['bg_card'], 
+        settings_canvas = tk.Canvas(settings_panel, bg=self.app.colors['bg_main'], 
                                    highlightthickness=0)
         settings_scrollbar = ttk.Scrollbar(settings_panel, orient="vertical", 
                                           command=settings_canvas.yview)
         self.app.methods_window_settings_frame = tk.Frame(settings_canvas, 
-                                                      bg=self.app.colors['bg_card'])
+                                                      bg=self.app.colors['bg_main'])
         
         # Флаг для отслеживания, нужна ли прокрутка
         _needs_scrolling_methods = True
@@ -373,7 +373,7 @@ class MethodsWindow:
     def create_new_name_settings(self):
         """Настройки для метода Новое имя"""
         tk.Label(self.app.methods_window_settings_frame, text="Шаблон:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_new_name_template = tk.StringVar()
@@ -382,11 +382,11 @@ class MethodsWindow:
                 font=('Robot', 9), bg='white', fg=self.app.colors['text_primary'],
                 relief=tk.SOLID, borderwidth=1).pack(fill=tk.X, pady=(0, 8))
         
-        num_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        num_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         num_frame.pack(fill=tk.X, pady=(0, 8))
         
         tk.Label(num_frame, text="Начальный номер:", font=('Robot', 8),
-                bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
+                bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
         
         self.app.methods_window_new_name_start_number = tk.StringVar(value="1")
         tk.Entry(num_frame, textvariable=self.app.methods_window_new_name_start_number,
@@ -396,18 +396,18 @@ class MethodsWindow:
     def create_add_remove_settings(self):
         """Настройки для метода Добавить/Удалить"""
         self.app.methods_window_add_remove_op = tk.StringVar(value="add")
-        op_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        op_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         op_frame.pack(fill=tk.X, pady=(0, 8))
         
         tk.Radiobutton(op_frame, text="Добавить", variable=self.app.methods_window_add_remove_op,
-                      value="add", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="add", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT, padx=(0, 10))
         tk.Radiobutton(op_frame, text="Удалить", variable=self.app.methods_window_add_remove_op,
-                      value="remove", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="remove", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT)
         
         tk.Label(self.app.methods_window_settings_frame, text="Текст:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_add_remove_text = tk.StringVar()
@@ -417,20 +417,20 @@ class MethodsWindow:
                 relief=tk.SOLID, borderwidth=1).pack(fill=tk.X, pady=(0, 8))
         
         self.app.methods_window_add_remove_pos = tk.StringVar(value="before")
-        pos_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        pos_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         pos_frame.pack(fill=tk.X)
         
         tk.Radiobutton(pos_frame, text="Перед", variable=self.app.methods_window_add_remove_pos,
-                      value="before", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="before", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT, padx=(0, 10))
         tk.Radiobutton(pos_frame, text="После", variable=self.app.methods_window_add_remove_pos,
-                      value="after", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="after", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT)
     
     def create_replace_settings(self):
         """Настройки для метода Замена"""
         tk.Label(self.app.methods_window_settings_frame, text="Найти:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_replace_find = tk.StringVar()
@@ -440,7 +440,7 @@ class MethodsWindow:
                 relief=tk.SOLID, borderwidth=1).pack(fill=tk.X, pady=(0, 8))
         
         tk.Label(self.app.methods_window_settings_frame, text="Заменить на:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_replace_with = tk.StringVar()
@@ -452,13 +452,13 @@ class MethodsWindow:
         self.app.methods_window_replace_case = tk.BooleanVar(value=False)
         tk.Checkbutton(self.app.methods_window_settings_frame, text="Учитывать регистр",
                       variable=self.app.methods_window_replace_case,
-                      bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(anchor=tk.W)
     
     def create_case_settings(self):
         """Настройки для метода Регистр"""
         self.app.methods_window_case_type = tk.StringVar(value="lower")
-        case_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        case_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         case_frame.pack(fill=tk.X)
         
         types = [("lower", "Строчные"), ("upper", "Заглавные"),
@@ -466,37 +466,37 @@ class MethodsWindow:
         
         for value, text in types:
             tk.Radiobutton(case_frame, text=text, variable=self.app.methods_window_case_type,
-                          value=value, bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                          value=value, bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                           font=('Robot', 8)).pack(anchor=tk.W)
     
     def create_numbering_settings(self):
         """Настройки для метода Нумерация"""
-        params_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        params_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         params_frame.pack(fill=tk.X, pady=(0, 8))
         
         tk.Label(params_frame, text="С:", font=('Robot', 8),
-                bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
+                bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
         self.app.methods_window_numbering_start = tk.StringVar(value="1")
         tk.Entry(params_frame, textvariable=self.app.methods_window_numbering_start,
                 font=('Robot', 8), bg='white', fg=self.app.colors['text_primary'],
                 relief=tk.SOLID, borderwidth=1, width=6).pack(side=tk.LEFT, padx=5)
         
         tk.Label(params_frame, text="Шаг:", font=('Robot', 8),
-                bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
+                bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
         self.app.methods_window_numbering_step = tk.StringVar(value="1")
         tk.Entry(params_frame, textvariable=self.app.methods_window_numbering_step,
                 font=('Robot', 8), bg='white', fg=self.app.colors['text_primary'],
                 relief=tk.SOLID, borderwidth=1, width=6).pack(side=tk.LEFT, padx=5)
         
         tk.Label(params_frame, text="Цифр:", font=('Robot', 8),
-                bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
+                bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary']).pack(side=tk.LEFT)
         self.app.methods_window_numbering_digits = tk.StringVar(value="3")
         tk.Entry(params_frame, textvariable=self.app.methods_window_numbering_digits,
                 font=('Robot', 8), bg='white', fg=self.app.colors['text_primary'],
                 relief=tk.SOLID, borderwidth=1, width=6).pack(side=tk.LEFT, padx=5)
         
         tk.Label(self.app.methods_window_settings_frame, text="Формат ({n} для номера):", 
-                font=('Robot', 8), bg=self.app.colors['bg_card'], 
+                font=('Robot', 8), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_numbering_format = tk.StringVar(value="({n})")
@@ -506,20 +506,20 @@ class MethodsWindow:
                 relief=tk.SOLID, borderwidth=1).pack(fill=tk.X, pady=(0, 8))
         
         self.app.methods_window_numbering_pos = tk.StringVar(value="end")
-        pos_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        pos_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         pos_frame.pack(fill=tk.X)
         
         tk.Radiobutton(pos_frame, text="В начале", variable=self.app.methods_window_numbering_pos,
-                      value="start", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="start", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT, padx=(0, 10))
         tk.Radiobutton(pos_frame, text="В конце", variable=self.app.methods_window_numbering_pos,
-                      value="end", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="end", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT)
     
     def create_metadata_settings(self):
         """Настройки для метода Метаданные"""
         tk.Label(self.app.methods_window_settings_frame, text="Тег:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_metadata_tag = tk.StringVar()
@@ -530,24 +530,24 @@ class MethodsWindow:
         
         tk.Label(self.app.methods_window_settings_frame, 
                 text="Примеры: {width}x{height}, {date_created}",
-                font=('Robot', 7), bg=self.app.colors['bg_card'], 
+                font=('Robot', 7), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_muted']).pack(anchor=tk.W, pady=(0, 8))
         
         self.app.methods_window_metadata_pos = tk.StringVar(value="end")
-        pos_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_card'])
+        pos_frame = tk.Frame(self.app.methods_window_settings_frame, bg=self.app.colors['bg_main'])
         pos_frame.pack(fill=tk.X)
         
         tk.Radiobutton(pos_frame, text="В начале", variable=self.app.methods_window_metadata_pos,
-                      value="start", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="start", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT, padx=(0, 10))
         tk.Radiobutton(pos_frame, text="В конце", variable=self.app.methods_window_metadata_pos,
-                      value="end", bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'],
+                      value="end", bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'],
                       font=('Robot', 8)).pack(side=tk.LEFT)
     
     def create_regex_settings(self):
         """Настройки для метода Регулярные выражения"""
         tk.Label(self.app.methods_window_settings_frame, text="Паттерн:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_regex_pattern = tk.StringVar()
@@ -557,7 +557,7 @@ class MethodsWindow:
                 relief=tk.SOLID, borderwidth=1).pack(fill=tk.X, pady=(0, 8))
         
         tk.Label(self.app.methods_window_settings_frame, text="Заменить на:", 
-                font=('Robot', 9), bg=self.app.colors['bg_card'], 
+                font=('Robot', 9), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 4))
         
         self.app.methods_window_regex_replace = tk.StringVar()
@@ -568,7 +568,7 @@ class MethodsWindow:
         
         tk.Label(self.app.methods_window_settings_frame, 
                 text="Группы: \\1, \\2 и т.д.",
-                font=('Robot', 7), bg=self.app.colors['bg_card'], 
+                font=('Robot', 7), bg=self.app.colors['bg_main'], 
                 fg=self.app.colors['text_muted']).pack(anchor=tk.W)
     
     def add_method_from_window(self):

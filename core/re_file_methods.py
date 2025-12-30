@@ -14,7 +14,6 @@ import os
 import re
 import sys
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from datetime import datetime
@@ -471,14 +470,58 @@ class NewNameMethod(ReFileMethod):
         ext_without_dot = extension.lstrip('.') if extension else ""
         new_name = new_name.replace("{ext}", ext_without_dot)
         
-        # {n} - номер файла (с поддержкой ведущих нулей)
-        if self.zeros_count > 0:
-            # Форматирование с ведущими нулями
-            formatted_number = f"{self.file_number:0{self.zeros_count}d}"
-            new_name = new_name.replace("{n}", formatted_number)
-        else:
-            # Простая замена {n} без ведущих нулей
-            new_name = new_name.replace("{n}", str(self.file_number))
+        # {n} или {n:start:zeros} - номер файла (с поддержкой параметров в шаблоне)
+        # Паттерн для поиска {n} или {n:start:zeros}
+        # Важно: используем нежадный поиск и правильную группировку
+        n_pattern = re.compile(r'\{n(?::(\d+)(?::(\d+))?)?\}')
+        
+        def replace_n(match):
+            """Замена {n} или {n:start:zeros} на номер"""
+            start_str = match.group(1)
+            zeros_str = match.group(2)
+            
+            # Если указаны параметры в шаблоне, используем их
+            if start_str is not None:
+                try:
+                    custom_start = int(start_str)
+                    # Если указан начальный номер, начинаем с него и инкрементируем для каждого файла
+                    # Для первого файла: custom_start, для второго: custom_start + 1, и т.д.
+                    # file_number начинается с start_number и увеличивается для каждого файла
+                    # Если custom_start указан, то для первого файла (file_number == start_number) 
+                    # должно быть custom_start, для второго - custom_start + 1, и т.д.
+                    offset = self.file_number - self.start_number
+                    current_num = custom_start + offset
+                except ValueError:
+                    current_num = self.file_number
+            else:
+                current_num = self.file_number
+            
+            # Если указано количество нулей в шаблоне, используем его
+            if zeros_str is not None:
+                try:
+                    custom_zeros = int(zeros_str)
+                    if custom_zeros > 0:
+                        return f"{current_num:0{custom_zeros}d}"
+                    else:
+                        return str(current_num)
+                except ValueError:
+                    # Если не удалось преобразовать, используем настройки
+                    zeros = self.zeros_count
+                    if zeros > 0:
+                        return f"{current_num:0{zeros}d}"
+                    else:
+                        return str(current_num)
+            else:
+                # Используем стандартную логику с нулями из настроек
+                zeros = self.zeros_count
+                if zeros > 0:
+                    return f"{current_num:0{zeros}d}"
+                else:
+                    return str(current_num)
+        
+        # Заменяем все вхождения {n} или {n:start:zeros} за один проход
+        # Используем sub с функцией замены, которая вызывается для каждого совпадения
+        new_name = n_pattern.sub(replace_n, new_name)
         
         # Метаданные (если доступны) - используем предварительно определенные теги
         if self.metadata_extractor and self.required_metadata_tags:
@@ -535,8 +578,11 @@ class NewNameMethod(ReFileMethod):
             else:
                 replacement = else_part
             
-            # Подставляем переменные в результат
+            # Подставляем переменные в результат (включая {n})
             replacement = self._substitute_variables(replacement, name, extension, file_path)
+            # Также обрабатываем {n} в replacement, если он там есть
+            if '{n' in replacement:
+                replacement = n_pattern.sub(replace_n, replacement)
             new_name = new_name[:match.start()] + replacement + new_name[match.end():]
         
         # Замена {name} в самом конце (если есть в шаблоне)
@@ -610,26 +656,38 @@ class ScriptEngine:
         except Exception as e:
             logger.error(f"Не удалось создать директорию для скриптов: {e}")
     
-    def execute_script(self, script_path: str, context: dict) -> Optional[Any]:
-        """Выполнение скрипта.
+    def execute_script(self, script_path: str, context: dict, timeout: float = 5.0) -> Optional[Any]:
+        """Выполнение скрипта с валидацией и таймаутом.
         
         Args:
             script_path: Путь к скрипту
             context: Контекст выполнения (file_data, methods и т.д.)
+            timeout: Максимальное время выполнения в секундах (по умолчанию 5.0)
             
         Returns:
             Результат выполнения скрипта или None
         """
         import os
+        import signal
+        import threading
         from typing import Any, Optional
         
         if not os.path.exists(script_path):
             logger.error(f"Скрипт не найден: {script_path}")
             return None
         
+        # Логируем выполнение скрипта
+        logger.info(f"Выполнение скрипта: {script_path}")
+        
         try:
             with open(script_path, 'r', encoding='utf-8') as f:
                 script_code = f.read()
+            
+            # Валидация скрипта перед выполнением
+            validation_result, validation_error = self.validate_script_content(script_code)
+            if not validation_result:
+                logger.error(f"Скрипт не прошел валидацию: {validation_error}")
+                return None
             
             # Безопасное выполнение скрипта
             # Ограничиваем доступные функции
@@ -676,17 +734,106 @@ class ScriptEngine:
             # Добавляем контекст
             safe_globals.update(context)
             
-            # Выполняем скрипт
-            exec(script_code, safe_globals)
+            # Выполняем скрипт с таймаутом
+            result = None
+            execution_error = None
             
-            # Возвращаем результат, если есть функция main
-            if 'main' in safe_globals and callable(safe_globals['main']):
-                return safe_globals['main']()
+            def execute():
+                nonlocal result, execution_error
+                try:
+                    # Выполняем скрипт
+                    exec(script_code, safe_globals)
+                    
+                    # Возвращаем результат, если есть функция main
+                    if 'main' in safe_globals and callable(safe_globals['main']):
+                        result = safe_globals['main']()
+                except Exception as e:
+                    execution_error = e
             
+            # Запускаем выполнение в отдельном потоке с таймаутом
+            execution_thread = threading.Thread(target=execute, daemon=True)
+            execution_thread.start()
+            execution_thread.join(timeout=timeout)
+            
+            if execution_thread.is_alive():
+                logger.error(f"Таймаут выполнения скрипта {script_path} (>{timeout} сек)")
+                return None
+            
+            if execution_error:
+                raise execution_error
+            
+            logger.debug(f"Скрипт {script_path} выполнен успешно")
+            return result
+            
+        except (SyntaxError, ValueError, TypeError) as e:
+            logger.error(f"Ошибка синтаксиса/типа в скрипте {script_path}: {e}", exc_info=True)
+            return None
+        except (OSError, PermissionError) as e:
+            logger.error(f"Ошибка доступа при выполнении скрипта {script_path}: {e}", exc_info=True)
             return None
         except Exception as e:
             logger.error(f"Ошибка выполнения скрипта {script_path}: {e}", exc_info=True)
             return None
+    
+    def validate_script_content(self, script_code: str) -> Tuple[bool, Optional[str]]:
+        """Валидация содержимого скрипта через AST.
+        
+        Проверяет на наличие опасных конструкций:
+        - import/__import__
+        - eval/exec/compile
+        - open/file operations
+        - subprocess/system calls
+        
+        Args:
+            script_code: Код скрипта для валидации
+            
+        Returns:
+            Tuple[валиден, сообщение_об_ошибке]
+        """
+        import ast
+        
+        try:
+            # Парсим AST
+            tree = ast.parse(script_code)
+            
+            # Запрещенные имена и атрибуты
+            forbidden_names = {
+                'eval', 'exec', 'compile', '__import__', 'open', 'file',
+                'input', 'raw_input', 'execfile', 'reload', '__builtins__',
+                'subprocess', 'os', 'sys', 'shutil', 'pickle', 'marshal'
+            }
+            
+            forbidden_attributes = {
+                'system', 'popen', 'call', 'run', 'spawn', 'fork', 'exec',
+                'remove', 'unlink', 'rmdir', 'rmtree', 'chmod', 'chown'
+            }
+            
+            # Проверяем все узлы AST
+            for node in ast.walk(tree):
+                # Проверяем импорты
+                if isinstance(node, (ast.Import, ast.ImportFrom)):
+                    for alias in (node.names if isinstance(node, ast.Import) else [ast.alias(name=node.module or '')]):
+                        module_name = alias.name if isinstance(alias, ast.alias) else alias
+                        if any(forbidden in module_name for forbidden in forbidden_names):
+                            return False, f"Запрещенный импорт: {module_name}"
+                
+                # Проверяем вызовы функций
+                if isinstance(node, ast.Call):
+                    # Проверяем имя функции
+                    if isinstance(node.func, ast.Name):
+                        if node.func.id in forbidden_names:
+                            return False, f"Запрещенная функция: {node.func.id}"
+                    # Проверяем атрибуты
+                    elif isinstance(node.func, ast.Attribute):
+                        if node.func.attr in forbidden_attributes:
+                            return False, f"Запрещенный метод: {node.func.attr}"
+            
+            return True, None
+            
+        except SyntaxError as e:
+            return False, f"Синтаксическая ошибка: {e}"
+        except Exception as e:
+            return False, f"Ошибка валидации: {e}"
     
     def validate_script(self, script_path: str) -> Tuple[bool, Optional[str]]:
         """Валидация скрипта.
@@ -705,11 +852,18 @@ class ScriptEngine:
             with open(script_path, 'r', encoding='utf-8') as f:
                 script_code = f.read()
             
+            # Валидация содержимого через AST
+            validation_result, validation_error = self.validate_script_content(script_code)
+            if not validation_result:
+                return False, validation_error
+            
             # Компилируем для проверки синтаксиса
             compile(script_code, script_path, 'exec')
             return True, None
         except SyntaxError as e:
             return False, f"Синтаксическая ошибка: {e}"
+        except (OSError, PermissionError) as e:
+            return False, f"Ошибка доступа к файлу: {e}"
         except Exception as e:
             return False, f"Ошибка: {e}"
 
@@ -745,10 +899,22 @@ def add_file_to_list(
     
     # Используем переданный кэш или создаем из списка файлов
     if path_cache is None:
-        path_cache = {os.path.normpath(os.path.abspath(f.get('full_path') or f.get('path', '')))
-                     for f in files_list if f.get('full_path') or f.get('path')}
+        path_cache = set()
+        for f in files_list:
+            if hasattr(f, 'full_path'):
+                # FileInfo объект
+                existing_path = f.full_path or str(f.path) if hasattr(f, 'path') else ''
+            elif isinstance(f, dict):
+                # Словарь
+                existing_path = f.get('full_path') or f.get('path', '')
+            else:
+                continue
+            if existing_path:
+                path_cache.add(os.path.normpath(os.path.abspath(existing_path)))
     
-    if normalized_path in path_cache or normalized_path in _path_cache:
+    # Проверяем дубликаты только в переданном кэше (локальном для текущего списка)
+    # Глобальный кэш не используем для проверки, так как он может содержать старые данные
+    if normalized_path in path_cache:
         return None
     
     # Добавляем путь в кэш с ограничением размера
@@ -893,23 +1059,29 @@ def validate_filename(name: str, extension: str, path: str, index: int) -> str:
 def check_conflicts(files_list: List[Dict[str, Any]]) -> None:
     """Проверка конфликтов имен файлов.
     
+    Оптимизированная версия с использованием defaultdict для O(1) добавления.
+    
     Args:
         files_list: Список файлов для проверки
     """
-    # Создаем словарь для подсчета одинаковых имен
-    name_counts = {}
+    from collections import defaultdict
+    
+    # Создаем словарь для подсчета одинаковых имен (оптимизация: defaultdict)
+    name_counts: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for file_data in files_list:
         full_name = file_data['new_name'] + file_data['extension']
-        if full_name not in name_counts:
-            name_counts[full_name] = []
         name_counts[full_name].append(file_data)
     
-    # Помечаем конфликты
+    # Помечаем конфликты (только для групп с более чем одним файлом)
     for full_name, file_list in name_counts.items():
         if len(file_list) > 1:
             # Есть конфликт
+            conflict_msg = f"Конфликт: {len(file_list)} файла с именем '{full_name}'"
             for file_data in file_list:
-                file_data['status'] = f"Конфликт: {len(file_list)} файла с именем '{full_name}'"
+                if hasattr(file_data, 'set_error'):
+                    file_data.set_error(conflict_msg)
+                elif isinstance(file_data, dict):
+                    file_data['status'] = conflict_msg
 
 
 def re_file_files_thread(
@@ -993,7 +1165,10 @@ def re_file_files_thread(
                             error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path)}"
                             if log_callback:
                                 log_callback(f"Ошибка: {error_msg}")
-                            file_data['status'] = f"Ошибка: {error_msg}"
+                            if hasattr(file_data, 'set_error'):
+                                file_data.set_error(error_msg)
+                            elif isinstance(file_data, dict):
+                                file_data['status'] = f"Ошибка: {error_msg}"
                             error_count += 1
                             continue
                         # Проверяем, что это действительно файл или папка (но не что-то другое)
@@ -1002,7 +1177,10 @@ def re_file_files_thread(
                             error_msg = f"Путь не является {item_type}: {os.path.basename(old_path)}"
                             if log_callback:
                                 log_callback(f"Ошибка: {error_msg}")
-                            file_data['status'] = f"Ошибка: {error_msg}"
+                            if hasattr(file_data, 'set_error'):
+                                file_data.set_error(error_msg)
+                            elif isinstance(file_data, dict):
+                                file_data['status'] = f"Ошибка: {error_msg}"
                             error_count += 1
                             continue
                         # Если это папка, но путь указывает на файл (или наоборот)
@@ -1010,22 +1188,32 @@ def re_file_files_thread(
                             error_msg = f"Путь указывает на файл, а не на папку: {os.path.basename(old_path)}"
                             if log_callback:
                                 log_callback(f"Ошибка: {error_msg}")
-                            file_data['status'] = f"Ошибка: {error_msg}"
+                            if hasattr(file_data, 'set_error'):
+                                file_data.set_error(error_msg)
+                            elif isinstance(file_data, dict):
+                                file_data['status'] = f"Ошибка: {error_msg}"
                             error_count += 1
                             continue
                         if not is_folder and not os.path.isfile(old_path):
                             error_msg = f"Путь указывает на папку, а не на файл: {os.path.basename(old_path)}"
                             if log_callback:
                                 log_callback(f"Ошибка: {error_msg}")
-                            file_data['status'] = f"Ошибка: {error_msg}"
+                            if hasattr(file_data, 'set_error'):
+                                file_data.set_error(error_msg)
+                            elif isinstance(file_data, dict):
+                                file_data['status'] = f"Ошибка: {error_msg}"
                             error_count += 1
                             continue
-                    except (OSError, ValueError):
+                    except (OSError, ValueError) as e:
+                        # В блоке except is_folder уже определена, но на всякий случай проверяем
                         item_type = "папка" if is_folder else "файл"
-                        error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path)}"
+                        error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path) if old_path else 'неизвестный путь'}"
                         if log_callback:
                             log_callback(f"Ошибка: {error_msg}")
-                        file_data['status'] = f"Ошибка: {error_msg}"
+                        if hasattr(file_data, 'set_error'):
+                            file_data.set_error(error_msg)
+                        elif isinstance(file_data, dict):
+                            file_data['status'] = f"Ошибка: {error_msg}"
                         error_count += 1
                         continue
                     
@@ -1067,33 +1255,26 @@ def re_file_files_thread(
                         continue
                     
                     # Переименовываем файл/папку (os.rename работает и для папок тоже)
-                    # os.rename атомарен и сам проверит существование, поэтому объединяем проверку и переименование
+                    # os.rename атомарен, поэтому полагаемся на него для проверки существования
+                    # Это уменьшает вероятность race condition
                     try:
-                        # Проверяем существование нового пути перед переименованием
-                        # Это оптимизация - избегаем лишних вызовов os.path.exists
-                        if os.path.exists(new_path):
-                            item_type = "папка" if is_folder else "файл"
-                            item_name = new_name if is_folder else new_name + extension
-                            error_msg = f"{item_type.capitalize()} '{item_name}' уже существует"
-                            if log_callback:
-                                log_callback(f"Ошибка: {error_msg}")
-                            file_data['status'] = f"Ошибка: {error_msg}"
-                            error_count += 1
-                            continue
-                        
                         # Выполняем переименование (атомарная операция)
                         # Если файл уже существует, это вызовет FileExistsError
                         os.rename(old_path, new_path)
                     except FileExistsError:
                         # Race condition: файл был создан между проверкой и переименованием
+                        # или файл уже существовал
                         item_type = "папка" if is_folder else "файл"
                         item_name = new_name if is_folder else new_name + extension
-                        error_msg = f"{item_type.capitalize()} '{item_name}' уже существует (race condition)"
+                        error_msg = f"{item_type.capitalize()} '{item_name}' уже существует"
                         if log_callback:
                             log_callback(f"Ошибка: {error_msg}")
-                        file_data['status'] = f"Ошибка: {error_msg}"
+                        if hasattr(file_data, 'set_error'):
+                            file_data.set_error(error_msg)
+                        elif isinstance(file_data, dict):
+                            file_data['status'] = f"Ошибка: {error_msg}"
                         error_count += 1
-                        logger.warning(f"Race condition при переименовании {old_path} -> {new_path}")
+                        logger.warning(f"Файл уже существует при переименовании {old_path} -> {new_path}")
                         continue
                     except OSError as rename_error:
                         # Другие ошибки файловой системы
@@ -1108,7 +1289,10 @@ def re_file_files_thread(
                             error_msg = f"Ошибка переименования: {str(rename_error)}"
                         if log_callback:
                             log_callback(f"Ошибка: {error_msg}")
-                        file_data['status'] = f"Ошибка: {error_msg}"
+                        if hasattr(file_data, 'set_error'):
+                            file_data.set_error(error_msg)
+                        elif isinstance(file_data, dict):
+                            file_data['status'] = f"Ошибка: {error_msg}"
                         error_count += 1
                         logger.error(f"Ошибка переименования {old_path} -> {new_path}: {rename_error}", exc_info=True)
                         continue
@@ -1136,9 +1320,13 @@ def re_file_files_thread(
                 except Exception as e:
                     error_msg = str(e)
                     logger.error(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}", exc_info=True)
+                    old_name = file_data.get('old_name', 'unknown') if isinstance(file_data, dict) else (file_data.old_name if hasattr(file_data, 'old_name') else 'unknown')
                     if log_callback:
-                        log_callback(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}")
-                    file_data['status'] = f"Ошибка: {error_msg}"
+                        log_callback(f"Ошибка при переименовании '{old_name}': {error_msg}")
+                    if hasattr(file_data, 'set_error'):
+                        file_data.set_error(error_msg)
+                    elif isinstance(file_data, dict):
+                        file_data['status'] = f"Ошибка: {error_msg}"
                     error_count += 1
                     # Проверяем, что исходный файл все еще существует (опционально, только для логирования)
                     if old_path:
@@ -1172,22 +1360,21 @@ def re_file_files_thread(
             else:
                 logger.warning("Callback не предоставлен, результат не будет передан")
     
-    # Запускаем worker в отдельном потоке
+    # Запускаем worker в отдельном потоке через threading (безопаснее для GUI)
     try:
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="re_file_files")
-        future = executor.submit(re_file_worker)
-        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
+        import threading
+        thread = threading.Thread(target=re_file_worker, daemon=True, name="re_file_files")
+        thread.start()
         
         # Добавляем таймаут для защиты от зависания
         def check_completion():
             """Проверка завершения операции через 10 секунд"""
             import time
             time.sleep(10)
-            if not future.done():
+            if thread.is_alive():
                 logger.warning("Операция re_file_worker не завершилась за 10 секунд, возможно зависание")
         
         # Запускаем проверку в отдельном потоке (не блокируем основной)
-        import threading
         timeout_thread = threading.Thread(target=check_completion, daemon=True)
         timeout_thread.start()
         

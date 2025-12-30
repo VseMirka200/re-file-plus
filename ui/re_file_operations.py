@@ -13,7 +13,6 @@
 import logging
 import os
 import threading
-from concurrent.futures import ThreadPoolExecutor
 import tkinter as tk
 from tkinter import messagebox
 from typing import Dict, List, Optional
@@ -115,15 +114,10 @@ class ReFileOperations:
         # Запускаем в отдельном потоке
         def apply_methods_worker():
             try:
+                # Упрощенное логирование: убрано избыточные данные
+                
+                # Определяем имена методов для логирования
                 method_names = [type(m).__name__ for m in methods]
-                log_batch_action(
-                    logger=logger,
-                    action='METHODS_APPLY_STARTED',
-                    message=f"Применение методов к файлам: {', '.join(method_names)}",
-                    file_count=len(self.app.files),
-                    method_name='apply_methods',
-                    details={'methods': method_names}
-                )
                 
                 # Сброс счетчиков нумерации перед применением
                 for method in methods:
@@ -144,22 +138,42 @@ class ReFileOperations:
                     # Поддержка как FileInfo, так и словарей
                     if hasattr(file_data, 'old_name'):
                         # FileInfo объект
-                        old_name_before = file_data.old_name
-                        new_name = file_data.old_name
-                        extension = file_data.extension
-                        file_path = str(file_data.path) if hasattr(file_data, 'path') else ''
-                    else:
+                        old_name_before = file_data.old_name or ''  # Может быть пустым для файлов типа .gitignore
+                        new_name = file_data.old_name or ''  # Используем пустую строку вместо None
+                        extension = file_data.extension or ''
+                        file_path = str(file_data.path) if hasattr(file_data, 'path') else (file_data.full_path if hasattr(file_data, 'full_path') else '')
+                    elif isinstance(file_data, dict):
                         # Словарь
-                        new_name = file_data.get('old_name', '')
-                        extension = file_data.get('extension', '')
+                        new_name = file_data.get('old_name', '') or ''  # Может быть пустым
+                        extension = file_data.get('extension', '') or ''
                         old_name_before = new_name
                         file_path = file_data.get('full_path') or file_data.get('path', '')
-                    
-                    if not new_name:
+                    else:
+                        # Неизвестный тип, пропускаем
                         continue
                     
+                    # Проверяем только путь - имя может быть пустым (файлы типа .gitignore)
                     if not file_path:
                         continue
+                    
+                    # Если имя пустое, но есть расширение, используем расширение как имя для обработки
+                    # Это нужно для файлов типа .gitignore, где old_name будет пустым
+                    if not new_name and extension:
+                        # Для файлов только с расширением используем расширение как имя
+                        # Методы должны обработать это корректно
+                        pass  # Продолжаем обработку - методы должны справиться с пустым именем
+                    
+                    # Формируем имя файла для отображения
+                    display_name = f"{old_name_before}{extension}" if extension else old_name_before
+                    
+                    # Обновляем прогресс с именем текущего файла
+                    current_file_index = i + 1
+                    self.app.root.after(0, lambda c=current_file_index, t=total_files, 
+                                       fn=display_name, a=applied_count, e=error_count:
+                                       self._update_progress_ui(c, t, a, e, fn))
+                    
+                    # Устанавливаем желтый тег "в работе" перед обработкой файла
+                    self.app.root.after(0, lambda fp=file_path: self._set_file_in_progress(fp))
                     
                     # Применяем все методы последовательно
                     try:
@@ -167,15 +181,20 @@ class ReFileOperations:
                             new_name, extension = method.apply(new_name, extension, file_path)
                         
                         # Сохраняем new_name в зависимости от типа данных
-                        if hasattr(file_data, 'new_name'):
+                        # Важно: всегда устанавливаем new_name, даже если он равен old_name
+                        if hasattr(file_data, 'old_name'):
                             # FileInfo объект
                             file_data.new_name = new_name
                             file_data.extension = extension
-                        else:
+                        elif isinstance(file_data, dict):
                             # Словарь
                             file_data['new_name'] = new_name
                             file_data['extension'] = extension
                         applied_count += 1
+                        
+                        # Устанавливаем зеленый тег "готово" после успешной обработки
+                        if file_path:
+                            self.app.root.after(0, lambda fp=file_path: self._set_file_ready(fp))
                         
                         # Логируем изменение имени, если оно произошло
                         if old_name_before != new_name:
@@ -191,10 +210,24 @@ class ReFileOperations:
                             )
                     except Exception as e:
                         error_count += 1
-                        old_name = file_data.get('old_name', 'unknown')
+                        # Устанавливаем красный тег "ошибка" при ошибке
+                        if file_path:
+                            self.app.root.after(0, lambda fp=file_path: self._set_file_error(fp))
+                        # Получаем old_name в зависимости от типа данных
+                        if hasattr(file_data, 'old_name'):
+                            old_name = file_data.old_name or 'unknown'
+                        elif isinstance(file_data, dict):
+                            old_name = file_data.get('old_name', 'unknown')
+                        else:
+                            old_name = 'unknown'
+                        
                         # Устанавливаем new_name даже при ошибке (используем старое имя)
-                        if 'new_name' not in file_data or not file_data.get('new_name'):
-                            file_data['new_name'] = old_name_before
+                        if hasattr(file_data, 'new_name'):
+                            if not file_data.new_name:
+                                file_data.new_name = old_name_before or ''
+                        elif isinstance(file_data, dict):
+                            if 'new_name' not in file_data or not file_data.get('new_name'):
+                                file_data['new_name'] = old_name_before or ''
                         log_file_action(
                             logger=logger,
                             action='METHOD_APPLY_ERROR',
@@ -212,8 +245,19 @@ class ReFileOperations:
                     
                     # Проверка на валидность имени
                     if not file_path:
-                        file_path = file_data.get('path') or file_data.get('full_path', '') if isinstance(file_data, dict) else str(file_data.path) if hasattr(file_data, 'path') else ''
-                    status = validate_filename(new_name, extension, file_path, i)
+                        if hasattr(file_data, 'path'):
+                            file_path = str(file_data.path)
+                        elif hasattr(file_data, 'full_path'):
+                            file_path = file_data.full_path
+                        elif isinstance(file_data, dict):
+                            file_path = file_data.get('path') or file_data.get('full_path', '')
+                        else:
+                            file_path = ''
+                    
+                    # Валидация имени (new_name может быть пустым для файлов типа .gitignore)
+                    # Для файлов только с расширением используем расширение как имя для валидации
+                    validation_name = new_name if new_name else (extension.lstrip('.') if extension else 'file')
+                    status = validate_filename(validation_name, extension, file_path, i)
                     
                     # Сохраняем статус в зависимости от типа данных
                     if hasattr(file_data, 'status'):
@@ -221,9 +265,11 @@ class ReFileOperations:
                         from core.domain.file_info import FileStatus
                         if isinstance(status, str):
                             file_data.status = FileStatus.from_string(status)
+                            if status != 'Готов' and hasattr(file_data, 'set_error'):
+                                file_data.set_error(status)
                         else:
                             file_data.status = status
-                    else:
+                    elif isinstance(file_data, dict):
                         # Словарь - сохраняем как строку
                         file_data['status'] = status
                     
@@ -235,9 +281,10 @@ class ReFileOperations:
                         update_interval = 10  # Fallback значение
                     
                     if (i + 1) % update_interval == 0 or i == total_files - 1:
-                        # Обновляем UI в главном потоке
-                        self.app.root.after(0, lambda idx=i, cnt=applied_count, err=error_count: 
-                            self._update_progress_ui(idx + 1, total_files, cnt, err))
+                        # Обновляем UI в главном потоке с именем текущего файла
+                        current_display_name = f"{old_name_before}{extension}" if extension else old_name_before
+                        self.app.root.after(0, lambda idx=i, cnt=applied_count, err=error_count, fn=current_display_name: 
+                            self._update_progress_ui(idx + 1, total_files, cnt, err, fn))
                 
                 # Проверка на конфликты
                 check_conflicts(self.app.files)
@@ -263,19 +310,149 @@ class ReFileOperations:
             finally:
                 self.app._applying_methods = False
         
-        # Запускаем в отдельном потоке через concurrent.futures
-        from concurrent.futures import ThreadPoolExecutor
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="apply_methods")
-        executor.submit(apply_methods_worker)
-        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
+        # Запускаем в отдельном потоке через threading (безопаснее для GUI)
+        import threading
+        thread = threading.Thread(target=apply_methods_worker, daemon=True, name="apply_methods")
+        thread.start()
     
-    def _update_progress_ui(self, current: int, total: int, applied: int, errors: int):
+    def _set_file_in_progress(self, file_path: str):
+        """Установка желтого тега "в работе" для файла в treeview
+        
+        Args:
+            file_path: Путь к файлу
+        """
+        if not hasattr(self.app, 'tree'):
+            return
+        
+        # Нормализуем путь для сравнения
+        file_path_normalized = os.path.normpath(os.path.abspath(file_path))
+        
+        # Находим файл в treeview и устанавливаем тег "in_progress"
+        actual_file_index = 0
+        for item in self.app.tree.get_children():
+            tags = self.app.tree.item(item, 'tags')
+            if tags and 'path_row' in tags:
+                continue
+            
+            if actual_file_index < len(self.app.files):
+                file_item = self.app.files[actual_file_index]
+                item_file_path = None
+                if hasattr(file_item, 'full_path'):
+                    item_file_path = file_item.full_path
+                elif hasattr(file_item, 'path'):
+                    item_file_path = str(file_item.path) if hasattr(file_item.path, '__str__') else file_item.path
+                elif isinstance(file_item, dict):
+                    item_file_path = file_item.get('full_path') or file_item.get('path', '')
+                
+                if item_file_path:
+                    item_file_path_normalized = os.path.normpath(os.path.abspath(item_file_path))
+                    if item_file_path_normalized == file_path_normalized:
+                        # Обновляем тег на "in_progress" (без изменения текста)
+                        item_values = self.app.tree.item(item, 'values')
+                        display_text = item_values[0] if item_values and len(item_values) > 0 else ''
+                        path_text = item_values[1] if item_values and len(item_values) > 1 else ''
+                        self.app.tree.item(item, values=(display_text, path_text), tags=('in_progress',))
+                        break
+            actual_file_index += 1
+    
+    def _set_file_ready(self, file_path: str):
+        """Установка зеленого тега "готово" для файла в treeview
+        
+        Args:
+            file_path: Путь к файлу
+        """
+        if not hasattr(self.app, 'tree'):
+            return
+        
+        # Нормализуем путь для сравнения
+        file_path_normalized = os.path.normpath(os.path.abspath(file_path))
+        
+        # Находим файл в treeview и устанавливаем тег "ready"
+        actual_file_index = 0
+        for item in self.app.tree.get_children():
+            tags = self.app.tree.item(item, 'tags')
+            if tags and 'path_row' in tags:
+                continue
+            
+            if actual_file_index < len(self.app.files):
+                file_item = self.app.files[actual_file_index]
+                item_file_path = None
+                if hasattr(file_item, 'full_path'):
+                    item_file_path = file_item.full_path
+                elif hasattr(file_item, 'path'):
+                    item_file_path = str(file_item.path) if hasattr(file_item.path, '__str__') else file_item.path
+                elif isinstance(file_item, dict):
+                    item_file_path = file_item.get('full_path') or file_item.get('path', '')
+                
+                if item_file_path:
+                    item_file_path_normalized = os.path.normpath(os.path.abspath(item_file_path))
+                    if item_file_path_normalized == file_path_normalized:
+                        # Обновляем тег на "ready" (без изменения текста)
+                        item_values = self.app.tree.item(item, 'values')
+                        display_text = item_values[0] if item_values and len(item_values) > 0 else ''
+                        path_text = item_values[1] if item_values and len(item_values) > 1 else ''
+                        self.app.tree.item(item, values=(display_text, path_text), tags=('ready',))
+                        break
+            actual_file_index += 1
+    
+    def _set_file_error(self, file_path: str):
+        """Установка красного тега "ошибка" для файла в treeview
+        
+        Args:
+            file_path: Путь к файлу
+        """
+        if not hasattr(self.app, 'tree'):
+            return
+        
+        # Нормализуем путь для сравнения
+        file_path_normalized = os.path.normpath(os.path.abspath(file_path))
+        
+        # Находим файл в treeview и устанавливаем тег "error"
+        actual_file_index = 0
+        for item in self.app.tree.get_children():
+            tags = self.app.tree.item(item, 'tags')
+            if tags and 'path_row' in tags:
+                continue
+            
+            if actual_file_index < len(self.app.files):
+                file_item = self.app.files[actual_file_index]
+                item_file_path = None
+                if hasattr(file_item, 'full_path'):
+                    item_file_path = file_item.full_path
+                elif hasattr(file_item, 'path'):
+                    item_file_path = str(file_item.path) if hasattr(file_item.path, '__str__') else file_item.path
+                elif isinstance(file_item, dict):
+                    item_file_path = file_item.get('full_path') or file_item.get('path', '')
+                
+                if item_file_path:
+                    item_file_path_normalized = os.path.normpath(os.path.abspath(item_file_path))
+                    if item_file_path_normalized == file_path_normalized:
+                        # Обновляем тег на "error" (без изменения текста)
+                        item_values = self.app.tree.item(item, 'values')
+                        display_text = item_values[0] if item_values and len(item_values) > 0 else ''
+                        path_text = item_values[1] if item_values and len(item_values) > 1 else ''
+                        self.app.tree.item(item, values=(display_text, path_text), tags=('error',))
+                        break
+            actual_file_index += 1
+    
+    def _update_progress_ui(self, current: int, total: int, applied: int, errors: int, filename: str = None):
         """Обновление UI прогресса (вызывается из главного потока)."""
         try:
             # Обновляем прогресс-бар если он есть
             if hasattr(self.app, 'progress'):
                 self.app.progress['value'] = (current / total) * 100
                 self.app.progress['maximum'] = 100
+            
+            # Обновляем метку прогресса с именем текущего файла
+            if hasattr(self.app, 'progress_label'):
+                if filename:
+                    self.app.progress_label.config(
+                        text=f"Обрабатывается: {filename} ({current}/{total})"
+                    )
+                else:
+                    self.app.progress_label.config(
+                        text=f"Обработано: {current}/{total}"
+                    )
             
             # Обновляем таблицу периодически (не каждый файл, чтобы не тормозить)
             if current % 10 == 0 or current == total:
@@ -601,7 +778,8 @@ class ReFileOperations:
             messagebox.showinfo("Завершено", f"Переименование завершено.\nУспешно: {success}\nОшибок: {error}")
             # Сбрасываем флаг после небольшой задержки
             self.app.root.after(100, lambda: setattr(self.app, '_re_file_complete_shown', False))
-        self.app.progress['value'] = 0
+        if hasattr(self.app, 'progress'):
+            self.app.progress['value'] = 0
         # Синхронизация прогресс-бара в окне действий, если оно открыто
         if hasattr(self.app, 'progress_window') and self.app.progress_window is not None:
             try:
@@ -629,17 +807,10 @@ class ReFileOperations:
                     self.app.refresh_treeview()
                     self.app.update_status()
         
-        # Обновление списка файлов в таблице
-        for item in self.app.tree.get_children():
-            self.app.tree.delete(item)
-        
-        for file_data in self.app.files:
-            self.app.tree.insert("", tk.END, values=(
-                file_data.get('old_name', ''),
-                file_data.get('new_name', ''),
-                file_data.get('path', ''),
-                file_data['status']
-            ))
+        # Обновление списка файлов через refresh_treeview
+        # Это более правильный способ, который правильно форматирует данные для одной колонки
+        if hasattr(self.app, 'refresh_treeview'):
+            self.app.refresh_treeview()
         
         # Обновляем статус
         if hasattr(self.app, 'update_status'):

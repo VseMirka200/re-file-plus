@@ -114,11 +114,14 @@ def word_application_context(com_client: Any):
         yield word_app
     finally:
         # Закрываем документы перед закрытием приложения
-        if word_app:
+        if word_app is not None:
             try:
-                # Закрываем все открытые документы
-                for doc in list(word_app.Documents):
-                    cleanup_word_document(doc)
+                # Проверяем наличие атрибута Documents
+                if hasattr(word_app, 'Documents'):
+                    # Закрываем все открытые документы
+                    for doc in list(word_app.Documents):
+                        if doc is not None:
+                            cleanup_word_document(doc)
             except (AttributeError, OSError, RuntimeError):
                 pass
         
@@ -296,9 +299,15 @@ def convert_docx_with_word(
         word_app.DisplayAlerts = 0  # Отключаем предупреждения
         
         # Открываем документ
+        if word_app is None:
+            return False, "Word приложение не инициализировано", None
+        
         doc_path = os.path.abspath(file_path)
         logger.debug(f"Открываем документ Word: {doc_path}")
         try:
+            if not hasattr(word_app, 'Documents'):
+                return False, "Word приложение не поддерживает Documents", None
+            
             doc = word_app.Documents.Open(
                 FileName=doc_path,
                 ReadOnly=True,
@@ -791,6 +800,10 @@ class FileConverter:
         if not os.path.exists(file_path):
             return False
         
+        # Проверяем, что это файл, а не папка
+        if os.path.isdir(file_path):
+            return False
+        
         source_ext = os.path.splitext(file_path)[1].lower()
         target_ext = target_format.lower()
         
@@ -884,6 +897,17 @@ class FileConverter:
                         except ImportError:
                             return False
                     return self.pdf2docx_available
+                # DOCX/DOC в ODT/ODS/ODP (через LibreOffice или Word)
+                if (source_ext == '.docx' or source_ext == '.doc') and target_ext in ('.odt', '.ods', '.odp'):
+                    # Проверяем доступность LibreOffice
+                    if self._check_libreoffice_available():
+                        return True
+                    # Если LibreOffice недоступен, проверяем Word (только на Windows, только для ODT)
+                    if target_ext == '.odt' and sys.platform == 'win32' and (self.win32com or self.comtypes):
+                        word_installed, _ = check_word_installed()
+                        if word_installed:
+                            return True
+                    return False
                 # Для других форматов документов в документы
                 if self.docx_available:
                     return True
@@ -975,6 +999,75 @@ class FileConverter:
         formats = sorted(list(set(formats)))
         return formats
     
+    def get_target_formats_for_file(self, file_path: str) -> List[str]:
+        """Получение списка доступных целевых форматов для конкретного файла.
+        
+        Args:
+            file_path: Путь к исходному файлу
+            
+        Returns:
+            Список расширений целевых форматов (с точкой), исключая исходный формат
+        """
+        if not os.path.exists(file_path):
+            return []
+        
+        # Проверяем, что это файл, а не папка
+        if os.path.isdir(file_path):
+            return []
+        
+        source_ext = os.path.splitext(file_path)[1].lower()
+        target_formats = []
+        
+        # Изображения
+        if source_ext in self.supported_image_formats:
+            # Изображения можно конвертировать в другие форматы изображений
+            for ext in self.supported_image_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+            # Изображения можно конвертировать в PDF
+            if self.can_convert(file_path, '.pdf'):
+                target_formats.append('.pdf')
+        
+        # Документы Word
+        if source_ext in self.supported_document_formats:
+            for ext in self.supported_document_target_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Таблицы Excel
+        if source_ext in self.supported_spreadsheet_formats:
+            for ext in self.supported_spreadsheet_target_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Презентации PowerPoint
+        if source_ext in self.supported_presentation_formats:
+            for ext in self.supported_presentation_target_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Аудио
+        if source_ext in self.supported_audio_formats:
+            for ext in self.supported_audio_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Видео
+        if source_ext in self.supported_video_formats:
+            for ext in self.supported_video_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Удаляем дубликаты и сортируем
+        target_formats = sorted(list(set(target_formats)))
+        
+        # Если нет доступных форматов, возвращаем все поддерживаемые (кроме исходного)
+        if not target_formats:
+            all_formats = self.get_supported_formats()
+            target_formats = [f for f in all_formats if f != source_ext]
+        
+        return target_formats
+    
     def get_file_type_category(self, file_path: str) -> Optional[str]:
         """Определение категории типа файла.
         
@@ -1023,7 +1116,7 @@ class FileConverter:
         return None
     
     def convert(self, file_path: str, target_format: str, output_path: Optional[str] = None, 
-                quality: int = 95, compress_pdf: bool = False) -> Tuple[bool, str, Optional[str]]:
+                quality: int = 95) -> Tuple[bool, str, Optional[str]]:
         """Конвертация файла.
         
         Args:
@@ -1031,13 +1124,16 @@ class FileConverter:
             target_format: Целевой формат (расширение с точкой, например '.png')
             output_path: Путь для сохранения (если None, заменяет исходный файл)
             quality: Качество для JPEG (1-100)
-            compress_pdf: Сжимать ли PDF после конвертации
             
         Returns:
             Кортеж (успех, сообщение, путь к выходному файлу)
         """
         if not os.path.exists(file_path):
             return False, "Файл не найден", None
+        
+        # Проверяем, что это файл, а не папка
+        if os.path.isdir(file_path):
+            return False, "Нельзя конвертировать папку, выберите файл", None
         
         if not self.can_convert(file_path, target_format):
             source_ext = os.path.splitext(file_path)[1].lower()
@@ -1086,7 +1182,7 @@ class FileConverter:
                 if target_ext == '.pdf':
                     if not self.pymupdf_available:
                         return False, "PyMuPDF не установлен. Для конвертации изображений в PDF установите: pip install PyMuPDF", None
-                    return self._convert_image_to_pdf(file_path, output_path, quality, compress_pdf)
+                    return self._convert_image_to_pdf(file_path, output_path, quality)
                 
                 # Конвертация изображений в другие форматы изображений
                 if target_ext in self.supported_image_formats:
@@ -1140,19 +1236,24 @@ class FileConverter:
             if source_ext in self.supported_document_formats:
                 # Конвертация документов Word в PDF
                 if (source_ext == '.docx' or source_ext == '.doc') and target_ext == '.pdf':
-                    result = self._convert_docx_to_pdf(file_path, output_path, compress_pdf)
-                    # Если конвертация успешна и нужно сжать PDF
-                    if result[0] and compress_pdf and os.path.exists(result[2]):
-                        compress_result = self._compress_pdf(result[2])
-                        if compress_result[0]:
-                            return True, f"{result[1]} (PDF сжат)", result[2]
+                    result = self._convert_docx_to_pdf(file_path, output_path)
                     return result
                 elif source_ext == '.pdf' and target_ext == '.docx':
                     return self._convert_pdf_to_docx(file_path, output_path)
+                # Конвертация DOCX/DOC в ODT/ODS/ODP (через LibreOffice или Word)
+                elif (source_ext == '.docx' or source_ext == '.doc') and target_ext in ('.odt', '.ods', '.odp'):
+                    # Сначала пробуем через LibreOffice
+                    result = self._convert_with_libreoffice(file_path, output_path, target_ext)
+                    # Если LibreOffice недоступен и это ODT, пробуем Word (только на Windows)
+                    if not result[0] and target_ext == '.odt' and sys.platform == 'win32' and (self.win32com or self.comtypes):
+                        word_result = self._convert_docx_to_odt_with_word(file_path, output_path)
+                        if word_result[0]:
+                            result = word_result
+                    return result
                 # Конвертация ODT и других форматов LibreOffice
                 elif source_ext in ('.odt', '.ods', '.odp') or target_ext in ('.odt', '.ods', '.odp'):
                     # Сначала пробуем через LibreOffice
-                    result = self._convert_with_libreoffice(file_path, output_path, target_ext, compress_pdf)
+                    result = self._convert_with_libreoffice(file_path, output_path, target_ext)
                     # Если LibreOffice недоступен и это ODT файл, пробуем Word или другие fallback методы
                     # (метод _convert_with_libreoffice уже пробует fallback, но на всякий случай проверяем)
                     if not result[0] and source_ext == '.odt':
@@ -1164,11 +1265,6 @@ class FileConverter:
                         # Если Word тоже не сработал, пробуем другие fallback методы
                         if not result[0]:
                             result = self._convert_odt_without_libreoffice(file_path, output_path, target_ext)
-                    # Если конвертация успешна и нужно сжать PDF
-                    if result[0] and compress_pdf and target_ext == '.pdf' and os.path.exists(result[2]):
-                        compress_result = self._compress_pdf(result[2])
-                        if compress_result[0]:
-                            return True, f"{result[1]} (PDF сжат)", result[2]
                     return result
                 # Конвертация документов в изображения (через промежуточный PDF)
                 elif target_ext in self.supported_image_formats:
@@ -1187,10 +1283,10 @@ class FileConverter:
                         # Для других форматов документов сначала конвертируем в PDF
                         pdf_result = None
                         if source_ext in ('.docx', '.doc'):
-                            pdf_result = self._convert_docx_to_pdf(file_path, temp_pdf, compress_pdf=False)
+                            pdf_result = self._convert_docx_to_pdf(file_path, temp_pdf)
                         elif source_ext == '.odt':
                             # Пробуем через LibreOffice
-                            pdf_result = self._convert_with_libreoffice(file_path, temp_pdf, '.pdf', compress_pdf=False)
+                            pdf_result = self._convert_with_libreoffice(file_path, temp_pdf, '.pdf')
                             # Если LibreOffice недоступен, пробуем Word
                             if not pdf_result[0] and sys.platform == 'win32' and (self.win32com or self.comtypes):
                                 word_result = self._convert_odt_with_word(file_path, temp_pdf, '.pdf')
@@ -1261,7 +1357,7 @@ class FileConverter:
                 
                 # Конвертация изображений в PDF
                 if target_ext == '.pdf':
-                    return self._convert_image_to_pdf(file_path, output_path, quality, compress_pdf)
+                    return self._convert_image_to_pdf(file_path, output_path, quality)
                 
                 # Открываем изображение
                 with self.Image.open(file_path) as img:
@@ -1475,14 +1571,13 @@ class FileConverter:
             logger.error(f"Ошибка при конвертации PDF в изображение {file_path}: {e}", exc_info=True)
             return False, f"Ошибка конвертации PDF: {str(e)}", None
     
-    def _convert_image_to_pdf(self, file_path: str, output_path: str, quality: int = 95, compress_pdf: bool = False) -> Tuple[bool, str, Optional[str]]:
+    def _convert_image_to_pdf(self, file_path: str, output_path: str, quality: int = 95) -> Tuple[bool, str, Optional[str]]:
         """Конвертация изображения в PDF.
         
         Args:
             file_path: Путь к изображению
             output_path: Путь для сохранения PDF
             quality: Качество для JPEG (1-100), используется для оптимизации изображения перед вставкой в PDF
-            compress_pdf: Сжимать ли PDF после конвертации
             
         Returns:
             Tuple[успех, сообщение, путь к выходному файлу]
@@ -1542,12 +1637,6 @@ class FileConverter:
                 pdf_document.save(output_path)
                 pdf_document.close()
             
-            # Если нужно сжать PDF
-            if compress_pdf and os.path.exists(output_path):
-                compress_result = self._compress_pdf(output_path)
-                if compress_result[0]:
-                    return True, "Изображение успешно конвертировано в PDF (PDF сжат)", output_path
-            
             return True, "Изображение успешно конвертировано в PDF", output_path
             
         except Exception as e:
@@ -1555,8 +1644,7 @@ class FileConverter:
             return False, f"Ошибка конвертации изображения в PDF: {str(e)}", None
     
     def convert_batch(self, file_paths: List[str], target_format: str, 
-                     output_dir: Optional[str] = None, quality: int = 95,
-                     compress_pdf: bool = False) -> List[Tuple[str, bool, str, Optional[str]]]:
+                     output_dir: Optional[str] = None, quality: int = 95) -> List[Tuple[str, bool, str, Optional[str]]]:
         """Конвертация нескольких файлов.
         
         Args:
@@ -1564,7 +1652,6 @@ class FileConverter:
             target_format: Целевой формат (расширение с точкой)
             output_dir: Директория для сохранения (если None, сохраняет рядом с исходными)
             quality: Качество для JPEG (1-100)
-            compress_pdf: Сжимать ли PDF после конвертации
             
         Returns:
             Список кортежей (путь, успех, сообщение, путь к выходному файлу)
@@ -1577,7 +1664,7 @@ class FileConverter:
                 output_path = os.path.join(output_dir, base_name + target_format.lower())
             
             success, message, converted_path = self.convert(
-                file_path, target_format, output_path, quality, compress_pdf
+                file_path, target_format, output_path, quality
             )
             results.append((file_path, success, message, converted_path))
         return results
@@ -1676,6 +1763,12 @@ class FileConverter:
             
             logger.info(f"Сохраняем как {target_ext}: {output_path_abs}")
             try:
+                if doc is None:
+                    return False, "Документ не был открыт", None
+                
+                if not hasattr(doc, 'SaveAs'):
+                    return False, "Документ не поддерживает SaveAs", None
+                
                 doc.SaveAs(FileName=output_path_abs, FileFormat=file_format)
                 logger.debug(f"Файл сохранен как {target_ext}")
             except (OSError, RuntimeError, AttributeError, PermissionError) as save_error:
@@ -1702,6 +1795,224 @@ class FileConverter:
             return False, f"Ошибка: {str(e)}", None
         finally:
             # Функции COM теперь в этом же файле
+            cleanup_word_document(doc)
+            cleanup_word_application(word_app)
+    
+    def _convert_docx_to_odt_with_word(self, file_path: str, output_path: str) -> Tuple[bool, str, Optional[str]]:
+        """Конвертация DOCX файлов в ODT через Microsoft Word.
+        
+        Args:
+            file_path: Путь к исходному DOCX файлу
+            output_path: Путь для сохранения ODT файла
+            
+        Returns:
+            Кортеж (успех, сообщение, путь к выходному файлу)
+        """
+        if sys.platform != 'win32':
+            return False, "Microsoft Word доступен только на Windows", None
+        
+        # COM функции теперь всегда доступны в этом файле
+        if sys.platform != 'win32' or (not self.win32com and not self.comtypes):
+            return False, "COM утилиты недоступны", None
+        
+        # Проверяем доступность COM клиентов
+        com_client = None
+        com_client_type = None
+        
+        if self.win32com:
+            com_client = self.win32com
+            com_client_type = "win32com"
+        elif self.comtypes:
+            com_client = self.comtypes
+            com_client_type = "comtypes"
+        else:
+            return False, "COM клиент недоступен (win32com или comtypes не установлен)", None
+        
+        word_app = None
+        doc = None
+        try:
+            word_installed, install_msg = check_word_installed()
+            if not word_installed:
+                return False, install_msg, None
+            
+            word_app, error_msg = create_word_application(com_client)
+            if not word_app:
+                return False, error_msg or "Не удалось создать Word приложение", None
+            
+            # Настраиваем Word
+            word_app.Visible = False
+            word_app.DisplayAlerts = 0  # Отключаем предупреждения
+            
+            # Открываем DOCX файл
+            doc_path = os.path.abspath(file_path)
+            logger.info(f"Открываем DOCX файл в Word: {doc_path}")
+            
+            try:
+                doc = word_app.Documents.Open(
+                    FileName=doc_path,
+                    ReadOnly=True,
+                    ConfirmConversions=False,
+                    AddToRecentFiles=False
+                )
+                logger.debug("DOCX файл открыт успешно в Word")
+            except (OSError, RuntimeError, AttributeError, TypeError) as open_error:
+                error_msg = str(open_error)
+                logger.error(f"Ошибка при открытии DOCX файла в Word: {error_msg}")
+                return False, f"Не удалось открыть DOCX файл в Word: {error_msg[:200]}", None
+            except Exception as open_error:
+                error_msg = str(open_error)
+                logger.error(f"Неожиданная ошибка при открытии DOCX файла в Word: {error_msg}")
+                return False, f"Не удалось открыть DOCX файл в Word: {error_msg[:200]}", None
+            
+            # Сохраняем в формате ODT (формат 23 для ODT)
+            output_path_abs = os.path.abspath(output_path)
+            output_dir = os.path.dirname(output_path_abs)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+            
+            logger.info(f"Сохраняем как ODT: {output_path_abs}")
+            try:
+                if doc is None:
+                    return False, "Документ не был открыт", None
+                
+                if not hasattr(doc, 'SaveAs'):
+                    return False, "Документ не поддерживает SaveAs", None
+                
+                # Формат 23 = wdFormatOpenDocumentText (ODT)
+                doc.SaveAs(FileName=output_path_abs, FileFormat=23)
+                logger.debug("Файл сохранен как ODT")
+            except (OSError, RuntimeError, AttributeError, PermissionError) as save_error:
+                error_msg = str(save_error)
+                logger.error(f"Ошибка при сохранении файла: {error_msg}")
+                # Проверяем, может быть файл уже существует
+                if os.path.exists(output_path_abs):
+                    try:
+                        os.remove(output_path_abs)
+                        doc.SaveAs(FileName=output_path_abs, FileFormat=23)
+                    except (OSError, PermissionError, RuntimeError) as retry_error:
+                        return False, f"Не удалось сохранить файл: {retry_error}", None
+                    except Exception as retry_error:
+                        return False, f"Неожиданная ошибка при повторной попытке сохранения: {retry_error}", None
+            except Exception as save_error:
+                error_msg = str(save_error)
+                logger.error(f"Неожиданная ошибка при сохранении файла: {error_msg}")
+                return False, f"Ошибка при сохранении файла: {error_msg[:200]}", None
+            
+            return True, "DOCX файл успешно конвертирован через Microsoft Word в ODT", output_path_abs
+            
+        except Exception as e:
+            logger.error(f"Ошибка при конвертации DOCX через Word {file_path}: {e}", exc_info=True)
+            return False, f"Ошибка: {str(e)}", None
+        finally:
+            cleanup_word_document(doc)
+            cleanup_word_application(word_app)
+    
+    def _convert_docx_to_odt_with_word(self, file_path: str, output_path: str) -> Tuple[bool, str, Optional[str]]:
+        """Конвертация DOCX файлов в ODT через Microsoft Word.
+        
+        Args:
+            file_path: Путь к исходному DOCX файлу
+            output_path: Путь для сохранения ODT файла
+            
+        Returns:
+            Кортеж (успех, сообщение, путь к выходному файлу)
+        """
+        if sys.platform != 'win32':
+            return False, "Microsoft Word доступен только на Windows", None
+        
+        # COM функции теперь всегда доступны в этом файле
+        if sys.platform != 'win32' or (not self.win32com and not self.comtypes):
+            return False, "COM утилиты недоступны", None
+        
+        # Проверяем доступность COM клиентов
+        com_client = None
+        com_client_type = None
+        
+        if self.win32com:
+            com_client = self.win32com
+            com_client_type = "win32com"
+        elif self.comtypes:
+            com_client = self.comtypes
+            com_client_type = "comtypes"
+        else:
+            return False, "COM клиент недоступен (win32com или comtypes не установлен)", None
+        
+        word_app = None
+        doc = None
+        try:
+            word_installed, install_msg = check_word_installed()
+            if not word_installed:
+                return False, install_msg, None
+            
+            word_app, error_msg = create_word_application(com_client)
+            if not word_app:
+                return False, error_msg or "Не удалось создать Word приложение", None
+            
+            # Настраиваем Word
+            word_app.Visible = False
+            word_app.DisplayAlerts = 0  # Отключаем предупреждения
+            
+            # Открываем DOCX файл
+            doc_path = os.path.abspath(file_path)
+            logger.info(f"Открываем DOCX файл в Word: {doc_path}")
+            
+            try:
+                doc = word_app.Documents.Open(
+                    FileName=doc_path,
+                    ReadOnly=True,
+                    ConfirmConversions=False,
+                    AddToRecentFiles=False
+                )
+                logger.debug("DOCX файл открыт успешно в Word")
+            except (OSError, RuntimeError, AttributeError, TypeError) as open_error:
+                error_msg = str(open_error)
+                logger.error(f"Ошибка при открытии DOCX файла в Word: {error_msg}")
+                return False, f"Не удалось открыть DOCX файл в Word: {error_msg[:200]}", None
+            except Exception as open_error:
+                error_msg = str(open_error)
+                logger.error(f"Неожиданная ошибка при открытии DOCX файла в Word: {error_msg}")
+                return False, f"Не удалось открыть DOCX файл в Word: {error_msg[:200]}", None
+            
+            # Сохраняем в формате ODT (формат 23 для ODT)
+            output_path_abs = os.path.abspath(output_path)
+            output_dir = os.path.dirname(output_path_abs)
+            if output_dir and not os.path.exists(output_dir):
+                os.makedirs(output_dir, exist_ok=True)
+            
+            logger.info(f"Сохраняем как ODT: {output_path_abs}")
+            try:
+                if doc is None:
+                    return False, "Документ не был открыт", None
+                
+                if not hasattr(doc, 'SaveAs'):
+                    return False, "Документ не поддерживает SaveAs", None
+                
+                # Формат 23 = wdFormatOpenDocumentText (ODT)
+                doc.SaveAs(FileName=output_path_abs, FileFormat=23)
+                logger.debug("Файл сохранен как ODT")
+            except (OSError, RuntimeError, AttributeError, PermissionError) as save_error:
+                error_msg = str(save_error)
+                logger.error(f"Ошибка при сохранении файла: {error_msg}")
+                # Проверяем, может быть файл уже существует
+                if os.path.exists(output_path_abs):
+                    try:
+                        os.remove(output_path_abs)
+                        doc.SaveAs(FileName=output_path_abs, FileFormat=23)
+                    except (OSError, PermissionError, RuntimeError) as retry_error:
+                        return False, f"Не удалось сохранить файл: {retry_error}", None
+                    except Exception as retry_error:
+                        return False, f"Неожиданная ошибка при повторной попытке сохранения: {retry_error}", None
+            except Exception as save_error:
+                error_msg = str(save_error)
+                logger.error(f"Неожиданная ошибка при сохранении файла: {error_msg}")
+                return False, f"Ошибка при сохранении файла: {error_msg[:200]}", None
+            
+            return True, "DOCX файл успешно конвертирован через Microsoft Word в ODT", output_path_abs
+            
+        except Exception as e:
+            logger.error(f"Ошибка при конвертации DOCX через Word {file_path}: {e}", exc_info=True)
+            return False, f"Ошибка: {str(e)}", None
+        finally:
             cleanup_word_document(doc)
             cleanup_word_application(word_app)
     
@@ -1819,15 +2130,13 @@ class FileConverter:
             logger.error(f"Ошибка при конвертации ODT без LibreOffice {file_path}: {e}", exc_info=True)
             return False, f"Ошибка: {str(e)}", None
     
-    def _convert_with_libreoffice(self, file_path: str, output_path: str, target_ext: str, 
-                                   compress_pdf: bool = False) -> Tuple[bool, str, Optional[str]]:
+    def _convert_with_libreoffice(self, file_path: str, output_path: str, target_ext: str) -> Tuple[bool, str, Optional[str]]:
         """Конвертация файлов через LibreOffice.
         
         Args:
             file_path: Путь к исходному файлу
             output_path: Путь для сохранения
             target_ext: Целевое расширение (с точкой)
-            compress_pdf: Сжимать ли PDF после конвертации
             
         Returns:
             Кортеж (успех, сообщение, путь к выходному файлу)
@@ -1957,12 +2266,6 @@ class FileConverter:
                     logger.warning(f"Не удалось переименовать файл: {e}, используем созданный файл")
                     output_path = expected_output
             
-            # Если конвертировали в PDF и нужно сжать
-            if target_ext == '.pdf' and compress_pdf and os.path.exists(output_path):
-                compress_result = self._compress_pdf(output_path)
-                if compress_result[0]:
-                    return True, f"Файл успешно конвертирован через LibreOffice ({compress_result[1]})", output_path
-            
             return True, "Файл успешно конвертирован через LibreOffice", output_path
             
         except subprocess.TimeoutExpired:
@@ -2028,68 +2331,13 @@ class FileConverter:
             except ImportError:
                 return None, None, False
     
-    def _compress_pdf(self, pdf_path: str) -> Tuple[bool, str]:
-        """Сжатие PDF файла.
-        
-        Args:
-            pdf_path: Путь к PDF файлу
-            
-        Returns:
-            Кортеж (успех, сообщение)
-        """
-        try:
-            PdfReader, PdfWriter, pdf_available = self._get_pdf_library()
-            
-            if not pdf_available:
-                return False, "Библиотека для работы с PDF не установлена (PyPDF2/pypdf)"
-            
-            # Читаем PDF
-            with open(pdf_path, 'rb') as input_file:
-                pdf_reader = PdfReader(input_file)
-                pdf_writer = PdfWriter()
-                
-                # Копируем страницы с оптимизацией
-                for page in pdf_reader.pages:
-                    # Сжимаем страницу
-                    page.compress_content_streams()
-                    pdf_writer.add_page(page)
-                
-                # Удаляем метаданные для уменьшения размера
-                pdf_writer.add_metadata({})
-            
-            # Сохраняем сжатый PDF во временный файл
-            temp_path = pdf_path + '.temp'
-            with open(temp_path, 'wb') as output_file:
-                pdf_writer.write(output_file)
-            
-            # Заменяем оригинальный файл
-            if os.path.exists(temp_path):
-                original_size = os.path.getsize(pdf_path)
-                shutil.move(temp_path, pdf_path)
-                new_size = os.path.getsize(pdf_path)
-                compression_ratio = (1 - new_size / original_size) * 100 if original_size > 0 else 0
-                return True, f"PDF сжат (размер уменьшен на {compression_ratio:.1f}%)"
-            
-            return False, "Не удалось создать сжатый PDF"
-            
-        except (OSError, IOError, PermissionError) as e:
-            logger.error(f"Ошибка при сжатии PDF {pdf_path}: {e}", exc_info=True)
-            return False, f"Ошибка сжатия: {str(e)}"
-        except (AttributeError, TypeError, ValueError) as e:
-            logger.error(f"Ошибка при обработке PDF {pdf_path}: {e}", exc_info=True)
-            return False, f"Ошибка обработки PDF: {str(e)}"
-        except Exception as e:
-            logger.error(f"Неожиданная ошибка при сжатии PDF {pdf_path}: {e}", exc_info=True)
-            return False, f"Неожиданная ошибка: {str(e)}"
     
-    def _convert_docx_to_pdf(self, file_path: str, output_path: str, 
-                              compress_pdf: bool = False) -> Tuple[bool, str, Optional[str]]:
+    def _convert_docx_to_pdf(self, file_path: str, output_path: str) -> Tuple[bool, str, Optional[str]]:
         """Конвертация DOCX/DOC в PDF.
         
         Args:
             file_path: Путь к исходному DOCX или DOC файлу
             output_path: Путь для сохранения PDF
-            compress_pdf: Сжимать ли PDF после конвертации
             
         Returns:
             Кортеж (успех, сообщение, путь к выходному файлу)
@@ -2309,16 +2557,20 @@ class FileConverter:
                     
                     # Открываем документ (используем полный путь)
                     doc_path = os.path.abspath(file_path)
-                    doc = word.Documents.Open(doc_path, ReadOnly=True, ConfirmConversions=False)
-                    
+                    doc = None
                     try:
+                        doc = word.Documents.Open(doc_path, ReadOnly=True, ConfirmConversions=False)
+                        
                         # Сохраняем как PDF (используем полный путь)
                         pdf_path = os.path.abspath(output_path)
                         doc.SaveAs(pdf_path, FileFormat=17)  # 17 = PDF format
                     finally:
-                        doc.Close(SaveChanges=False)
+                        # Закрываем документ перед закрытием приложения
+                        if doc:
+                            cleanup_word_document(doc)
                     
-                    word.Quit(SaveChanges=False)
+                    # Закрываем приложение
+                    cleanup_word_application(word)
                     word = None
                     
                     # Освобождаем COM

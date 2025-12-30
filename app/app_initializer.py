@@ -20,7 +20,7 @@ class AppInitializer:
         """Инициализация инициализатора приложения.
         
         Args:
-            app: Экземпляр FileRenamerApp
+            app: Экземпляр ReFilePlusApp
         """
         self.app = app
     
@@ -100,7 +100,7 @@ class AppInitializer:
     
     def _setup_root_window_colors(self, root: 'tk.Tk'):
         """Настройка цветов корневого окна (после инициализации менеджеров)."""
-        # Настройка фона окна
+        # Настройка фона окна (используем тот же фон, что и у вкладок)
         root.configure(bg=self.app.colors['bg_main'])
         
         # Привязка изменения размера окна для адаптивного масштабирования
@@ -239,11 +239,10 @@ class AppInitializer:
             try:
                 from core.error_handling import ErrorHandler
             except ImportError:
-                try:
-                    from infrastructure.system.error_handler import ErrorHandler
-                except ImportError:
-                    from utils.helpers import ErrorHandler
-            self.app.error_handler = ErrorHandler()
+                # Fallback через helpers
+                from utils.helpers import ErrorHandler
+            if ErrorHandler is not None:
+                self.app.error_handler = ErrorHandler()
         except (ImportError, Exception) as e:
             logger.debug(f"Не удалось инициализировать обработчик ошибок: {e}")
         

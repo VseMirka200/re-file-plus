@@ -126,12 +126,12 @@ class MethodsPanel:
     def create_new_name_settings(self):
         """Создание настроек для метода Новое имя"""
         # Поле ввода шаблона
-        template_label_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_card'])
+        template_label_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_main'])
         template_label_frame.pack(fill=tk.X, pady=(0, 2))
         
         template_label = tk.Label(template_label_frame, text="Новое имя (шаблон):", 
                                  font=('Robot', 9, 'bold'),
-                                 bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'])
+                                 bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
         template_label.pack(side=tk.LEFT)
         
         self.app.new_name_template = ttk.Entry(self.app.settings_frame, width=18, font=('Robot', 9))
@@ -142,7 +142,7 @@ class MethodsPanel:
         padx = 6
         pady = 6
         
-        self.app.template_buttons_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_card'])
+        self.app.template_buttons_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_main'])
         self.app.template_buttons_frame.pack(fill=tk.X, pady=(0, 6))
         self.app.template_buttons_frame.columnconfigure(0, weight=1)
         self.app.template_buttons_frame.columnconfigure(1, weight=1)
@@ -161,168 +161,18 @@ class MethodsPanel:
             active_bg=self.app.colors['primary_hover'], expand=True)
         self.app.btn_saved.grid(row=0, column=1, sticky="ew")
         
-        # Контейнер для настроек нумерации (скрыт по умолчанию)
-        # Создаем в settings_frame, чтобы разместить перед списком переменных
-        self.app.numbering_settings_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_card'])
-        # Не упаковываем сразу - будет показан только при использовании {n}
-        
-        # Настройка начального номера и количества нулей (разная ширина)
-        # Используем такой же контейнер с фоном, как у переменных
-        number_inputs_container = tk.Frame(self.app.numbering_settings_frame, bg=self.app.colors['bg_secondary'], 
-                                          highlightbackground=self.app.colors['border'],
-                                          highlightthickness=1)
-        number_inputs_container.pack(fill=tk.X, padx=0, pady=(0, 0))
-        
-        number_inputs_frame = tk.Frame(number_inputs_container, bg=self.app.colors['bg_secondary'])
-        number_inputs_frame.pack(fill=tk.X, padx=8, pady=(4, 4))
-        number_inputs_frame.columnconfigure(0, weight=1)  # Равная ширина для обоих полей
-        number_inputs_frame.columnconfigure(1, weight=1)  # Равная ширина для обоих полей
-        
-        # Начальный номер (одинаковой ширины)
-        start_number_frame = tk.Frame(number_inputs_frame, bg=self.app.colors['bg_secondary'])
-        start_number_frame.grid(row=0, column=0, sticky="ew", padx=(0, 10))
-        
-        number_label = tk.Label(start_number_frame, text="Начальный номер:", 
-                               font=('Robot', 9, 'bold'),
-                               bg=self.app.colors['bg_secondary'], fg=self.app.colors['text_primary'])
-        number_label.pack(side=tk.LEFT, padx=(0, 5))
-        
-        # Используем Spinbox для начального номера (с встроенными стрелками) - увеличенный размер
-        self.app.new_name_start_number = tk.Spinbox(
-            start_number_frame, 
-            from_=1, 
-            to=999999, 
-            width=25, 
-            font=('Robot', 11),
-            bg='white',
-            fg=self.app.colors['text_primary'],
-            relief=tk.SOLID,
-            borderwidth=1,
-            justify=tk.CENTER
-        )
-        self.app.new_name_start_number.delete(0, tk.END)
-        self.app.new_name_start_number.insert(0, "1")
-        self.app.new_name_start_number.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=1, ipady=2)
-        
-        # Количество нулей (одинакового размера)
-        zeros_frame = tk.Frame(number_inputs_frame, bg=self.app.colors['bg_secondary'])
-        zeros_frame.grid(row=0, column=1, sticky="ew")
-        
-        zeros_label = tk.Label(zeros_frame, text="Кол-во нулей:", 
-                              font=('Robot', 9, 'bold'),
-                              bg=self.app.colors['bg_secondary'], fg=self.app.colors['text_primary'])
-        zeros_label.pack(side=tk.LEFT, padx=(0, 5))
-        
-        # Используем Spinbox для количества нулей (с встроенными стрелками) - увеличенный размер
-        self.app.new_name_zeros_count = tk.Spinbox(
-            zeros_frame, 
-            from_=0, 
-            to=20, 
-            width=25, 
-            font=('Robot', 11),
-            bg='white',
-            fg=self.app.colors['text_primary'],
-            relief=tk.SOLID,
-            borderwidth=1,
-            justify=tk.CENTER
-        )
-        self.app.new_name_zeros_count.delete(0, tk.END)
-        self.app.new_name_zeros_count.insert(0, "0")
-        self.app.new_name_zeros_count.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=1, ipady=2)
-        
-        # Автоматическое применение при изменении шаблона или начального номера
-        # Используем переменную для отслеживания таймера, чтобы избежать множественных вызовов
-        if not hasattr(self.app, '_template_change_timer'):
-            self.app._template_change_timer = None
-        
+        # Автоматическое применение при изменении шаблона
         def on_template_change(event=None):
-            # Проверяем, используется ли {n} в шаблоне
-            template = self.app.new_name_template.get().strip()
-            has_n = '{n}' in template
-            
-            # Показываем/скрываем настройки нумерации после списка переменных
-            if has_n:
-                if not self.app.numbering_settings_frame.winfo_ismapped():
-                    # Упаковываем после списка переменных
-                    if hasattr(self.app, 'variables_frame'):
-                        self.app.numbering_settings_frame.pack(fill=tk.X, pady=(4, 4), after=self.app.variables_frame)
-                    else:
-                        # Fallback: просто упаковываем
-                        self.app.numbering_settings_frame.pack(fill=tk.X, pady=(4, 4))
-            else:
-                if self.app.numbering_settings_frame.winfo_ismapped():
-                    self.app.numbering_settings_frame.pack_forget()
-            
-            # Отменяем предыдущий таймер, если он есть
-            if hasattr(self.app, '_template_change_timer') and self.app._template_change_timer:
-                try:
-                    self.app.root.after_cancel(self.app._template_change_timer)
-                except (tk.TclError, ValueError) as e:
-                    logger.debug(f"Не удалось отменить таймер в on_template_change: {e}")
-            # Устанавливаем новый таймер для применения через 150 мс (быстрее для мгновенного отображения)
-            if hasattr(self.app, 'root'):
-                self.app._template_change_timer = self.app.root.after(150, self.app._apply_template_delayed)
-        
-        def on_number_change(event=None):
-            # Отменяем предыдущий таймер, если он есть
-            if hasattr(self.app, '_template_change_timer') and self.app._template_change_timer:
-                try:
-                    self.app.root.after_cancel(self.app._template_change_timer)
-                except (tk.TclError, ValueError) as e:
-                    logger.debug(f"Не удалось отменить таймер в on_number_change: {e}")
-            # Устанавливаем новый таймер для применения через 150 мс (быстрее для мгновенного отображения)
-            if hasattr(self.app, 'root'):
-                self.app._template_change_timer = self.app.root.after(150, self.app._apply_template_delayed)
-        
-        def on_zeros_change(event=None):
-            # Отменяем предыдущий таймер, если он есть
-            if hasattr(self.app, '_template_change_timer') and self.app._template_change_timer:
-                try:
-                    self.app.root.after_cancel(self.app._template_change_timer)
-                except (tk.TclError, ValueError) as e:
-                    logger.debug(f"Не удалось отменить таймер в on_zeros_change: {e}")
-            # Устанавливаем новый таймер для применения через 150 мс
-            if hasattr(self.app, 'root'):
-                self.app._template_change_timer = self.app.root.after(150, self.app._apply_template_delayed)
+            # Применяем шаблон с небольшой задержкой (debounce) для предотвращения множественных вызовов
+            if hasattr(self.app, '_apply_template_debounced'):
+                self.app._apply_template_debounced()
         
         # Привязка событий
         def on_focus_out(e):
             self.app._apply_template_immediate()
         
-        # Для Spinbox используем команду для обработки изменений
-        def on_spinbox_change():
-            on_number_change()
-        
-        def on_zeros_spinbox_change():
-            on_zeros_change()
-        
         self.app.new_name_template.bind('<KeyRelease>', on_template_change)
         self.app.new_name_template.bind('<FocusOut>', on_focus_out)
-        # Для Spinbox привязываем команду и события изменения
-        self.app.new_name_start_number.config(command=on_spinbox_change)
-        self.app.new_name_start_number.bind('<KeyRelease>', lambda e: on_number_change())
-        self.app.new_name_start_number.bind('<FocusOut>', on_focus_out)
-        self.app.new_name_start_number.bind('<ButtonRelease-1>', lambda e: on_number_change())
-        self.app.new_name_start_number.bind('<Up>', lambda e: on_number_change())
-        self.app.new_name_start_number.bind('<Down>', lambda e: on_number_change())
-        
-        self.app.new_name_zeros_count.config(command=on_zeros_spinbox_change)
-        self.app.new_name_zeros_count.bind('<KeyRelease>', lambda e: on_zeros_change())
-        self.app.new_name_zeros_count.bind('<FocusOut>', on_focus_out)
-        self.app.new_name_zeros_count.bind('<ButtonRelease-1>', lambda e: on_zeros_change())
-        self.app.new_name_zeros_count.bind('<Up>', lambda e: on_zeros_change())
-        self.app.new_name_zeros_count.bind('<Down>', lambda e: on_zeros_change())
-        
-        # Проверяем начальное состояние шаблона
-        if hasattr(self.app, 'new_name_template'):
-            template = self.app.new_name_template.get().strip()
-            if '{n}' in template:
-                # Упаковываем после списка переменных с такой же шириной
-                if hasattr(self.app, 'variables_frame'):
-                    self.app.numbering_settings_frame.pack(fill=tk.X, pady=(0, 0), after=self.app.variables_frame)
-                else:
-                    # Fallback: просто упаковываем
-                    self.app.numbering_settings_frame.pack(fill=tk.X, pady=(0, 0))
         
         # Если шаблон уже есть в поле, применяем его сразу
         if hasattr(self.app, 'new_name_template'):
@@ -347,17 +197,17 @@ class MethodsPanel:
         vars_label = tk.Label(self.app.settings_frame, 
                              text="Доступные переменные (кликните для вставки):", 
                              font=('Robot', 9, 'bold'),
-                             bg=self.app.colors['bg_card'], fg=self.app.colors['text_primary'])
+                             bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
         vars_label.pack(anchor=tk.W, pady=(4, 4))
         
-        variables_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_card'])
+        variables_frame = tk.Frame(self.app.settings_frame, bg=self.app.colors['bg_main'])
         variables_frame.pack(fill=tk.X, pady=(0, 0))
         
         # Сохраняем ссылку на variables_frame для размещения полей нумерации после списка переменных
         self.app.variables_frame = variables_frame
         
         # Контейнер для переменных с фоном и рамкой
-        vars_container = tk.Frame(variables_frame, bg=self.app.colors['bg_secondary'], 
+        vars_container = tk.Frame(variables_frame, bg=self.app.colors['bg_main'], 
                                  highlightbackground=self.app.colors['border'],
                                  highlightthickness=1)
         vars_container.pack(fill=tk.X, padx=0, pady=(0, 0))
@@ -405,7 +255,7 @@ class MethodsPanel:
         
         # Создание кликабельных меток для переменных
         for i, (var, desc) in enumerate(variables):
-            var_frame = tk.Frame(vars_container, bg=self.app.colors['bg_secondary'])
+            var_frame = tk.Frame(vars_container, bg=self.app.colors['bg_main'])
             # Уменьшаем отступ для последнего элемента
             if i == len(variables) - 1:
                 var_frame.pack(anchor=tk.W, pady=(2, 0), padx=8, fill=tk.X)
@@ -417,7 +267,7 @@ class MethodsPanel:
                                font=('Courier New', 11, 'bold'),
                                foreground=self.app.colors['primary'],
                                cursor="hand2",
-                               bg=self.app.colors['bg_secondary'])
+                               bg=self.app.colors['bg_main'])
             var_label.pack(side=tk.LEFT)
             def on_var_click(e, v=var):
                 self.insert_variable(v)
@@ -448,7 +298,7 @@ class MethodsPanel:
             desc_label = tk.Label(var_frame, text=f"- {desc}",
                                  font=('Robot', 10),
                                  foreground=self.app.colors['text_secondary'],
-                                 bg=self.app.colors['bg_secondary'])
+                                 bg=self.app.colors['bg_main'])
             desc_label.pack(side=tk.LEFT)
     
     def insert_variable(self, variable: str):
@@ -463,16 +313,6 @@ class MethodsPanel:
             self.app.new_name_template.icursor(cursor_pos + len(variable))
             self.app.new_name_template.focus()
             
-            # Если вставили {n}, показываем настройки нумерации
-            if variable == "{n}":
-                if '{n}' in new_text and hasattr(self.app, 'numbering_settings_frame'):
-                    if not self.app.numbering_settings_frame.winfo_ismapped():
-                        # Упаковываем после списка переменных с такой же шириной
-                        if hasattr(self.app, 'variables_frame'):
-                            self.app.numbering_settings_frame.pack(fill=tk.X, pady=(0, 0), after=self.app.variables_frame)
-                        else:
-                            # Fallback: просто упаковываем
-                            self.app.numbering_settings_frame.pack(fill=tk.X, pady=(0, 0))
             
             # Автоматически применяем шаблон сразу после вставки переменной
             if hasattr(self.app, 'root') and self.app.files:
@@ -519,32 +359,104 @@ class MethodsPanel:
     
     def create_numbering_settings(self) -> None:
         """Создание настроек для метода Нумерация."""
+        # Загружаем значения из настроек по умолчанию
+        default_start = self.app.settings_manager.get('numbering_method_start', '1')
+        default_step = self.app.settings_manager.get('numbering_method_step', '1')
+        default_digits = self.app.settings_manager.get('numbering_method_digits', '3')
+        default_format = self.app.settings_manager.get('numbering_method_format', '({n})')
+        default_position = self.app.settings_manager.get('numbering_method_position', 'end')
+        
         ttk.Label(self.app.settings_frame, text="Начальный индекс:", font=('Robot', 9)).pack(anchor=tk.W, pady=(0, 2))
-        self.app.numbering_start = ttk.Entry(self.app.settings_frame, width=10, font=('Robot', 9))
-        self.app.numbering_start.insert(0, "1")
+        self.app.numbering_start = tk.Entry(self.app.settings_frame, width=10, font=('Robot', 9),
+                                           bg='white', fg=self.app.colors['text_primary'],
+                                           relief=tk.SOLID, borderwidth=1)
+        self.app.numbering_start.insert(0, default_start)
         self.app.numbering_start.pack(anchor=tk.W, pady=(0, 4))
         
+        # Сохранение значения при изменении
+        def on_numbering_start_change(event=None):
+            try:
+                value = self.app.numbering_start.get().strip()
+                if value:
+                    int(value)  # Проверка на число
+                    self.app.settings_manager.set('numbering_method_start', value)
+                    self.app.settings_manager.save_settings()
+            except ValueError:
+                pass
+        self.app.numbering_start.bind('<FocusOut>', on_numbering_start_change)
+        self.app.numbering_start.bind('<KeyRelease>', lambda e: self.app.root.after(500, on_numbering_start_change))
+        
         ttk.Label(self.app.settings_frame, text="Шаг:", font=('Robot', 9)).pack(anchor=tk.W, pady=(4, 2))
-        self.app.numbering_step = ttk.Entry(self.app.settings_frame, width=10, font=('Robot', 9))
-        self.app.numbering_step.insert(0, "1")
+        self.app.numbering_step = tk.Entry(self.app.settings_frame, width=10, font=('Robot', 9),
+                                          bg='white', fg=self.app.colors['text_primary'],
+                                          relief=tk.SOLID, borderwidth=1)
+        self.app.numbering_step.insert(0, default_step)
         self.app.numbering_step.pack(anchor=tk.W, pady=(0, 4))
         
-        ttk.Label(self.app.settings_frame, text="Количество цифр:", font=('Robot', 9)).pack(anchor=tk.W, pady=(4, 2))
-        self.app.numbering_digits = ttk.Entry(self.app.settings_frame, width=10, font=('Robot', 9))
-        self.app.numbering_digits.insert(0, "3")
+        # Сохранение значения при изменении
+        def on_numbering_step_change(event=None):
+            try:
+                value = self.app.numbering_step.get().strip()
+                if value:
+                    int(value)  # Проверка на число
+                    self.app.settings_manager.set('numbering_method_step', value)
+                    self.app.settings_manager.save_settings()
+            except ValueError:
+                pass
+        self.app.numbering_step.bind('<FocusOut>', on_numbering_step_change)
+        self.app.numbering_step.bind('<KeyRelease>', lambda e: self.app.root.after(500, on_numbering_step_change))
+        
+        ttk.Label(self.app.settings_frame, text="Количество цифр (ведущие нули):", font=('Robot', 9)).pack(anchor=tk.W, pady=(4, 2))
+        self.app.numbering_digits = tk.Entry(self.app.settings_frame, width=10, font=('Robot', 9),
+                                            bg='white', fg=self.app.colors['text_primary'],
+                                            relief=tk.SOLID, borderwidth=1)
+        self.app.numbering_digits.insert(0, default_digits)
         self.app.numbering_digits.pack(anchor=tk.W, pady=(0, 4))
         
+        # Сохранение значения при изменении
+        def on_numbering_digits_change(event=None):
+            try:
+                value = self.app.numbering_digits.get().strip()
+                if value:
+                    int(value)  # Проверка на число
+                    self.app.settings_manager.set('numbering_method_digits', value)
+                    self.app.settings_manager.save_settings()
+            except ValueError:
+                pass
+        self.app.numbering_digits.bind('<FocusOut>', on_numbering_digits_change)
+        self.app.numbering_digits.bind('<KeyRelease>', lambda e: self.app.root.after(500, on_numbering_digits_change))
+        
         ttk.Label(self.app.settings_frame, text="Формат:", font=('Robot', 9)).pack(anchor=tk.W, pady=(4, 2))
-        self.app.numbering_format = tk.StringVar(value="({n})")
-        ttk.Entry(self.app.settings_frame, textvariable=self.app.numbering_format, width=20, font=('Robot', 9)).pack(anchor=tk.W, pady=(0, 2))
+        self.app.numbering_format = tk.StringVar(value=default_format)
+        format_entry = tk.Entry(self.app.settings_frame, textvariable=self.app.numbering_format, width=20, font=('Robot', 9),
+                               bg='white', fg=self.app.colors['text_primary'],
+                               relief=tk.SOLID, borderwidth=1)
+        format_entry.pack(anchor=tk.W, pady=(0, 2))
         ttk.Label(
             self.app.settings_frame,
-            text="(используйте {n} для номера)",
+            text="(используйте {n} для номера, например: ({n}), _{n}, -{n})",
             font=('Robot', 8)
         ).pack(anchor=tk.W, pady=(0, 4))
         
+        # Сохранение значения при изменении
+        def on_numbering_format_change(event=None):
+            value = self.app.numbering_format.get()
+            if value:
+                self.app.settings_manager.set('numbering_method_format', value)
+                self.app.settings_manager.save_settings()
+        format_entry.bind('<FocusOut>', on_numbering_format_change)
+        format_entry.bind('<KeyRelease>', lambda e: self.app.root.after(500, on_numbering_format_change))
+        
         ttk.Label(self.app.settings_frame, text="Позиция:", font=('Robot', 9)).pack(anchor=tk.W, pady=(4, 2))
-        self.app.numbering_pos = tk.StringVar(value="end")
+        self.app.numbering_pos = tk.StringVar(value=default_position)
+        
+        # Сохранение значения при изменении
+        def on_numbering_pos_change(*args):
+            value = self.app.numbering_pos.get()
+            self.app.settings_manager.set('numbering_method_position', value)
+            self.app.settings_manager.save_settings()
+        self.app.numbering_pos.trace('w', on_numbering_pos_change)
+        
         ttk.Radiobutton(self.app.settings_frame, text="В начале", variable=self.app.numbering_pos, value="start", font=('Robot', 9)).pack(anchor=tk.W, pady=1)
         ttk.Radiobutton(self.app.settings_frame, text="В конце", variable=self.app.numbering_pos, value="end", font=('Robot', 9)).pack(anchor=tk.W, pady=1)
     
@@ -613,25 +525,23 @@ class MethodsPanel:
         if not template:
             raise ValueError("Введите шаблон нового имени")
         
-        # Получаем начальный номер из поля ввода
+        # Получаем начальный номер из настроек
         start_number = 1
-        if hasattr(self.app, 'new_name_start_number'):
-            try:
-                start_number = int(self.app.new_name_start_number.get() or "1")
-                if start_number < 1:
-                    start_number = 1
-            except ValueError:
+        try:
+            start_number = int(self.app.settings_manager.get('numbering_start_number', '1'))
+            if start_number < 1:
                 start_number = 1
+        except (ValueError, TypeError):
+            start_number = 1
         
-        # Получаем количество нулей из поля ввода
+        # Получаем количество нулей из настроек
         zeros_count = 0
-        if hasattr(self.app, 'new_name_zeros_count'):
-            try:
-                zeros_count = int(self.app.new_name_zeros_count.get() or "0")
-                if zeros_count < 0:
-                    zeros_count = 0
-            except ValueError:
+        try:
+            zeros_count = int(self.app.settings_manager.get('numbering_zeros_count', '0'))
+            if zeros_count < 0:
                 zeros_count = 0
+        except (ValueError, TypeError):
+            zeros_count = 0
         
         return NewNameMethod(
             template=template,

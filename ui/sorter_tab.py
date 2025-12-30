@@ -6,7 +6,6 @@
 
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 import tkinter as tk
@@ -40,7 +39,7 @@ class SorterTab:
         
         # Основной контейнер
         main_container = tk.Frame(sorter_tab, bg=self.app.colors['bg_main'])
-        main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+        main_container.grid(row=0, column=0, sticky="nsew", padx=0, pady=0)
         main_container.columnconfigure(0, weight=1)
         main_container.columnconfigure(1, weight=1)
         main_container.rowconfigure(0, weight=1)
@@ -50,21 +49,21 @@ class SorterTab:
             main_container,
             text="Настройки сортировки",
             style='Card.TLabelframe',
-            padding=10
+            padding=(6, 12, 6, 12)
         )
-        left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        left_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 2), pady=(20, 20))
         left_panel.columnconfigure(0, weight=1)
         
         # Выбор папки для сортировки
-        folder_frame = tk.Frame(left_panel, bg=self.app.colors['bg_card'])
+        folder_frame = tk.Frame(left_panel, bg=self.app.colors['bg_main'])
         folder_frame.pack(fill=tk.X, pady=(0, 15))
         
         tk.Label(folder_frame, text="Папка для сортировки:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 5))
         
-        folder_path_frame = tk.Frame(folder_frame, bg=self.app.colors['bg_card'])
+        folder_path_frame = tk.Frame(folder_frame, bg=self.app.colors['bg_main'])
         folder_path_frame.pack(fill=tk.X)
         
         self.app.sorter_folder_path = tk.StringVar()
@@ -87,36 +86,35 @@ class SorterTab:
                                fg=self.app.colors['text_primary'],
                                relief=tk.SOLID,
                                borderwidth=1)
-        folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        folder_entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
-        btn_browse = self.app.create_rounded_button(
-            folder_path_frame, "🔍 Обзор...", self.browse_sorter_folder,
-            self.app.colors['primary'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=5,
-            active_bg=self.app.colors['primary_hover'], expand=False)
-        btn_browse.pack(side=tk.LEFT)
+        btn_browse = self.app.create_square_icon_button(
+            folder_path_frame,
+            "🔍",
+            self.browse_sorter_folder,
+            bg_color=self.app.colors['primary'],
+            size=28,
+            active_bg=self.app.colors['primary_hover'],
+            tooltip="Обзор..."
+        )
+        btn_browse.pack(side=tk.LEFT, fill=tk.NONE)
         
         # Фильтры
-        filters_frame = tk.Frame(left_panel, bg=self.app.colors['bg_card'])
+        filters_frame = tk.Frame(left_panel, bg=self.app.colors['bg_main'])
         filters_frame.pack(fill=tk.BOTH, expand=True)
         filters_frame.columnconfigure(0, weight=1)
         
         tk.Label(filters_frame, text="Правила распределения:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 10))
         
         # Canvas для прокрутки фильтров
-        filters_canvas = tk.Canvas(filters_frame, bg=self.app.colors['bg_card'],
+        filters_canvas = tk.Canvas(filters_frame, bg=self.app.colors['bg_main'],
                                    highlightthickness=0)
         filters_scrollbar = ttk.Scrollbar(filters_frame, orient="vertical",
                                           command=filters_canvas.yview)
-        filters_scrollable = tk.Frame(filters_canvas, bg=self.app.colors['bg_card'])
-        
-        filters_scrollable.bind(
-            "<Configure>",
-            lambda e: filters_canvas.configure(scrollregion=filters_canvas.bbox("all"))
-        )
+        filters_scrollable = tk.Frame(filters_canvas, bg=self.app.colors['bg_main'])
         
         filters_canvas_window = filters_canvas.create_window((0, 0),
                                                              window=filters_scrollable,
@@ -145,30 +143,7 @@ class SorterTab:
         if not hasattr(self.app, 'sorter_filters'):
             self.app.sorter_filters = []  # Список фильтров
         
-        # Кнопки управления фильтрами
-        filter_buttons_frame = tk.Frame(left_panel, bg=self.app.colors['bg_card'])
-        filter_buttons_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        btn_add_filter = self.app.create_rounded_button(
-            filter_buttons_frame, "➕ Добавить правило", self.add_sorter_filter,
-            self.app.colors['success'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=6,
-            active_bg=self.app.colors['success_hover'], expand=True)
-        btn_add_filter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
-        btn_save_filters = self.app.create_rounded_button(
-            filter_buttons_frame, "💾 Сохранить", self.save_sorter_filters,
-            self.app.colors['info'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=6,
-            active_bg=self.app.colors['info_hover'], expand=True)
-        btn_save_filters.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
-        btn_load_filters = self.app.create_rounded_button(
-            filter_buttons_frame, "📂 Загрузить", self.load_sorter_filters,
-            self.app.colors['primary'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=6,
-            active_bg=self.app.colors['primary_hover'], expand=True)
-        btn_load_filters.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # Кнопки управления фильтрами удалены - перенесены под вкладки
         
         # Правая панель - действия и результаты (такого же размера как настройка конвертации)
         right_panel = ttk.LabelFrame(
@@ -185,84 +160,14 @@ class SorterTab:
         main_container.columnconfigure(1, weight=4, uniform="panels")
         
         # Внутренний Frame для содержимого (для работы с bg)
-        right_panel_inner = tk.Frame(right_panel, bg=self.app.colors['bg_card'])
+        right_panel_inner = tk.Frame(right_panel, bg=self.app.colors['bg_main'])
         right_panel_inner.pack(fill=tk.BOTH, expand=True)
         right_panel_inner.columnconfigure(0, weight=1)
         right_panel_inner.rowconfigure(2, weight=1)
         
-        # Кнопки управления
-        buttons_frame = tk.Frame(right_panel_inner, bg=self.app.colors['bg_card'])
-        buttons_frame.pack(fill=tk.X, pady=(0, 15))
-        buttons_frame.columnconfigure(0, weight=1)
-        buttons_frame.columnconfigure(1, weight=1)
+        # Кнопки управления удалены - перенесены под вкладки
         
-        # Кнопка предпросмотра
-        btn_preview = self.app.create_rounded_button(
-            buttons_frame, "👁️ Предпросмотр", self.preview_file_sorting,
-            self.app.colors['info'], 'white',
-            font=('Robot', 9, 'bold'), padx=12, pady=8,
-            active_bg=self.app.colors['info_hover'], expand=True)
-        btn_preview.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        
-        # Кнопка запуска сортировки
-        btn_start_sort = self.app.create_rounded_button(
-            buttons_frame, "▶️ Начать сортировку", self.start_file_sorting,
-            self.app.colors['success'], 'white',
-            font=('Robot', 9, 'bold'), padx=12, pady=8,
-            active_bg=self.app.colors['success_hover'], expand=True)
-        btn_start_sort.grid(row=0, column=1, sticky="ew")
-        
-        # Прогресс-бар
-        progress_frame = tk.Frame(right_panel_inner, bg=self.app.colors['bg_card'])
-        progress_frame.pack(fill=tk.X, pady=(0, 15))
-        progress_frame.columnconfigure(1, weight=1)
-        
-        progress_label = tk.Label(progress_frame, text="Прогресс:",
-                                 font=('Robot', 9, 'bold'),
-                                 bg=self.app.colors['bg_card'],
-                                 fg=self.app.colors['text_primary'],
-                                 anchor='w')
-        progress_label.grid(row=0, column=0, padx=(0, 10), sticky="w")
-        
-        self.app.sorter_progress = ttk.Progressbar(progress_frame, mode='determinate')
-        self.app.sorter_progress.grid(row=0, column=1, sticky="ew", padx=(0, 10))
-        self.app.sorter_progress['value'] = 0
-        
-        self.app.sorter_status_label = tk.Label(progress_frame, text="",
-                                                font=('Robot', 8),
-                                                bg=self.app.colors['bg_card'],
-                                                fg=self.app.colors['text_secondary'],
-                                                anchor='w')
-        self.app.sorter_status_label.grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
-        
-        # Результаты
-        results_frame = tk.Frame(right_panel_inner, bg=self.app.colors['bg_card'])
-        results_frame.pack(fill=tk.BOTH, expand=True)
-        results_frame.columnconfigure(0, weight=1)
-        results_frame.rowconfigure(0, weight=1)
-        
-        tk.Label(results_frame, text="Результаты:",
-                font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
-                fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 5))
-        
-        # Текстовое поле для результатов
-        results_text_frame = tk.Frame(results_frame, bg=self.app.colors['bg_card'])
-        results_text_frame.pack(fill=tk.BOTH, expand=True)
-        
-        results_scrollbar = ttk.Scrollbar(results_text_frame, orient=tk.VERTICAL)
-        self.app.sorter_results_text = tk.Text(results_text_frame,
-                                          yscrollcommand=results_scrollbar.set,
-                                          font=('Consolas', 9),
-                                          bg='white',
-                                          fg=self.app.colors['text_primary'],
-                                          relief=tk.SOLID,
-                                          borderwidth=1,
-                                          wrap=tk.WORD)
-        results_scrollbar.config(command=self.app.sorter_results_text.yview)
-        
-        self.app.sorter_results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        results_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Результаты убраны
         
         # Загружаем сохраненные фильтры
         self.load_sorter_filters()
@@ -280,44 +185,97 @@ class SorterTab:
         """
         # Создаем Frame для содержимого вкладки сортировки
         sort_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        sort_frame.grid(row=0, column=0, sticky="nsew")
+        sort_frame.grid(row=0, column=0, sticky="nsew", pady=(5, 0))
         sort_frame.columnconfigure(0, weight=1)
-        sort_frame.rowconfigure(0, weight=1)
+        sort_frame.rowconfigure(1, weight=1)  # settings_panel растягивается
+        sort_frame.rowconfigure(0, weight=0)  # actions_panel не растягивается
         
         # Сохраняем ссылку
         self.app.tab_contents["sort"] = sort_frame
         
-        # Основной контейнер (вся ширина)
-        main_container = tk.Frame(sort_frame, bg=self.app.colors['bg_main'])
-        main_container.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
-        main_container.columnconfigure(0, weight=1)
-        main_container.rowconfigure(0, weight=1)
+        # Панель действий для вкладки "Сортировка" (как во вкладке "Файлы")
+        actions_panel = tk.Frame(sort_frame, bg=self.app.colors['bg_main'])
+        actions_panel.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 5))
         
-        # Используем тот же код создания содержимого, что и в create_tab
-        # Но без левой панели со списком файлов - используем общий список
-        # Создаем объединенную панель с настройками и действиями
+        # Контейнер для кнопок (чтобы они были "за границей" основного контейнера)
+        buttons_container = tk.Frame(actions_panel, bg=self.app.colors['bg_main'])
+        buttons_container.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        
+        # Кнопки управления сортировкой (квадратные, только иконки)
+        # Добавить правило
+        btn_add_filter = self.app.create_square_icon_button(
+            buttons_container,
+            "+",
+            self.add_sorter_filter,
+            bg_color=self.app.colors['success'],
+            size=28,
+            active_bg=self.app.colors['success_hover'],
+            tooltip="Добавить правило"
+        )
+        btn_add_filter.grid(row=0, column=0, padx=(0, 5), pady=0)
+        
+        # Сохранить
+        btn_save = self.app.create_square_icon_button(
+            buttons_container,
+            "💾",
+            self.save_sorter_filters,
+            bg_color=self.app.colors['info'],
+            size=28,
+            active_bg=self.app.colors['info_hover'],
+            tooltip="Сохранить правила"
+        )
+        btn_save.grid(row=0, column=1, padx=(0, 5), pady=0)
+        
+        # Предпросмотр
+        btn_preview = self.app.create_square_icon_button(
+            buttons_container,
+            "🔍",
+            self.preview_file_sorting,
+            bg_color=self.app.colors['info'],
+            size=28,
+            active_bg=self.app.colors['info_hover'],
+            tooltip="Предпросмотр сортировки"
+        )
+        btn_preview.grid(row=0, column=2, padx=(0, 5), pady=0)
+        
+        # Начать сортировку
+        btn_start_sort = self.app.create_square_icon_button(
+            buttons_container,
+            "✓",
+            self.start_file_sorting,
+            bg_color=self.app.colors['success'],
+            size=28,
+            active_bg=self.app.colors['success_hover'],
+            tooltip="Начать сортировку"
+        )
+        btn_start_sort.grid(row=0, column=3, padx=(0, 5), pady=0)
+        
+        # Контейнер для панели настроек (как files_container во вкладке "Файлы")
+        settings_container = tk.Frame(sort_frame, bg=self.app.colors['bg_main'])
+        settings_container.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        settings_container.columnconfigure(0, weight=1)
+        settings_container.rowconfigure(0, weight=1)
         
         # Панель с настройками и действиями
         settings_panel = ttk.LabelFrame(
-            main_container,
+            settings_container,
             text="Настройки сортировки",
             style='Card.TLabelframe',
-            padding=10
+            padding=(6, 12, 6, 12)
         )
-        settings_panel.grid(row=0, column=0, sticky="nsew")
+        settings_panel.pack(fill=tk.BOTH, expand=True, padx=5, pady=(5, 1))
         settings_panel.columnconfigure(0, weight=1)
         
         # Выбор папки для сортировки
-        folder_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        folder_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_main'])
         folder_frame.pack(fill=tk.X, pady=(0, 15))
+        folder_frame.columnconfigure(1, weight=1)
         
+        # Метка "Папка для сортировки:" в одной строке с полем и кнопкой
         tk.Label(folder_frame, text="Папка для сортировки:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
-                fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 5))
-        
-        folder_path_frame = tk.Frame(folder_frame, bg=self.app.colors['bg_card'])
-        folder_path_frame.pack(fill=tk.X)
+                bg=self.app.colors['bg_main'],
+                fg=self.app.colors['text_primary']).grid(row=0, column=0, sticky="w", padx=(0, 5))
         
         if not hasattr(self.app, 'sorter_folder_path'):
             self.app.sorter_folder_path = tk.StringVar()
@@ -331,55 +289,79 @@ class SorterTab:
                 else:
                     self.app.sorter_folder_path.set(os.path.expanduser("~"))
         
-        folder_entry = tk.Entry(folder_path_frame,
+        # Frame для Entry с фиксированной высотой 28px (как у кнопки "Обзор")
+        folder_entry_frame = tk.Frame(folder_frame, bg=self.app.colors['bg_main'], height=28)
+        folder_entry_frame.grid(row=0, column=1, sticky="ew", padx=(0, 5))
+        folder_entry_frame.grid_propagate(False)
+        folder_entry_frame.pack_propagate(False)
+        
+        folder_entry = tk.Entry(folder_entry_frame,
                                textvariable=self.app.sorter_folder_path,
                                font=('Robot', 9),
                                bg='white',
                                fg=self.app.colors['text_primary'],
                                relief=tk.SOLID,
                                borderwidth=1)
-        folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        folder_entry.pack(fill=tk.BOTH, expand=True)
         
-        btn_browse = self.app.create_rounded_button(
-            folder_path_frame, "🔍 Обзор...", self.browse_sorter_folder,
-            self.app.colors['primary'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=5,
-            active_bg=self.app.colors['primary_hover'], expand=False)
-        btn_browse.pack(side=tk.LEFT)
+        btn_browse = self.app.create_square_icon_button(
+            folder_frame,
+            "🔍",
+            self.browse_sorter_folder,
+            bg_color=self.app.colors['primary'],
+            size=28,
+            active_bg=self.app.colors['primary_hover'],
+            tooltip="Обзор..."
+        )
+        btn_browse.grid(row=0, column=2, sticky="")
         
         # Фильтры
-        filters_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
+        filters_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_main'])
         filters_frame.pack(fill=tk.BOTH, expand=True)
         filters_frame.columnconfigure(0, weight=1)
         
         tk.Label(filters_frame, text="Правила распределения:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 10))
         
         # Canvas для прокрутки фильтров
-        filters_canvas = tk.Canvas(filters_frame, bg=self.app.colors['bg_card'],
+        filters_canvas = tk.Canvas(filters_frame, bg=self.app.colors['bg_main'],
                                    highlightthickness=0)
         filters_scrollbar = ttk.Scrollbar(filters_frame, orient="vertical",
                                           command=filters_canvas.yview)
-        filters_scrollable = tk.Frame(filters_canvas, bg=self.app.colors['bg_card'])
-        
-        filters_scrollable.bind(
-            "<Configure>",
-            lambda e: filters_canvas.configure(scrollregion=filters_canvas.bbox("all"))
-        )
+        filters_scrollable = tk.Frame(filters_canvas, bg=self.app.colors['bg_main'])
         
         filters_canvas_window = filters_canvas.create_window((0, 0),
                                                              window=filters_scrollable,
                                                              anchor="nw")
         
+        # Функция для автоматического показа/скрытия скроллбара
+        def update_scrollbar_visibility(*args):
+            try:
+                canvas_height = filters_canvas.winfo_height()
+                scrollable_height = filters_scrollable.winfo_reqheight()
+                
+                if scrollable_height > canvas_height:
+                    filters_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+                else:
+                    filters_scrollbar.pack_forget()
+            except (tk.TclError, AttributeError):
+                pass
+        
         def on_filters_canvas_configure(event):
             if event.widget == filters_canvas:
                 canvas_width = event.width
                 filters_canvas.itemconfig(filters_canvas_window, width=canvas_width)
+                # Обновляем видимость скроллбара при изменении размера canvas
+                filters_canvas.after(10, update_scrollbar_visibility)
         
         filters_canvas.bind('<Configure>', on_filters_canvas_configure)
-        filters_canvas.configure(yscrollcommand=filters_scrollbar.set)
+        
+        def on_scroll(*args):
+            filters_scrollbar.set(*args)
+        
+        filters_canvas.configure(yscrollcommand=on_scroll)
         
         def on_mousewheel_filters(event):
             scroll_amount = int(-1 * (event.delta / 120))
@@ -387,103 +369,29 @@ class SorterTab:
         
         filters_canvas.bind("<MouseWheel>", on_mousewheel_filters)
         
+        # Обновляем видимость скроллбара при изменении содержимого
+        def on_scrollable_configure(event):
+            filters_canvas.configure(scrollregion=filters_canvas.bbox("all"))
+            filters_canvas.after(10, update_scrollbar_visibility)
+        
+        filters_scrollable.bind("<Configure>", on_scrollable_configure)
+        
         filters_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         filters_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Сохраняем ссылку на функцию обновления для вызова из refresh_filters_display
+        self.app.update_filters_scrollbar = update_scrollbar_visibility
         
         # Контейнер для списка фильтров
         self.app.sorter_filters_frame = filters_scrollable
         if not hasattr(self.app, 'sorter_filters'):
             self.app.sorter_filters = []
         
-        # Кнопки управления фильтрами
-        filter_buttons_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
-        filter_buttons_frame.pack(fill=tk.X, pady=(10, 15))
+        # Кнопки управления фильтрами удалены - перенесены под вкладки
         
-        btn_add_filter = self.app.create_rounded_button(
-            filter_buttons_frame, "➕ Добавить правило", self.add_sorter_filter,
-            self.app.colors['success'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=6,
-            active_bg=self.app.colors['success_hover'], expand=True)
-        btn_add_filter.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        # Кнопки управления удалены - перенесены под вкладки
         
-        btn_save_filters = self.app.create_rounded_button(
-            filter_buttons_frame, "💾 Сохранить", self.save_sorter_filters,
-            self.app.colors['info'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=6,
-            active_bg=self.app.colors['info_hover'], expand=True)
-        btn_save_filters.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-        
-        btn_load_filters = self.app.create_rounded_button(
-            filter_buttons_frame, "📂 Загрузить", self.load_sorter_filters,
-            self.app.colors['primary'], 'white',
-            font=('Robot', 9, 'bold'), padx=10, pady=6,
-            active_bg=self.app.colors['primary_hover'], expand=True)
-        btn_load_filters.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        # Кнопки управления
-        buttons_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
-        buttons_frame.pack(fill=tk.X, pady=(0, 15))
-        buttons_frame.columnconfigure(0, weight=1)
-        buttons_frame.columnconfigure(1, weight=1)
-        
-        btn_preview = self.app.create_rounded_button(
-            buttons_frame, "👁️ Предпросмотр", self.preview_file_sorting,
-            self.app.colors['info'], 'white',
-            font=('Robot', 9, 'bold'), padx=12, pady=8,
-            active_bg=self.app.colors['info_hover'], expand=True)
-        btn_preview.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        
-        btn_start_sort = self.app.create_rounded_button(
-            buttons_frame, "▶️ Начать сортировку", self.start_file_sorting,
-            self.app.colors['success'], 'white',
-            font=('Robot', 9, 'bold'), padx=12, pady=8,
-            active_bg=self.app.colors['success_hover'], expand=True)
-        btn_start_sort.grid(row=0, column=1, sticky="ew")
-        
-        # Прогресс-бар
-        progress_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
-        progress_frame.pack(fill=tk.X, pady=(0, 15))
-        progress_frame.columnconfigure(1, weight=1)
-        
-        progress_label = tk.Label(progress_frame, text="Прогресс:",
-                                 font=('Robot', 9, 'bold'),
-                                 bg=self.app.colors['bg_card'],
-                                 fg=self.app.colors['text_primary'],
-                                 anchor='w')
-        progress_label.grid(row=0, column=0, padx=(0, 10), sticky="w")
-        
-        if not hasattr(self.app, 'sorter_progress'):
-            self.app.sorter_progress = ttk.Progressbar(progress_frame, mode='determinate')
-            self.app.sorter_progress.grid(row=0, column=1, sticky="ew")
-            self.app.sorter_progress['value'] = 0
-        
-        # Результаты
-        results_label = tk.Label(settings_panel, text="Результаты:",
-                                font=('Robot', 9, 'bold'),
-                                bg=self.app.colors['bg_card'],
-                                fg=self.app.colors['text_primary'],
-                                anchor='w')
-        results_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        results_frame = tk.Frame(settings_panel, bg=self.app.colors['bg_card'])
-        results_frame.pack(fill=tk.BOTH, expand=True)
-        
-        if not hasattr(self.app, 'sorter_results_text'):
-            results_scrollbar = ttk.Scrollbar(results_frame, orient="vertical")
-            self.app.sorter_results_text = tk.Text(
-                results_frame,
-                wrap=tk.WORD,
-                font=('Robot', 9),
-                bg='white',
-                fg=self.app.colors['text_primary'],
-                relief=tk.SOLID,
-                borderwidth=1,
-                yscrollcommand=results_scrollbar.set,
-                state=tk.DISABLED
-            )
-            results_scrollbar.config(command=self.app.sorter_results_text.yview)
-            self.app.sorter_results_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-            results_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Результаты убраны
         
         # Загружаем сохраненные фильтры
         self.load_sorter_filters()
@@ -503,7 +411,7 @@ class SorterTab:
         filter_window = tk.Toplevel(self.app.root)
         filter_window.title("Добавить правило")
         filter_window.geometry("500x400")
-        filter_window.configure(bg=self.app.colors['bg_card'])
+        filter_window.configure(bg=self.app.colors['bg_main'])
         
         try:
             set_window_icon(filter_window, self.app._icon_photos)
@@ -512,13 +420,13 @@ class SorterTab:
         except Exception as e:
             logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
-        main_frame = tk.Frame(filter_window, bg=self.app.colors['bg_card'])
+        main_frame = tk.Frame(filter_window, bg=self.app.colors['bg_main'])
         main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         
         # Название папки назначения
         tk.Label(main_frame, text="Название папки назначения:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 5))
         
         folder_name_var = tk.StringVar()
@@ -531,7 +439,7 @@ class SorterTab:
         # Тип фильтра
         tk.Label(main_frame, text="Тип фильтра:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 5))
         
         filter_type_var = tk.StringVar(value="extension")
@@ -545,14 +453,14 @@ class SorterTab:
         
         for text, value in filter_types:
             tk.Radiobutton(main_frame, text=text, variable=filter_type_var,
-                          value=value, bg=self.app.colors['bg_card'],
+                          value=value, bg=self.app.colors['bg_main'],
                           fg=self.app.colors['text_primary'],
                           font=('Robot', 9)).pack(anchor=tk.W, padx=20)
         
         # Значение фильтра
         tk.Label(main_frame, text="Значение фильтра:",
                 font=('Robot', 9, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(15, 5))
         
         filter_value_var = tk.StringVar()
@@ -566,12 +474,12 @@ class SorterTab:
         hint_text = "Примеры:\n- Расширение: .jpg, .png, .pdf\n- Имя: содержит 'фото', начинается с 'IMG'\n- Размер: >10MB, <1MB\n- Дата: >2024-01-01, <2023-12-31"
         tk.Label(main_frame, text=hint_text,
                 font=('Robot', 8),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_secondary'],
                 justify=tk.LEFT).pack(anchor=tk.W, pady=(0, 15))
         
         # Кнопки
-        buttons_frame = tk.Frame(main_frame, bg=self.app.colors['bg_card'])
+        buttons_frame = tk.Frame(main_frame, bg=self.app.colors['bg_main'])
         buttons_frame.pack(fill=tk.X, pady=(10, 0))
         
         def save_filter():
@@ -618,31 +526,39 @@ class SorterTab:
         
         # Отображаем все фильтры
         for i, filter_data in enumerate(self.app.sorter_filters):
-            filter_frame = tk.Frame(self.app.sorter_filters_frame, bg=self.app.colors['bg_card'],
+            filter_frame = tk.Frame(self.app.sorter_filters_frame, bg=self.app.colors['bg_main'],
                                    relief=tk.SOLID, borderwidth=1)
-            filter_frame.pack(fill=tk.X, pady=5, padx=5)
+            filter_frame.pack(fill=tk.X, pady=2, padx=5)
             filter_frame.columnconfigure(1, weight=1)
             
             # Чекбокс включения
             enabled_var = tk.BooleanVar(value=filter_data.get('enabled', True))
             enabled_var.trace('w', lambda *args, idx=i: self.toggle_filter(idx))
             tk.Checkbutton(filter_frame, variable=enabled_var,
-                          bg=self.app.colors['bg_card']).grid(row=0, column=0, padx=5)
+                          bg=self.app.colors['bg_main']).grid(row=0, column=0, padx=(5, 2))
             
             # Информация о фильтре
             info_text = f"{filter_data['folder_name']} | {filter_data['type']}: {filter_data['value']}"
             tk.Label(filter_frame, text=info_text,
                     font=('Robot', 9),
-                    bg=self.app.colors['bg_card'],
-                    fg=self.app.colors['text_primary']).grid(row=0, column=1, sticky="w", padx=5)
+                    bg=self.app.colors['bg_main'],
+                    fg=self.app.colors['text_primary']).grid(row=0, column=1, sticky="w", padx=(2, 2))
             
-            # Кнопка удаления
-            btn_delete = self.app.create_rounded_button(
-                filter_frame, "🗑️ Удалить", lambda idx=i: self.delete_filter(idx),
-                self.app.colors['danger'], 'white',
-                font=('Robot', 8, 'bold'), padx=8, pady=4,
-                active_bg=self.app.colors['danger_hover'], expand=False)
-            btn_delete.grid(row=0, column=2, padx=5)
+            # Кнопка удаления (квадратная, как кнопка "Добавить")
+            btn_delete = self.app.create_square_icon_button(
+                filter_frame,
+                "🗑️",
+                lambda idx=i: self.delete_filter(idx),
+                bg_color=self.app.colors['danger'],
+                size=28,
+                active_bg=self.app.colors['danger_hover'],
+                tooltip="Удалить правило"
+            )
+            btn_delete.grid(row=0, column=2, padx=(2, 5), sticky="nse")
+        
+        # Обновляем видимость скроллбара после обновления списка фильтров
+        if hasattr(self.app, 'update_filters_scrollbar'):
+            self.app.root.after(10, self.app.update_filters_scrollbar)
     
     def toggle_filter(self, index):
         """Включение/выключение фильтра"""
@@ -727,7 +643,7 @@ class SorterTab:
         preview_window = tk.Toplevel(self.app.root)
         preview_window.title("Предпросмотр сортировки")
         preview_window.geometry("900x600")
-        preview_window.configure(bg=self.app.colors['bg_card'])
+        preview_window.configure(bg=self.app.colors['bg_main'])
         
         try:
             set_window_icon(preview_window, self.app._icon_photos)
@@ -736,27 +652,27 @@ class SorterTab:
         except Exception as e:
             logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
-        main_frame = tk.Frame(preview_window, bg=self.app.colors['bg_card'])
+        main_frame = tk.Frame(preview_window, bg=self.app.colors['bg_main'])
         main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
         
         # Заголовок
-        header_frame = tk.Frame(main_frame, bg=self.app.colors['bg_card'])
+        header_frame = tk.Frame(main_frame, bg=self.app.colors['bg_main'])
         header_frame.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         
         tk.Label(header_frame, text="Предпросмотр сортировки файлов",
                 font=('Robot', 12, 'bold'),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W)
         
         tk.Label(header_frame, text=f"Папка: {folder_path}",
                 font=('Robot', 9),
-                bg=self.app.colors['bg_card'],
+                bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_secondary']).pack(anchor=tk.W, pady=(5, 0))
         
         # Таблица предпросмотра
-        table_frame = tk.Frame(main_frame, bg=self.app.colors['bg_card'])
+        table_frame = tk.Frame(main_frame, bg=self.app.colors['bg_main'])
         table_frame.grid(row=1, column=0, sticky="nsew")
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
@@ -801,12 +717,12 @@ class SorterTab:
         table_frame.grid_columnconfigure(0, weight=1)
         
         # Статистика
-        stats_frame = tk.Frame(main_frame, bg=self.app.colors['bg_card'])
+        stats_frame = tk.Frame(main_frame, bg=self.app.colors['bg_main'])
         stats_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
         
         stats_label = tk.Label(stats_frame, text="",
                                font=('Robot', 9, 'bold'),
-                               bg=self.app.colors['bg_card'],
+                               bg=self.app.colors['bg_main'],
                                fg=self.app.colors['text_primary'],
                                anchor=tk.W)
         stats_label.pack(anchor=tk.W)
@@ -877,9 +793,15 @@ class SorterTab:
             return
         
         # Запускаем сортировку в отдельном потоке через concurrent.futures
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sort_files")
-        executor.submit(self.sort_files_thread, folder_path, enabled_filters)
-        executor.shutdown(wait=False)  # Не ждем завершения, поток daemon
+        # Запускаем в отдельном потоке через threading (безопаснее для GUI)
+        import threading
+        thread = threading.Thread(
+            target=self.sort_files_thread, 
+            args=(folder_path, enabled_filters),
+            daemon=True, 
+            name="sort_files"
+        )
+        thread.start()
     
     def sort_files_thread(self, folder_path, filters):
         """Поток для сортировки файлов"""
@@ -896,9 +818,8 @@ class SorterTab:
                     files_to_sort.append(item_path)
                     total_files += 1
             
-            self.app.root.after(0, lambda: self.app.sorter_progress.configure(maximum=total_files))
-            self.app.root.after(0, lambda: self.app.sorter_progress.configure(value=0))
-            self.app.root.after(0, lambda: self.app.sorter_results_text.delete(1.0, tk.END))
+            # Результаты убраны
+            # self.app.root.after(0, lambda: self.app.sorter_results_text.delete(1.0, tk.END))
             
             # Обрабатываем каждый файл
             for i, file_path in enumerate(files_to_sort):
@@ -933,32 +854,31 @@ class SorterTab:
                             matched = True
                             
                             result_text = f"✓ {file_name} -> {target_folder_name}\n"
-                            self.app.root.after(0, lambda t=result_text: self.app.sorter_results_text.insert(tk.END, t))
+                            # Результаты убраны
+                            # self.app.root.after(0, lambda t=result_text: self.app.sorter_results_text.insert(tk.END, t))
                             break
                     
                     if not matched:
-                        result_text = f"○ {file_name} (не подошел ни под одно правило)\n"
-                        self.app.root.after(0, lambda t=result_text: self.app.sorter_results_text.insert(tk.END, t))
+                        # Результаты убраны
+                        # result_text = f"○ {file_name} (не подошел ни под одно правило)\n"
+                        # self.app.root.after(0, lambda t=result_text: self.app.sorter_results_text.insert(tk.END, t))
+                        pass
                 
                 except Exception as e:
                     error_msg = f"Ошибка при обработке {os.path.basename(file_path)}: {e}\n"
                     errors.append(error_msg)
-                    self.app.root.after(0, lambda t=error_msg: self.app.sorter_results_text.insert(tk.END, t))
+                    # Результаты убраны
+                    # self.app.root.after(0, lambda t=error_msg: self.app.sorter_results_text.insert(tk.END, t))
                 
-                # Обновляем прогресс
-                self.app.root.after(0, lambda v=i+1: self.app.sorter_progress.configure(value=v))
-                self.app.root.after(0, lambda: self.app.sorter_status_label.config(
-                    text=f"Обработано: {i+1}/{total_files}"))
             
             # Показываем итоги
-            summary = f"\n{'='*50}\n"
-            summary += f"Итого обработано: {total_files} файлов\n"
-            summary += f"Перемещено: {moved_files} файлов\n"
-            summary += f"Ошибок: {len(errors)}\n"
-            self.app.root.after(0, lambda t=summary: self.app.sorter_results_text.insert(tk.END, t))
+            # Результаты убраны
+            # summary = f"\n{'='*50}\n"
+            # summary += f"Итого обработано: {total_files} файлов\n"
+            # summary += f"Перемещено: {moved_files} файлов\n"
+            # summary += f"Ошибок: {len(errors)}\n"
+            # self.app.root.after(0, lambda t=summary: self.app.sorter_results_text.insert(tk.END, t))
             
-            self.app.root.after(0, lambda: self.app.sorter_status_label.config(
-                text=f"Завершено! Перемещено {moved_files} из {total_files} файлов"))
             
             if moved_files > 0:
                 self.app.root.after(0, lambda: messagebox.showinfo(

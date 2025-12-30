@@ -1,7 +1,49 @@
 {
-  "auto_apply": false,
+  "auto_apply": true,
   "show_warnings": true,
-  "font_size": "10",
+  "font_size": "16",
   "backup": false,
-  "remove_files_after_operation": true
+  "remove_files_after_operation": true,
+  "numbering_start_number": "1",
+  "numbering_zeros_count": "0",
+  "numbering_method_start": "1",
+  "numbering_method_step": "1",
+  "numbering_method_digits": "3",
+  "numbering_method_format": "({n})",
+  "numbering_method_position": "end",
+  "file_sorter_filters": {
+    "folder_path": "C:\\Users\\vsemirka\\Desktop",
+    "filters": [
+      {
+        "folder_name": "Изображения",
+        "type": "extension",
+        "value": ".jpg,.jpeg,.png,.gif,.bmp,.webp",
+        "enabled": true
+      },
+      {
+        "folder_name": "Документы",
+        "type": "extension",
+        "value": ".pdf,.doc,.docx,.xls,.xlsx,.txt",
+        "enabled": true
+      },
+      {
+        "folder_name": "Видео",
+        "type": "extension",
+        "value": ".mp4,.avi,.mkv,.mov,.wmv",
+        "enabled": true
+      },
+      {
+        "folder_name": "Аудио",
+        "type": "extension",
+        "value": ".mp3,.wav,.flac,.ogg,.m4a",
+        "enabled": true
+      },
+      {
+        "folder_name": "Архивы",
+        "type": "extension",
+        "value": ".zip,.rar,.7z,.tar,.gz",
+        "enabled": true
+      }
+    ]
+  }
 }

@@ -25,6 +25,9 @@ class TemplatesManager:
         """
         self.app = app
         self._template_change_timer = None
+        self._last_applied_template = None
+        self._last_files_count = 0
+        self._is_applying_template = False
     
     def save_template_quick(self):
         """Быстрое сохранение шаблона (Ctrl+S)"""
@@ -50,15 +53,11 @@ class TemplatesManager:
         if template_name:
             template_name = template_name.strip()
             if template_name:
-                # Получаем начальный номер, если есть
-                start_number = "1"
-                if hasattr(self.app, 'new_name_start_number'):
-                    start_number = self.app.new_name_start_number.get().strip() or "1"
+                # Получаем начальный номер из настроек
+                start_number = self.app.settings_manager.get('numbering_start_number', '1')
                 
-                # Получаем количество нулей, если есть
-                zeros_count = "0"
-                if hasattr(self.app, 'new_name_zeros_count'):
-                    zeros_count = self.app.new_name_zeros_count.get().strip() or "0"
+                # Получаем количество нулей из настроек
+                zeros_count = self.app.settings_manager.get('numbering_zeros_count', '0')
                 
                 # Сохраняем шаблон
                 self.app.saved_templates[template_name] = {
@@ -141,9 +140,6 @@ class TemplatesManager:
             self.app.save_templates()
             self.app.templates_manager.save_templates(self.app.saved_templates)
             
-            # Обновляем выпадающий список шаблонов
-            if hasattr(self.app, 'refresh_rename_templates') and self.app.refresh_rename_templates:
-                self.app.refresh_rename_templates()
             
             # Показываем результат
             message = f"Загружено шаблонов: {added_count}"
@@ -273,14 +269,6 @@ class TemplatesManager:
                             self.app.new_name_template.delete(0, tk.END)
                             self.app.new_name_template.insert(0, template)
                     
-                    if hasattr(self.app, 'new_name_start_number'):
-                        self.app.new_name_start_number.delete(0, tk.END)
-                        self.app.new_name_start_number.insert(0, str(start_number))
-                    
-                    if hasattr(self.app, 'new_name_zeros_count'):
-                        self.app.new_name_zeros_count.delete(0, tk.END)
-                        self.app.new_name_zeros_count.insert(0, str(zeros_count))
-                    
                     template_window.destroy()
                     self.app.log(f"Применен сохраненный шаблон: {template_name}")
                     # Применяем шаблон
@@ -298,8 +286,6 @@ class TemplatesManager:
                         # Автосохранение шаблонов
                         self.app.templates_manager.save_templates(self.app.saved_templates)
                         # Обновляем выпадающий список шаблонов
-                        if hasattr(self.app, 'refresh_rename_templates') and self.app.refresh_rename_templates:
-                            self.app.refresh_rename_templates()
                         listbox.delete(selection[0])
                         self.app.log(f"Шаблон '{template_name}' удален")
                         if not self.app.saved_templates:
@@ -382,11 +368,32 @@ class TemplatesManager:
     
     def _apply_template_immediate(self):
         """Немедленное применение шаблона (при потере фокуса)"""
+        # Сбрасываем таймер
+        self._template_change_timer = None
+        
+        # Если уже применяется шаблон, пропускаем
+        if self._is_applying_template:
+            return
+        
         if hasattr(self.app, 'new_name_template'):
             template = self.app.new_name_template.get().strip()
-            if template:
+            current_files_count = len(self.app.files) if self.app.files else 0
+            
+            # Применяем шаблон, если:
+            # 1. Шаблон изменился, ИЛИ
+            # 2. Количество файлов изменилось (добавлены новые файлы)
+            template_changed = template != self._last_applied_template
+            files_count_changed = current_files_count != self._last_files_count
+            
+            if template and (template_changed or files_count_changed):
                 try:
+                    self._is_applying_template = True
                     self.apply_template_quick(auto=True)
+                    self._last_applied_template = template
+                    self._last_files_count = current_files_count
+                    # Убеждаемся, что таблица обновлена
+                    if hasattr(self.app, 'refresh_treeview'):
+                        self.app.refresh_treeview()
                 except Exception as e:
                     # Логируем ошибки, но не показываем пользователю при автоматическом применении
                     try:
@@ -394,6 +401,26 @@ class TemplatesManager:
                             self.app.log(f"Ошибка при применении шаблона: {e}")
                     except Exception as log_error:
                         logger.debug(f"Не удалось залогировать ошибку применения шаблона: {log_error}")
+                finally:
+                    self._is_applying_template = False
+    
+    def _apply_template_debounced(self):
+        """Применение шаблона с небольшой задержкой (debounce) для предотвращения множественных вызовов"""
+        # Если уже применяется шаблон, не запускаем новый таймер
+        if self._is_applying_template:
+            return
+        
+        # Отменяем предыдущий таймер, если он есть
+        if self._template_change_timer:
+            try:
+                self.app.root.after_cancel(self._template_change_timer)
+            except (tk.TclError, ValueError):
+                pass
+        
+        # Устанавливаем новый таймер для применения через 300 мс (увеличено для стабильности)
+        # Это достаточно быстро, чтобы ощущалось как мгновенное, но предотвращает множественные вызовы
+        if hasattr(self.app, 'root'):
+            self._template_change_timer = self.app.root.after(300, self._apply_template_immediate)
     
     def _apply_template_delayed(self):
         """Отложенное применение шаблона (используется для автоматического применения при вводе)"""
@@ -460,13 +487,15 @@ class TemplatesManager:
             
             # Автоматически применяем метод
             if self.app.files:
-                # Сбрасываем счетчики всех методов перед применением
-                from core.re_file_methods import NewNameMethod, NumberingMethod
-                for m in self.app.methods_manager.get_methods():
-                    if isinstance(m, (NewNameMethod, NumberingMethod)):
-                        m.reset()
-                # Применяем методы и принудительно обновляем таблицу
-                self.app.apply_methods()
+                # Проверяем, не применяются ли уже методы
+                if not (hasattr(self.app, '_applying_methods') and self.app._applying_methods):
+                    # Сбрасываем счетчики всех методов перед применением
+                    from core.re_file_methods import NewNameMethod, NumberingMethod
+                    for m in self.app.methods_manager.get_methods():
+                        if isinstance(m, (NewNameMethod, NumberingMethod)):
+                            m.reset()
+                    # Применяем методы и принудительно обновляем таблицу
+                    self.app.apply_methods()
                 # Полностью обновляем таблицу для отображения изменений
                 self.app.refresh_treeview()
                 # Принудительно обновляем отображение

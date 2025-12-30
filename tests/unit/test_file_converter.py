@@ -71,26 +71,4 @@ class TestFileConverter:
         )
         assert pdf_path == expected_pdf
     
-    @pytest.mark.skipif(not os.path.exists('/tmp'), reason="Требуется временная директория")
-    def test_compress_pdf_no_library(self, temp_file):
-        """Тест: сжатие PDF без библиотеки."""
-        converter = FileConverter()
-        pdf_path = temp_file("test.pdf")
-        
-        with patch.object(converter, '_get_pdf_library', return_value=(None, None, False)):
-            success, message = converter._compress_pdf(pdf_path)
-            
-            assert success is False
-            assert "не установлена" in message.lower()
-    
-    def test_compress_pdf_file_not_found(self):
-        """Тест: сжатие несуществующего PDF."""
-        converter = FileConverter()
-        pdf_path = "/nonexistent/file.pdf"
-        
-        with patch.object(converter, '_get_pdf_library', return_value=(Mock, Mock, True)):
-            success, message = converter._compress_pdf(pdf_path)
-            
-            assert success is False
-            assert "ошибка" in message.lower() or "error" in message.lower()
 

@@ -592,6 +592,13 @@ class DragDropHandler:
         if hasattr(self.app, 'methods_manager') and self.app.methods_manager.get_methods():
             logger.info("Применяются методы переименования...")
             self.app.apply_methods()
+        else:
+            # Если есть шаблон в поле, но нет метода, применяем шаблон
+            if hasattr(self.app, 'new_name_template'):
+                template = self.app.new_name_template.get().strip()
+                if template:
+                    if hasattr(self.app, 'templates_manager'):
+                        self.app.templates_manager.apply_template_quick(auto=True)
         
         # Обновляем статус
         if hasattr(self.app, 'update_status'):

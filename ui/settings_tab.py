@@ -10,13 +10,18 @@ import subprocess
 import sys
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+
 
 logger = logging.getLogger(__name__)
 
 
 class SettingsTab:
-    """Класс для управления вкладкой настроек."""
+    """
+    Класс для управления вкладкой настроек приложения.
+    
+    Предоставляет интерфейс для изменения различных параметров приложения,
+    таких как автоприменение методов, резервное копирование, размер шрифта и т.д.
+    """
     
     def __init__(self, app) -> None:
         """Инициализация вкладки настроек.
@@ -25,6 +30,8 @@ class SettingsTab:
             app: Экземпляр главного приложения (для доступа к методам и данным)
         """
         self.app = app
+        self.current_section = None
+        self.section_frames = {}
     
     def create_tab(self):
         """Создание вкладки настроек на главном экране"""
@@ -32,7 +39,7 @@ class SettingsTab:
             return
         
         settings_tab = tk.Frame(self.app.main_notebook, bg=self.app.colors['bg_main'])
-        settings_tab.columnconfigure(0, weight=1)
+        settings_tab.columnconfigure(1, weight=1)
         settings_tab.rowconfigure(0, weight=1)
         self.app.main_notebook.add(settings_tab, text="Настройки")
         
@@ -40,501 +47,489 @@ class SettingsTab:
         self.create_tab_content(settings_tab)
     
     def create_tab_for_notebook(self, notebook):
-        """Создание вкладки настроек для отдельного notebook"""
-        # Фрейм для вкладки настроек
-        settings_tab = tk.Frame(notebook, bg=self.app.colors['bg_card'])
-        settings_tab.columnconfigure(0, weight=1)
+        """
+        Создание вкладки настроек для внешнего notebook.
+        
+        Args:
+            notebook: Экземпляр ttk.Notebook для добавления вкладки
+        """
+        settings_tab = tk.Frame(notebook, bg=self.app.colors['bg_main'])
+        settings_tab.columnconfigure(1, weight=1)
         settings_tab.rowconfigure(0, weight=1)
         notebook.add(settings_tab, text="Настройки")
         
         # Используем общий метод для создания содержимого
         self.create_tab_content(settings_tab)
     
-    def create_tab_content_for_main(self, parent):
-        """Создание содержимого вкладки настроек для главного окна (новая структура)
+    def create_tab_content_for_main(self, settings_tab):
+        """
+        Создание содержимого вкладки настроек для главного окна.
         
         Args:
-            parent: Родительский контейнер для размещения содержимого
+            settings_tab: Родительский контейнер (Frame) для размещения содержимого
         """
-        # Создаем Frame для содержимого вкладки настроек
-        settings_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        settings_frame.grid(row=0, column=0, sticky="nsew")
-        settings_frame.columnconfigure(0, weight=1)
-        settings_frame.rowconfigure(0, weight=1)
-        
-        # Сохраняем ссылку
-        self.app.tab_contents["settings"] = settings_frame
-        
-        # Используем общий метод для создания содержимого
-        self.create_tab_content(settings_frame)
+        # Используем тот же метод, что и для обычного notebook
+        self.create_tab_content(settings_tab)
     
     def create_tab_content(self, settings_tab):
-        """Создание содержимого вкладки настроек (используется и в главном окне, и в отдельном)"""
-        # Определяем цвет фона в зависимости от того, где используется
-        try:
-            bg_color = settings_tab.cget('bg')
-        except (tk.TclError, AttributeError):
-            bg_color = self.app.colors['bg_main']
-        # Содержимое настроек с прокруткой
-        canvas = tk.Canvas(settings_tab, bg=bg_color, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(settings_tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=bg_color)
+        """
+        Создание содержимого вкладки настроек.
         
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
+        Args:
+            settings_tab: Родительский контейнер (Frame) для размещения содержимого
+        """
+        # Основной контейнер с двумя панелями
+        main_container = tk.Frame(settings_tab, bg=self.app.colors['bg_main'])
+        main_container.pack(fill=tk.BOTH, expand=True)
+        # Настраиваем grid для размещения дочерних элементов
+        main_container.grid_columnconfigure(2, weight=1)  # Содержимое растягивается
+        main_container.grid_rowconfigure(0, weight=1)
         
-        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        # Левая панель - меню настроек
+        menu_frame = tk.Frame(main_container, bg=self.app.colors['bg_main'], width=200)
+        menu_frame.grid(row=0, column=0, sticky="nsw", padx=0, pady=0)
+        menu_frame.grid_propagate(False)
+        menu_frame.pack_propagate(False)
+        
+        # Список пунктов меню
+        menu_items = [
+            ("Удаление файлов", "remove_files"),
+            ("Логи", "logs")
+        ]
+        
+        # Переменная для хранения выбранного пункта меню
+        self.selected_menu_item = tk.StringVar(value="remove_files")
+        
+        # Создаем кнопки меню
+        self.menu_buttons = {}
+        for idx, (text, value) in enumerate(menu_items):
+            # Контейнер с фиксированной высотой, как у вкладок (pady*2 + 20 = 28px при pady=4)
+            btn_container = tk.Frame(menu_frame, bg=self.app.colors['bg_main'], height=28)
+            btn_container.pack(fill=tk.X, padx=0, pady=0)
+            btn_container.pack_propagate(False)
+            
+            btn = tk.Button(
+                btn_container,
+                text=text,
+                font=('Robot', 11, 'bold'),
+                bg=self.app.colors['bg_main'],
+                fg=self.app.colors['text_primary'],
+                activebackground=self.app.colors['bg_main'],
+                activeforeground=self.app.colors['text_primary'],
+                relief=tk.FLAT,
+                anchor=tk.W,
+                padx=10,
+                pady=4,  # Такой же отступ, как у верхних вкладок
+                cursor='hand2',
+                command=lambda v=value: self.switch_section(v)
+            )
+            btn.pack(fill=tk.BOTH, expand=True, anchor=tk.W)
+            self.menu_buttons[value] = btn
+        
+        # Визуальная граница между меню и содержимым
+        separator = tk.Frame(main_container, bg=self.app.colors['border'], width=1)
+        separator.grid(row=0, column=1, sticky="ns", padx=0, pady=0)
+        
+        # Правая панель - контейнер для содержимого настроек
+        content_container = tk.Frame(main_container, bg=self.app.colors['bg_main'])
+        content_container.grid(row=0, column=2, sticky="nsew", padx=0, pady=0)
+        content_container.columnconfigure(0, weight=1)
+        content_container.rowconfigure(0, weight=1)
+        
+        # Простой Frame для содержимого (без прокрутки)
+        scrollable_frame = tk.Frame(content_container, bg=self.app.colors['bg_main'])
+        scrollable_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Сохраняем ссылку на scrollable_frame для использования в методах создания секций
+        self.content_scrollable_frame = scrollable_frame
+        
+        # Выделяем первый пункт меню после инициализации всех контейнеров
+        self.switch_section("remove_files")
     
-        def on_canvas_configure(event):
-            if event.widget == canvas:
-                try:
-                    canvas_width = event.width
-                    canvas.itemconfig(canvas_window, width=canvas_width)
-                except (AttributeError, tk.TclError):
-                    pass
+    def switch_section(self, section_name):
+        """Переключение между разделами настроек"""
+        # Обновляем выделение в меню
+        for value, btn in self.menu_buttons.items():
+            if value == section_name:
+                btn.config(bg=self.app.colors['primary'], fg='white')
+            else:
+                btn.config(bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
         
-        canvas.bind('<Configure>', on_canvas_configure)
-        def on_window_configure(event):
-            if event.widget == settings_tab:
-                try:
-                    canvas_width = settings_tab.winfo_width() - scrollbar.winfo_width() - 4
-                    canvas.itemconfig(canvas_window, width=max(canvas_width, 100))
-                except (AttributeError, tk.TclError):
-                    pass
+        # Удаляем старое содержимое
+        for frame in self.section_frames.values():
+            frame.pack_forget()
         
-        settings_tab.bind('<Configure>', on_window_configure)
+        # Создаем или показываем выбранный раздел
+        if section_name not in self.section_frames:
+            self.create_section_content(section_name)
         
-        # Функция для автоматического управления видимостью скроллбара
-        def update_settings_scrollbar_visibility():
-            """Обновление видимости скроллбара в настройках"""
+        self.section_frames[section_name].pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        self.current_section = section_name
+    
+    def create_section_content(self, section_name):
+        """Создание содержимого для конкретного раздела настроек"""
+        section_frame = tk.Frame(self.content_scrollable_frame, bg=self.app.colors['bg_main'])
+        self.section_frames[section_name] = section_frame
+        
+        if section_name == "remove_files":
+            self.create_remove_files_section(section_frame)
+        elif section_name == "logs":
+            self.create_logs_section(section_frame)
+    
+    def create_general_section(self, parent):
+        """Создание секции общих настроек"""
+        # Заголовок
+        title_label = tk.Label(
+            parent,
+            text="Общие настройки",
+            font=('Robot', 14, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary']
+        )
+        title_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        # Карточка настроек
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
+        card_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
+        inner_frame.pack(fill=tk.X, padx=12, pady=12)
+        
+        # Автоприменение
+        auto_apply_container = tk.Frame(inner_frame, bg=self.app.colors['bg_main'])
+        auto_apply_container.pack(fill=tk.X, anchor=tk.W, pady=(0, 8))
+        
+        auto_apply_var = tk.BooleanVar(value=self.app.settings_manager.get('auto_apply', False))
+        
+        def on_auto_apply_change():
+            """Обработчик изменения автоприменения"""
+            self.app.settings_manager.set('auto_apply', auto_apply_var.get())
+            self.app.settings_manager.save_settings()
+        
+        auto_apply_checkbox = tk.Checkbutton(
+            auto_apply_container,
+            text="Автоматически применять методы при добавлении файлов",
+            variable=auto_apply_var,
+            command=on_auto_apply_change,
+            font=('Robot', 10),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            activebackground=self.app.colors['bg_main'],
+            activeforeground=self.app.colors['text_primary'],
+            selectcolor='white'
+        )
+        auto_apply_checkbox.pack(anchor=tk.W)
+        
+        # Сохраняем ссылку на переменную
+        self.app.auto_apply_var = auto_apply_var
+        
+        # Размер шрифта
+        font_size_container = tk.Frame(inner_frame, bg=self.app.colors['bg_main'])
+        font_size_container.pack(fill=tk.X, anchor=tk.W, pady=(0, 8))
+        
+        font_size_label = tk.Label(
+            font_size_container,
+            text="Размер шрифта:",
+            font=('Robot', 10, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            anchor='w'
+        )
+        font_size_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        font_size_var = tk.StringVar(value=self.app.settings_manager.get('font_size', '10'))
+        
+        def on_font_size_change():
+            """Обработчик изменения размера шрифта"""
+            self.app.settings_manager.set('font_size', font_size_var.get())
+            self.app.settings_manager.save_settings()
+        
+        font_size_spinbox = tk.Spinbox(
+            font_size_container,
+            from_=8,
+            to=20,
+            textvariable=font_size_var,
+            width=10,
+            font=('Robot', 10),
+            bg='white',
+            fg=self.app.colors['text_primary'],
+            relief=tk.SOLID,
+            borderwidth=1,
+            justify=tk.CENTER,
+            command=on_font_size_change
+        )
+        font_size_spinbox.pack(anchor=tk.W)
+        font_size_spinbox.bind('<KeyRelease>', lambda e: on_font_size_change())
+        font_size_spinbox.bind('<FocusOut>', lambda e: on_font_size_change())
+        
+        # Сохраняем ссылку на переменную
+        self.app.font_size_var = font_size_var
+        
+        # Показ предупреждений
+        show_warnings_container = tk.Frame(inner_frame, bg=self.app.colors['bg_main'])
+        show_warnings_container.pack(fill=tk.X, anchor=tk.W)
+        
+        show_warnings_var = tk.BooleanVar(value=self.app.settings_manager.get('show_warnings', True))
+        
+        def on_show_warnings_change():
+            """Обработчик изменения показа предупреждений"""
+            self.app.settings_manager.set('show_warnings', show_warnings_var.get())
+            self.app.settings_manager.save_settings()
+        
+        show_warnings_checkbox = tk.Checkbutton(
+            show_warnings_container,
+            text="Показывать предупреждения",
+            variable=show_warnings_var,
+            command=on_show_warnings_change,
+            font=('Robot', 10),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            activebackground=self.app.colors['bg_main'],
+            activeforeground=self.app.colors['text_primary'],
+            selectcolor='white'
+        )
+        show_warnings_checkbox.pack(anchor=tk.W)
+        
+        # Сохраняем ссылку на переменную
+        self.app.show_warnings_var = show_warnings_var
+    
+    def create_backup_section(self, parent):
+        """Создание секции резервного копирования"""
+        # Заголовок
+        title_label = tk.Label(
+            parent,
+            text="Резервное копирование",
+            font=('Robot', 14, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary']
+        )
+        title_label.pack(anchor=tk.W, pady=(0, 5))
+        
+        # Описание
+        info_label = tk.Label(
+            parent,
+            text="Создание резервных копий файлов перед переименованием. Копии сохраняются в папке backup рядом с исходными файлами.",
+            font=('Robot', 9),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_secondary'],
+            justify=tk.LEFT
+        )
+        info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
+        
+        # Функция для обновления wraplength при изменении размера
+        def update_wraplength(event=None):
             try:
-                canvas.update_idletasks()
-                bbox = canvas.bbox("all")
-                if bbox:
-                    canvas_height = canvas.winfo_height()
-                    if canvas_height > 1:
-                        content_height = bbox[3] - bbox[1]
-                        # Если содержимое помещается, скрываем скроллбар
-                        if content_height <= canvas_height + 2:
-                            canvas.configure(scrollregion=(0, 0, bbox[2], canvas_height))
-                            canvas.yview_moveto(0)
-                            try:
-                                if scrollbar.winfo_viewable():
-                                    scrollbar.grid_remove()
-                            except (tk.TclError, AttributeError):
-                                pass
-                        else:
-                            canvas.configure(scrollregion=bbox)
-                            try:
-                                if not scrollbar.winfo_viewable():
-                                    scrollbar.grid(row=0, column=1, sticky="ns")
-                            except (tk.TclError, AttributeError):
-                                pass
-            except (tk.TclError, AttributeError):
+                # Используем ширину scrollable_frame для определения ширины текста
+                scrollable_width = self.content_scrollable_frame.winfo_width()
+                if scrollable_width > 1:
+                    # Вычитаем отступы (padx=20 с каждой стороны = 40)
+                    info_label.config(wraplength=scrollable_width - 40)
+            except (AttributeError, tk.TclError):
                 pass
         
-        def on_settings_scroll(*args):
-            scrollbar.set(*args)
-            self.app.root.after(10, update_settings_scrollbar_visibility)
+        # Привязываем обновление к изменению размера scrollable_frame
+        if hasattr(self, 'content_scrollable_frame'):
+            self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
+        # Устанавливаем начальное значение после создания виджетов
+        parent.after_idle(update_wraplength)
         
-        canvas.configure(yscrollcommand=on_settings_scroll)
+        # Карточка настроек
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
+        card_frame.pack(fill=tk.X)
         
-        # Обновляем scrollregion при изменении содержимого
-        def on_scrollable_configure(event):
-            canvas.configure(scrollregion=canvas.bbox("all"))
-            self.app.root.after(10, update_settings_scrollbar_visibility)
+        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
+        inner_frame.pack(fill=tk.X, padx=12, pady=12)
         
-        scrollable_frame.bind("<Configure>", on_scrollable_configure)
+        backup_var = tk.BooleanVar(value=self.app.settings_manager.get('backup', False))
         
-        # Привязка прокрутки колесом мыши
-        self.app.bind_mousewheel(canvas, canvas)
-        self.app.bind_mousewheel(scrollable_frame, canvas)
+        def on_backup_change():
+            """Обработчик изменения резервного копирования"""
+            self.app.settings_manager.set('backup', backup_var.get())
+            self.app.settings_manager.save_settings()
         
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        settings_tab.rowconfigure(0, weight=1)
-        settings_tab.columnconfigure(0, weight=1)
+        backup_checkbox = tk.Checkbutton(
+            inner_frame,
+            text="Создавать резервные копии перед переименованием",
+            variable=backup_var,
+            command=on_backup_change,
+            font=('Robot', 10),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            activebackground=self.app.colors['bg_main'],
+            activeforeground=self.app.colors['text_primary'],
+            selectcolor='white'
+        )
+        backup_checkbox.pack(anchor=tk.W)
         
-        # Первоначальная проверка видимости скроллбара
-        self.app.root.after(100, update_settings_scrollbar_visibility)
+        # Сохраняем ссылку на переменную
+        self.app.backup_var = backup_var
+    
+    def create_remove_files_section(self, parent):
+        """Создание секции удаления файлов из списка"""
+        # Заголовок
+        title_label = tk.Label(
+            parent,
+            text="Удаление файлов из списка",
+            font=('Robot', 14, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary']
+        )
+        title_label.pack(anchor=tk.W, pady=(0, 5))
         
-        content_frame = scrollable_frame
-        content_frame.columnconfigure(0, weight=1)
-        scrollable_frame.configure(padx=20, pady=20)
+        # Описание
+        info_label = tk.Label(
+            parent,
+            text="Автоматически удалять файлы из списка после успешного переименования или конвертации.",
+            font=('Robot', 9),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_secondary'],
+            justify=tk.LEFT
+        )
+        info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
         
-        # Заголовок убран - настройки начинаются сразу с секций
-        
-        # Функция для создания сворачиваемой секции
-        def create_collapsible_frame(parent, title, default_expanded=False):
-            """Создание сворачиваемой секции"""
-            # Основной контейнер
-            container = tk.Frame(parent, bg=bg_color)
-            container.pack(fill=tk.X, pady=(0, 10))
-            
-            # Заголовок с кнопкой сворачивания
-            header_frame = tk.Frame(container, bg=self.app.colors['bg_card'], cursor='hand2')
-            header_frame.pack(fill=tk.X)
-            
-            # Индикатор сворачивания
-            indicator = "▼" if default_expanded else "▶"
-            indicator_label = tk.Label(header_frame, text=indicator, 
-                                     font=('Robot', 12), 
-                                     bg=self.app.colors['bg_card'],
-                                     fg=self.app.colors['text_primary'])
-            indicator_label.pack(side=tk.LEFT, padx=(10, 10))
-            
-            # Заголовок секции
-            title_label = tk.Label(header_frame, text=title,
-                                  font=('Robot', 12, 'bold'),
-                                  bg=self.app.colors['bg_card'],
-                                  fg=self.app.colors['text_primary'])
-            title_label.pack(side=tk.LEFT)
-            
-            # Контент секции
-            content_frame = ttk.LabelFrame(container, text="", 
-                                          style='Card.TLabelframe', padding=20)
-            is_expanded = default_expanded
-            
-            def toggle():
-                nonlocal is_expanded
-                is_expanded = not is_expanded
-                if is_expanded:
-                    content_frame.pack(fill=tk.BOTH, expand=True)
-                    indicator_label.config(text="▼")
-                else:
-                    content_frame.pack_forget()
-                    indicator_label.config(text="▶")
-            
-            if default_expanded:
-                content_frame.pack(fill=tk.BOTH, expand=True)
-            else:
-                content_frame.pack_forget()
-            
-            # Привязка клика к заголовку
-            header_frame.bind("<Button-1>", lambda e: toggle())
-            indicator_label.bind("<Button-1>", lambda e: toggle())
-            title_label.bind("<Button-1>", lambda e: toggle())
-            
-            return content_frame
-        
-        # Управление ярлыками (сворачиваемая секция)
-        shortcuts_frame = create_collapsible_frame(content_frame, "Ярлыки", default_expanded=False)
-        
-        shortcuts_buttons_frame = tk.Frame(shortcuts_frame, bg=self.app.colors['bg_card'])
-        shortcuts_buttons_frame.pack(fill=tk.X)
-        shortcuts_buttons_frame.columnconfigure(0, weight=1)
-        shortcuts_buttons_frame.columnconfigure(1, weight=1)
-        
-        def get_icon_path():
-            """Получение пути к файлу иконки приложения"""
-            app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            # Приоритет: icon.ico -> Логотип.ico
-            icon_path = os.path.join(app_dir, "materials", "icon", "icon.ico")
-            if not os.path.exists(icon_path):
-                icon_path = os.path.join(app_dir, "materials", "icon", "Логотип.ico")
-            if os.path.exists(icon_path):
-                return os.path.abspath(icon_path)
-            return None
-        
-        def create_desktop_shortcut():
-            """Создание ярлыка на рабочем столе"""
+        # Функция для обновления wraplength при изменении размера
+        def update_wraplength(event=None):
             try:
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                desktop = shell.SpecialFolders("Desktop")
-                shortcut_path = os.path.join(desktop, "Ре-Файл+.lnk")
-                shortcut = shell.CreateShortCut(shortcut_path)
-                # Определяем путь к основному файлу запуска
-                app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                launch_file = os.path.join(app_dir, "file_re-file-plus.py")
-                if not os.path.exists(launch_file):
-                    launch_file = os.path.join(app_dir, "Запуск.pyw")
-                shortcut.Targetpath = sys.executable
-                shortcut.Arguments = f'"{launch_file}"'
-                shortcut.WorkingDirectory = app_dir
-                
-                # Устанавливаем иконку для ярлыка
-                icon_path = get_icon_path()
-                if icon_path:
-                    # IconLocation принимает путь к файлу и индекс иконки (0 - первая иконка)
-                    shortcut.IconLocation = f"{icon_path},0"
-                
-                shortcut.save()
-                messagebox.showinfo("Успех", "Ярлык на рабочем столе создан")
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось создать ярлык: {e}")
+                # Используем ширину scrollable_frame для определения ширины текста
+                scrollable_width = self.content_scrollable_frame.winfo_width()
+                if scrollable_width > 1:
+                    # Вычитаем отступы (padx=20 с каждой стороны = 40)
+                    info_label.config(wraplength=scrollable_width - 40)
+            except (AttributeError, tk.TclError):
+                pass
         
-        def delete_desktop_shortcut():
-            """Удаление ярлыка с рабочего стола"""
-            try:
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                desktop = shell.SpecialFolders("Desktop")
-                shortcut_path = os.path.join(desktop, "Ре-Файл+.lnk")
-                if os.path.exists(shortcut_path):
-                    os.remove(shortcut_path)
-                    messagebox.showinfo("Успех", "Ярлык с рабочего стола удален")
-                else:
-                    messagebox.showinfo("Информация", "Ярлык на рабочем столе не найден")
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось удалить ярлык: {e}")
+        # Привязываем обновление к изменению размера scrollable_frame
+        if hasattr(self, 'content_scrollable_frame'):
+            self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
+        # Устанавливаем начальное значение после создания виджетов
+        parent.after_idle(update_wraplength)
         
-        def create_start_menu_shortcut():
-            """Создание или обновление ярлыка в меню Пуск с иконкой"""
-            try:
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                start_menu = shell.SpecialFolders("StartMenu")
-                shortcut_path = os.path.join(start_menu, "Programs", "Ре-Файл+.lnk")
-                os.makedirs(os.path.dirname(shortcut_path), exist_ok=True)
-                
-                # Создаем или открываем существующий ярлык
-                shortcut = shell.CreateShortCut(shortcut_path)
-                
-                # Определяем путь к основному файлу запуска
-                app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                launch_file = os.path.join(app_dir, "file_re-file-plus.py")
-                if not os.path.exists(launch_file):
-                    launch_file = os.path.join(app_dir, "Запуск.pyw")
-                
-                # Устанавливаем параметры ярлыка
-                shortcut.Targetpath = sys.executable
-                shortcut.Arguments = f'"{launch_file}"'
-                shortcut.WorkingDirectory = app_dir
-                
-                # Устанавливаем иконку для ярлыка (важно для меню Пуск)
-                icon_path = get_icon_path()
-                if icon_path:
-                    # IconLocation принимает путь к файлу и индекс иконки (0 - первая иконка)
-                    # Формат: "путь_к_файлу,индекс"
-                    shortcut.IconLocation = f"{icon_path},0"
-                else:
-                    # Если иконка не найдена, используем иконку из исполняемого файла Python
-                    # Это запасной вариант
-                    shortcut.IconLocation = f"{sys.executable},0"
-                
-                # Сохраняем ярлык
-                shortcut.save()
-                
-                # Принудительно обновляем кэш иконок Windows для меню Пуск
-                try:
-                    import ctypes
-                    # SHCNE_ASSOCCHANGED - обновление ассоциаций файлов
-                    # SHCNE_UPDATEITEM - обновление элемента
-                    ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
-                    ctypes.windll.shell32.SHChangeNotify(0x00002000, 0x0000, None, None)
-                except (OSError, AttributeError, ctypes.ArgumentError):
-                    pass
-                
-                if os.path.exists(shortcut_path):
-                    messagebox.showinfo("Успех", "Ярлык в меню Пуск создан/обновлен с иконкой")
-                else:
-                    messagebox.showinfo("Успех", "Ярлык в меню Пуск создан")
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось создать ярлык: {e}")
+        # Карточка настроек
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
+        card_frame.pack(fill=tk.X)
         
-        def update_existing_shortcuts():
-            """Обновление иконки существующих ярлыков в меню Пуск и на рабочем столе"""
-            updated_count = 0
-            icon_path = get_icon_path()
-            
-            if not icon_path:
-                messagebox.showwarning("Предупреждение", "Файл иконки не найден")
-                return
-            
-            try:
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                
-                # Обновляем ярлык в меню Пуск
-                try:
-                    start_menu = shell.SpecialFolders("StartMenu")
-                    shortcut_path = os.path.join(start_menu, "Programs", "Ре-Файл+.lnk")
-                    if os.path.exists(shortcut_path):
-                        shortcut = shell.CreateShortCut(shortcut_path)
-                        shortcut.IconLocation = f"{icon_path},0"
-                        shortcut.save()
-                        updated_count += 1
-                except Exception as e:
-                    logger.debug(f"Не удалось обновить ярлык в меню Пуск: {e}")
-                
-                # Обновляем ярлык на рабочем столе
-                try:
-                    desktop = shell.SpecialFolders("Desktop")
-                    shortcut_path = os.path.join(desktop, "Ре-Файл+.lnk")
-                    if os.path.exists(shortcut_path):
-                        shortcut = shell.CreateShortCut(shortcut_path)
-                        shortcut.IconLocation = f"{icon_path},0"
-                        shortcut.save()
-                        updated_count += 1
-                except Exception as e:
-                    logger.debug(f"Не удалось обновить ярлык на рабочем столе: {e}")
-                
-                # Обновляем кэш иконок Windows
-                try:
-                    import ctypes
-                    ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
-                    ctypes.windll.shell32.SHChangeNotify(0x00002000, 0x0000, None, None)
-                except (OSError, AttributeError, ctypes.ArgumentError):
-                    pass
-                
-                if updated_count > 0:
-                    messagebox.showinfo("Успех", f"Обновлено ярлыков: {updated_count}")
-                else:
-                    messagebox.showinfo("Информация", "Ярлыки не найдены для обновления")
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось обновить ярлыки: {e}")
+        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
+        inner_frame.pack(fill=tk.X, padx=12, pady=12)
         
-        def delete_start_menu_shortcut():
-            """Удаление ярлыка из меню Пуск"""
-            try:
-                import win32com.client
-                shell = win32com.client.Dispatch("WScript.Shell")
-                start_menu = shell.SpecialFolders("StartMenu")
-                shortcut_path = os.path.join(start_menu, "Programs", "Ре-Файл+.lnk")
-                if os.path.exists(shortcut_path):
-                    os.remove(shortcut_path)
-                    messagebox.showinfo("Успех", "Ярлык из меню Пуск удален")
-                else:
-                    messagebox.showinfo("Информация", "Ярлык в меню Пуск не найден")
-            except Exception as e:
-                messagebox.showerror("Ошибка", f"Не удалось удалить ярлык: {e}")
-        
-        btn_create_desktop = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "➕ Создать ярлык на рабочем столе", create_desktop_shortcut,
-            self.app.colors['success'], 'white',
-            font=('Robot', 9, 'bold'), padx=8, pady=6,
-            active_bg=self.app.colors['success_hover'], expand=True)
-        btn_create_desktop.grid(row=0, column=0, sticky="ew", padx=(0, 5))
-        
-        btn_delete_desktop = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "🗑️ Удалить ярлык с рабочего стола", delete_desktop_shortcut,
-            self.app.colors['danger'], 'white',
-            font=('Robot', 9, 'bold'), padx=8, pady=6,
-            active_bg=self.app.colors['danger_hover'], expand=True)
-        btn_delete_desktop.grid(row=0, column=1, sticky="ew")
-        
-        btn_create_start = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "➕ Создать ярлык в меню Пуск", create_start_menu_shortcut,
-            self.app.colors['success'], 'white',
-            font=('Robot', 9, 'bold'), padx=8, pady=6,
-            active_bg=self.app.colors['success_hover'], expand=True)
-        btn_create_start.grid(row=1, column=0, sticky="ew", padx=(0, 5), pady=(5, 0))
-        
-        btn_delete_start = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "🗑️ Удалить ярлык из меню Пуск", delete_start_menu_shortcut,
-            self.app.colors['danger'], 'white',
-            font=('Robot', 9, 'bold'), padx=8, pady=6,
-            active_bg=self.app.colors['danger_hover'], expand=True)
-        btn_delete_start.grid(row=1, column=1, sticky="ew", pady=(5, 0))
-        
-        # Кнопка для обновления иконок существующих ярлыков
-        btn_update_icons = self.app.create_rounded_button(
-            shortcuts_buttons_frame, "🔄 Обновить иконки ярлыков", update_existing_shortcuts,
-            self.app.colors['info'], 'white',
-            font=('Robot', 9, 'bold'), padx=8, pady=6,
-            active_bg=self.app.colors['info_hover'], expand=True)
-        btn_update_icons.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(5, 0))
-        
-        # Секция: Поведение программы (сворачиваемая секция)
-        behavior_frame = create_collapsible_frame(content_frame, "Поведение программы", default_expanded=False)
-        
-        # Настройка удаления файлов после операций
         remove_files_var = tk.BooleanVar(value=self.app.settings_manager.get('remove_files_after_operation', False))
         
         def on_remove_files_change():
-            """Обработчик изменения настройки удаления файлов"""
-            new_value = remove_files_var.get()
-            self.app.settings_manager.set('remove_files_after_operation', new_value)
+            """Обработчик изменения удаления файлов из списка"""
+            self.app.settings_manager.set('remove_files_after_operation', remove_files_var.get())
             self.app.settings_manager.save_settings()
-            # Синхронизируем переменную, если она уже существует
-            if hasattr(self.app, 'remove_files_after_operation_var'):
-                self.app.remove_files_after_operation_var.set(new_value)
         
-        remove_files_check = tk.Checkbutton(
-            behavior_frame,
-            text="Удалять файлы из списка после успешного переименования или конвертации",
+        remove_files_checkbox = tk.Checkbutton(
+            inner_frame,
+            text="Удалять файлы из списка после операции",
             variable=remove_files_var,
             command=on_remove_files_change,
-            bg=self.app.colors['bg_card'],
+            font=('Robot', 10),
+            bg=self.app.colors['bg_main'],
             fg=self.app.colors['text_primary'],
-            font=('Robot', 9),
-            anchor='w',
-            activebackground=self.app.colors['bg_card'],
-            activeforeground=self.app.colors['text_primary']
+            activebackground=self.app.colors['bg_main'],
+            activeforeground=self.app.colors['text_primary'],
+            selectcolor='white'
         )
-        remove_files_check.pack(anchor=tk.W, fill=tk.X, pady=(0, 10))
-        
-        remove_files_info = tk.Label(
-            behavior_frame,
-            text="Если включено, файлы будут автоматически удаляться из списка после успешного выполнения операции.",
-            font=('Robot', 8),
-            bg=self.app.colors['bg_card'],
-            fg=self.app.colors['text_secondary'],
-            wraplength=600,
-            justify=tk.LEFT,
-            anchor='w'
-        )
-        remove_files_info.pack(anchor=tk.W, fill=tk.X, pady=(0, 15))
+        remove_files_checkbox.pack(anchor=tk.W)
         
         # Сохраняем ссылку на переменную для использования в других модулях
         self.app.remove_files_after_operation_var = remove_files_var
+    
+    def create_logs_section(self, parent):
+        """Создание секции логов"""
+        # Заголовок
+        title_label = tk.Label(
+            parent,
+            text="Логи",
+            font=('Robot', 14, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            anchor=tk.W
+        )
+        title_label.pack(anchor=tk.W, pady=(0, 5))
         
-        # Секция: Логи (сворачиваемая секция)
-        logs_frame = create_collapsible_frame(content_frame, "Логи", default_expanded=False)
+        # Описание
+        info_label = tk.Label(
+            parent,
+            text="Просмотр и управление логами программы. Все действия записываются в файл лога.",
+            font=('Robot', 9),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_secondary'],
+            justify=tk.LEFT,
+            anchor=tk.W
+        )
+        info_label.pack(anchor=tk.W, pady=(0, 10))
         
-        logs_info_label = tk.Label(logs_frame,
-                                 text="Просмотр и управление логами программы. Все действия записываются в файл лога.",
-                                 font=('Robot', 9),
-                                 bg=self.app.colors['bg_card'],
-                                 fg=self.app.colors['text_secondary'],
-                                 wraplength=600,
-                                 justify=tk.LEFT)
-        logs_info_label.pack(anchor=tk.W, pady=(0, 15))
+        # Функция для обновления wraplength при изменении размера
+        def update_wraplength(event=None):
+            try:
+                # Используем ширину scrollable_frame для определения ширины текста
+                scrollable_width = self.content_scrollable_frame.winfo_width()
+                if scrollable_width > 1:
+                    # Вычитаем отступы (padx=20 с каждой стороны = 40)
+                    info_label.config(wraplength=scrollable_width - 40)
+            except (AttributeError, tk.TclError):
+                pass
         
-        logs_buttons_frame = tk.Frame(logs_frame, bg=self.app.colors['bg_card'])
-        logs_buttons_frame.pack(fill=tk.X)
-        logs_buttons_frame.columnconfigure(0, weight=1)
+        # Привязываем обновление к изменению размера scrollable_frame
+        if hasattr(self, 'content_scrollable_frame'):
+            self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
+        # Устанавливаем начальное значение после создания виджетов
+        parent.after_idle(update_wraplength)
+        
+        # Карточка настроек
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
+        card_frame.pack(fill=tk.X, anchor=tk.W)
+        
+        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
+        inner_frame.pack(padx=12, pady=12, anchor=tk.W)
         
         def open_logs():
             """Открытие файла логов"""
             try:
                 # Импорт функции работы с путями
                 try:
-                    from infrastructure.system.paths import get_log_file_path
+                    from config.paths import get_logs_dir
+                    logs_dir = get_logs_dir()
                 except ImportError:
-                    # Fallback на старый импорт
-                    from config.constants import get_log_file_path
-                log_file_path = get_log_file_path()
+                    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
                 
-                if os.path.exists(log_file_path):
-                    # Открываем файл в системном редакторе по умолчанию (безопасно)
-                    if sys.platform == 'win32':
-                        os.startfile(log_file_path)
-                    elif sys.platform == 'darwin':
-                        subprocess.run(['open', log_file_path], check=False)
-                    else:
-                        subprocess.run(['xdg-open', log_file_path], check=False)
-                    logger.info(f"Открыт файл логов: {log_file_path}")
+                if not os.path.exists(logs_dir):
+                    os.makedirs(logs_dir)
+                
+                # Находим последний файл лога
+                log_files = [f for f in os.listdir(logs_dir) if f.endswith('.log')]
+                if not log_files:
+                    self.app.log("Файлы логов не найдены")
+                    return
+                
+                latest_log = max(log_files, key=lambda f: os.path.getmtime(os.path.join(logs_dir, f)))
+                log_path = os.path.join(logs_dir, latest_log)
+                
+                # Открываем файл в системном редакторе
+                if sys.platform == 'win32':
+                    os.startfile(log_path)
+                elif sys.platform == 'darwin':
+                    subprocess.run(['open', log_path])
                 else:
-                    messagebox.showinfo("Информация", "Файл логов еще не создан")
+                    subprocess.run(['xdg-open', log_path])
             except Exception as e:
-                logger.error(f"Ошибка при открытии логов: {e}", exc_info=True)
-                messagebox.showerror("Ошибка", f"Не удалось открыть файл логов: {e}")
+                logger.error(f"Ошибка открытия логов: {e}", exc_info=True)
+                self.app.log(f"Ошибка открытия логов: {e}")
         
-        btn_open_logs = self.app.create_rounded_button(
-            logs_buttons_frame, "📄 Открыть файл логов", open_logs,
-            self.app.colors['primary'], 'white',
-            font=('Robot', 9, 'bold'), padx=8, pady=6,
-            active_bg=self.app.colors['primary_hover'], expand=True)
-        btn_open_logs.pack(fill=tk.X)
-    
-    def load_settings(self):
-        """Загрузка настроек из файла"""
-        return self.app.settings_manager.load_settings()
-    
-    def save_settings(self, settings_dict):
-        """Сохранение настроек в файл"""
-        return self.app.settings_manager.save_settings(settings_dict)
+        open_logs_button = tk.Button(
+            inner_frame,
+            text="Открыть файл логов",
+            command=open_logs,
+            font=('Robot', 8),
+            bg=self.app.colors['primary'],
+            fg='white',
+            activebackground=self.app.colors['primary_hover'],
+            activeforeground='white',
+            relief=tk.FLAT,
+            cursor='hand2',
+            padx=6,
+            pady=3,
+            anchor=tk.W
+        )
+        open_logs_button.pack(anchor=tk.W)

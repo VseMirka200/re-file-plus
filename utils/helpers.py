@@ -1,9 +1,9 @@
 """Вспомогательные утилиты приложения.
 
-Для обратной совместимости - импортирует классы из infrastructure/.
+Для обратной совместимости - импортирует классы из infrastructure/ и core/.
 Все классы перенесены в соответствующие модули:
 - NotificationManager -> infrastructure/system/notifications.py
-- ErrorHandler -> infrastructure/system/error_handler.py
+- ErrorHandler -> core/error_handling/error_handler.py
 - I18nManager -> infrastructure/system/i18n.py
 - UpdateChecker -> infrastructure/system/updates.py
 - Logger -> infrastructure/logging/logger.py
@@ -23,7 +23,8 @@ except ImportError:
     NotificationManager = None
 
 try:
-    from infrastructure.system.error_handler import ErrorHandler
+    # Используем основной ErrorHandler из core
+    from core.error_handling import ErrorHandler
 except ImportError:
     ErrorHandler = None
 

@@ -45,7 +45,7 @@ class PluginManager:
         init_file = os.path.join(self.plugins_dir, '__init__.py')
         if not os.path.exists(init_file):
             try:
-                with open(init_file, 'w') as f:
+                with open(init_file, 'w', encoding='utf-8') as f:
                     f.write('# Plugins directory\n')
             except Exception:
                 pass
