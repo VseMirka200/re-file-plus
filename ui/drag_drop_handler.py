@@ -47,45 +47,8 @@ except ImportError:
 
 
 # ============================================================================
-# ФУНКЦИИ НАСТРОЙКИ DRAG AND DROP
-# 
-# Низкоуровневые функции для настройки drag and drop функциональности.
-# Используются классом DragDropHandler для реализации высокоуровневого API.
+# ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ОБРАБОТКИ DROP СОБЫТИЙ
 # ============================================================================
-
-def setup_drag_drop(root: tk.Tk, on_drop_callback: Callable[[List[str]], None]) -> None:
-    """Настройка drag and drop для главного окна.
-    
-    Args:
-        root: Корневое окно Tkinter
-        on_drop_callback: Функция обратного вызова при сбросе файлов
-    """
-    if HAS_TKINTERDND2:
-        try:
-            root.drop_target_register(DND_FILES)
-            root.dnd_bind('<<Drop>>', lambda e: _on_drop_files(e, on_drop_callback))
-        except (AttributeError, RuntimeError, tk.TclError) as e:
-            logger.debug(f"Не удалось настроить drag and drop для root окна: {e}")
-        except Exception as e:
-            logger.warning(f"Неожиданная ошибка при настройке drag and drop: {e}")
-
-
-def setup_window_drag_drop(window: tk.Toplevel, on_drop_callback: Callable[[List[str]], None]) -> None:
-    """Настройка drag and drop для дочернего окна.
-    
-    Args:
-        window: Дочернее окно Tkinter
-        on_drop_callback: Функция обратного вызова при сбросе файлов
-    """
-    if HAS_TKINTERDND2:
-        try:
-            window.drop_target_register(DND_FILES)
-            window.dnd_bind('<<Drop>>', lambda e: _on_drop_files(e, on_drop_callback))
-        except (AttributeError, RuntimeError, tk.TclError) as e:
-            logger.debug(f"Не удалось настроить drag and drop для окна: {e}")
-        except Exception as e:
-            logger.warning(f"Неожиданная ошибка при настройке drag and drop для окна: {e}")
-
 
 def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
     """Обработчик события сброса файлов.
@@ -226,58 +189,6 @@ def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
             logger.warning("Не найдено валидных элементов для обработки")
     except Exception as e:
         logger.error(f"Ошибка при обработке drag and drop: {e}", exc_info=True)
-
-
-def setup_treeview_drag_drop(tree, 
-                             on_move_callback: Callable[[int, int], None]) -> None:
-    """Настройка drag and drop для перестановки элементов в Treeview.
-    
-    Args:
-        tree: Treeview виджет
-        on_move_callback: Функция обратного вызова при перемещении (start_idx, target_idx)
-    """
-    drag_item = None
-    drag_start_index = None
-    drag_start_y = None
-    is_dragging = False
-    
-    def on_button_press(event):
-        nonlocal drag_item, drag_start_index, drag_start_y, is_dragging
-        item = tree.identify_row(event.y)
-        if item:
-            drag_item = item
-            drag_start_index = tree.index(item)
-            drag_start_y = event.y
-            is_dragging = False
-    
-    def on_drag_motion(event):
-        nonlocal is_dragging
-        if drag_item and drag_start_y is not None:
-            if abs(event.y - drag_start_y) > 5:
-                is_dragging = True
-    
-    def on_drag_release(event):
-        nonlocal drag_item, drag_start_index, drag_start_y, is_dragging
-        if drag_item and is_dragging:
-            target_item = tree.identify_row(event.y)
-            if target_item and target_item != drag_item:
-                try:
-                    start_idx = tree.index(drag_item)
-                    target_idx = tree.index(target_item)
-                    if 0 <= start_idx and 0 <= target_idx:
-                        on_move_callback(start_idx, target_idx)
-                except Exception:
-                    pass
-        
-        # Сброс состояния
-        drag_item = None
-        drag_start_index = None
-        drag_start_y = None
-        is_dragging = False
-    
-    tree.bind('<Button-1>', on_button_press)
-    tree.bind('<B1-Motion>', on_drag_motion)
-    tree.bind('<ButtonRelease-1>', on_drag_release)
 
 
 # ============================================================================
@@ -597,8 +508,8 @@ class DragDropHandler:
             if hasattr(self.app, 'new_name_template'):
                 template = self.app.new_name_template.get().strip()
                 if template:
-                    if hasattr(self.app, 'templates_manager'):
-                        self.app.templates_manager.apply_template_quick(auto=True)
+                    if hasattr(self.app, 'ui_templates_manager'):
+                        self.app.ui_templates_manager.apply_template_quick(auto=True)
         
         # Обновляем статус
         if hasattr(self.app, 'update_status'):
@@ -834,39 +745,6 @@ class DragDropHandler:
             # Это блокирует интерфейс! Вместо этого используем только tkinterdnd2
             logger.warning("DragAndDropTk отключен - может блокировать интерфейс при размещении поверх всех виджетов")
             return False
-            
-            # ЗАКОММЕНТИРОВАНО: создание виджета, который блокирует интерфейс
-            # self._dndtk_widget = DragAndDropTk(
-            #     self.app.root,
-            #     bg=self.app.colors.get('bg_main', '#FFFFFF')
-            # )
-            # self._dndtk_widget.place(x=0, y=0, relwidth=1, relheight=1)
-            
-            # Устанавливаем обработчик для перетаскивания файлов
-            def on_drop(files):
-                """Обработчик перетаскивания файлов"""
-                try:
-                    logger.info(f"DragAndDropTk: получено {len(files)} файлов")
-                    self.app.log(f"Получено файлов через DragAndDropTk: {len(files)}")
-                    
-                    # Обрабатываем файлы
-                    if isinstance(files, (list, tuple)):
-                        file_list = list(files)
-                    elif isinstance(files, str):
-                        # Если это строка, пробуем разделить по пробелам или другим разделителям
-                        file_list = [f.strip() for f in files.split() if f.strip()]
-                    else:
-                        file_list = [str(files)]
-                    
-                    # Обрабатываем файлы через стандартный метод
-                    self._process_dropped_files(file_list)
-                except Exception as e:
-                    logger.error(f"Ошибка в обработчике DragAndDropTk: {e}", exc_info=True)
-                    self.app.log(f"Ошибка обработки файлов: {e}")
-            
-            # Код ниже не выполнится, так как мы вернули False выше
-            # Оставлено для справки
-            pass
             
         except Exception as e:
             logger.error(f"Ошибка настройки DragAndDropTk: {e}", exc_info=True)

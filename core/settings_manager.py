@@ -57,7 +57,6 @@ class SettingsManager:
         'auto_apply': False,
         'show_warnings': True,
         'font_size': '10',
-        'backup': False,
         'remove_files_after_operation': False,  # Удалять файлы из списка после переименования/конвертации
         'numbering_start_number': '1',  # Начальный номер для {n} в шаблонах
         'numbering_zeros_count': '0',  # Количество ведущих нулей для {n} в шаблонах
@@ -68,7 +67,7 @@ class SettingsManager:
         'numbering_method_position': 'end'  # Позиция (start/end) для метода Нумерация
     }
     
-    REQUIRED_SETTINGS_KEYS = {'auto_apply', 'show_warnings', 'font_size', 'backup', 'remove_files_after_operation', 
+    REQUIRED_SETTINGS_KEYS = {'auto_apply', 'show_warnings', 'font_size', 'remove_files_after_operation', 
                               'numbering_start_number', 'numbering_zeros_count',
                               'numbering_method_start', 'numbering_method_step', 'numbering_method_digits',
                               'numbering_method_format', 'numbering_method_position'}
@@ -94,8 +93,6 @@ class SettingsManager:
         if not isinstance(settings.get('auto_apply'), bool):
             return False
         if not isinstance(settings.get('show_warnings'), bool):
-            return False
-        if not isinstance(settings.get('backup'), bool):
             return False
         if not isinstance(settings.get('remove_files_after_operation'), bool):
             return False

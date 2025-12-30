@@ -7,6 +7,21 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+
+def normalize_path(path: str) -> str:
+    """Нормализация пути к файлу.
+    
+    Комбинирует os.path.normpath и os.path.abspath для получения
+    нормализованного абсолютного пути.
+    
+    Args:
+        path: Путь к файлу или директории
+        
+    Returns:
+        Нормализованный абсолютный путь
+    """
+    return os.path.normpath(os.path.abspath(path))
+
 # Импорт функции валидации путей
 try:
     from infrastructure.system.paths import is_safe_path

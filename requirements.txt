@@ -12,24 +12,21 @@ pytest-mock>=3.10.0
 # Опциональные зависимости (для расширенной функциональности)
 # Работа с документами
 python-docx>=0.8.11
-openpyxl>=3.0.0
 python-pptx>=0.6.0
 pypdf>=3.0.0
 # PyPDF2 устарел, используем только pypdf
 PyMuPDF>=1.23.0
 
-# Работа с аудио/видео
-mutagen>=1.45.0
+# Работа с видео
 pydub>=0.25.0
 moviepy>=1.0.3
 
 # Windows-специфичные зависимости (только для Windows)
 # Для установки на Windows раскомментируйте следующие строки:
-# pywin32>=300
-# comtypes>=1.1.0
-# docx2pdf>=0.1.8
-# pdf2docx>=0.5.0
-# 
+pywin32>=300
+comtypes>=1.1.0
+docx2pdf>=0.1.8
+pdf2docx>=0.5.0
+
 # Или установите вручную:
 # pip install pywin32 comtypes docx2pdf pdf2docx
-

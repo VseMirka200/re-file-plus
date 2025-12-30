@@ -1,26 +1,72 @@
 {
   "Нумерация": {
     "template": "{n}",
-    "start_number": "1"
+    "start_number": "1",
+    "zeros_count": "0"
   },
   "Нумерация с префиксом": {
     "template": "Файл_{n}",
-    "start_number": "1"
+    "start_number": "1",
+    "zeros_count": "0"
   },
   "Дата и имя": {
-    "template": "{date}_{name}",
-    "start_number": "1"
+    "template": "{date_created}_{name}",
+    "start_number": "1",
+    "zeros_count": "0"
   },
   "Имя и дата": {
-    "template": "{name}_{date}",
-    "start_number": "1"
+    "template": "{name}_{date_created}",
+    "start_number": "1",
+    "zeros_count": "0"
   },
   "Дата и нумерация": {
-    "template": "{date}_{n}",
-    "start_number": "1"
+    "template": "{date_created}_{n}",
+    "start_number": "1",
+    "zeros_count": "0"
   },
   "Префикс, дата и номер": {
-    "template": "IMG_{date}_{n:03d}",
-    "start_number": "1"
+    "template": "IMG_{date_created}_{n}",
+    "start_number": "1",
+    "zeros_count": "3"
+  },
+  "Год-месяц-день и номер": {
+    "template": "{year}-{month}-{day}_{n}",
+    "start_number": "1",
+    "zeros_count": "3"
+  },
+  "Дата и время с именем": {
+    "template": "{date_created_time}_{name}",
+    "start_number": "1",
+    "zeros_count": "0"
+  },
+  "Папка и номер": {
+    "template": "{dirname}_{n}",
+    "start_number": "1",
+    "zeros_count": "3"
+  },
+  "Фото: камера и ISO": {
+    "template": "{camera}_ISO{iso}_{n}",
+    "start_number": "1",
+    "zeros_count": "3"
+  },
+  "Фото: размеры и номер": {
+    "template": "{width}x{height}_{n}",
+    "start_number": "1",
+    "zeros_count": "3"
+  },
+  "Аудио: исполнитель - трек": {
+    "template": "{artist} - {title}",
+    "start_number": "1",
+    "zeros_count": "0"
+  },
+  "Аудио: альбом - номер трека": {
+    "template": "{album}_{track}",
+    "start_number": "1",
+    "zeros_count": "2"
+  },
+  "Формат и номер": {
+    "template": "{format}_{n}",
+    "start_number": "1",
+    "zeros_count": "3"
   }
 }

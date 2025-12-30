@@ -169,7 +169,6 @@ class AppInitializer:
             error_handler = getattr(self.app, 'error_handler', None) or ErrorHandler()
             self.app.re_file_service = ReFileService(
                 metadata_extractor=self.app.metadata_extractor,
-                backup_manager=None,  # Будет установлен позже
                 error_handler=error_handler
             )
         except (ImportError, Exception) as e:
@@ -184,22 +183,16 @@ class AppInitializer:
             except ImportError:
                 # Fallback - состояние будет создано в app_core
                 pass
+        
+        # Инициализация флагов состояния операций
+        self.app._re_file_in_progress = False
+        self.app._applying_methods = False
+        # Сохраняем время запуска приложения для проверки зависших операций
+        import time
+        self.app._app_start_time = time.time()
     
     def _initialize_optional_managers(self):
         """Инициализация опциональных менеджеров."""
-        # Менеджер резервных копий
-        self.app.backup_manager = None
-        try:
-            from core.backup_manager import BackupManager
-            backup_enabled = self.app.settings_manager.get('backup', False)
-            if backup_enabled:
-                self.app.backup_manager = BackupManager()
-                # Обновляем сервис re-file с backup_manager
-                if hasattr(self.app, 're_file_service') and self.app.re_file_service:
-                    self.app.re_file_service.backup_manager = self.app.backup_manager
-        except (ImportError, Exception) as e:
-            logger.debug(f"Не удалось инициализировать менеджер резервных копий: {e}")
-        
         # Менеджер истории операций
         self.app.history_manager = None
         try:

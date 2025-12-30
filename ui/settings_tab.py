@@ -1,7 +1,7 @@
 """Модуль для вкладки настроек.
 
 Обеспечивает интерфейс для управления настройками приложения:
-автоприменение, резервные копии, шрифты и другие параметры.
+автоприменение, шрифты и другие параметры.
 """
 
 import logging
@@ -20,7 +20,7 @@ class SettingsTab:
     Класс для управления вкладкой настроек приложения.
     
     Предоставляет интерфейс для изменения различных параметров приложения,
-    таких как автоприменение методов, резервное копирование, размер шрифта и т.д.
+    таких как автоприменение методов, размер шрифта и т.д.
     """
     
     def __init__(self, app) -> None:
@@ -189,7 +189,7 @@ class SettingsTab:
         title_label.pack(anchor=tk.W, pady=(0, 5))
         
         # Карточка настроек
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.FLAT, borderwidth=0)
         card_frame.pack(fill=tk.X, pady=(0, 8))
         
         inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
@@ -293,97 +293,35 @@ class SettingsTab:
         # Сохраняем ссылку на переменную
         self.app.show_warnings_var = show_warnings_var
     
-    def create_backup_section(self, parent):
-        """Создание секции резервного копирования"""
-        # Заголовок
-        title_label = tk.Label(
-            parent,
-            text="Резервное копирование",
-            font=('Robot', 14, 'bold'),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary']
-        )
-        title_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        # Описание
-        info_label = tk.Label(
-            parent,
-            text="Создание резервных копий файлов перед переименованием. Копии сохраняются в папке backup рядом с исходными файлами.",
-            font=('Robot', 9),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_secondary'],
-            justify=tk.LEFT
-        )
-        info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
-        
-        # Функция для обновления wraplength при изменении размера
-        def update_wraplength(event=None):
-            try:
-                # Используем ширину scrollable_frame для определения ширины текста
-                scrollable_width = self.content_scrollable_frame.winfo_width()
-                if scrollable_width > 1:
-                    # Вычитаем отступы (padx=20 с каждой стороны = 40)
-                    info_label.config(wraplength=scrollable_width - 40)
-            except (AttributeError, tk.TclError):
-                pass
-        
-        # Привязываем обновление к изменению размера scrollable_frame
-        if hasattr(self, 'content_scrollable_frame'):
-            self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
-        # Устанавливаем начальное значение после создания виджетов
-        parent.after_idle(update_wraplength)
-        
-        # Карточка настроек
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
-        card_frame.pack(fill=tk.X)
-        
-        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
-        inner_frame.pack(fill=tk.X, padx=12, pady=12)
-        
-        backup_var = tk.BooleanVar(value=self.app.settings_manager.get('backup', False))
-        
-        def on_backup_change():
-            """Обработчик изменения резервного копирования"""
-            self.app.settings_manager.set('backup', backup_var.get())
-            self.app.settings_manager.save_settings()
-        
-        backup_checkbox = tk.Checkbutton(
-            inner_frame,
-            text="Создавать резервные копии перед переименованием",
-            variable=backup_var,
-            command=on_backup_change,
-            font=('Robot', 10),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
-            activebackground=self.app.colors['bg_main'],
-            activeforeground=self.app.colors['text_primary'],
-            selectcolor='white'
-        )
-        backup_checkbox.pack(anchor=tk.W)
-        
-        # Сохраняем ссылку на переменную
-        self.app.backup_var = backup_var
-    
     def create_remove_files_section(self, parent):
         """Создание секции удаления файлов из списка"""
-        # Заголовок
+        # Единая карточка для всего раздела
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.FLAT, borderwidth=0)
+        card_frame.pack(fill=tk.X, anchor=tk.W)
+        
+        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
+        inner_frame.pack(fill=tk.X, padx=12, pady=12, anchor=tk.W)
+        
+        # Заголовок внутри карточки
         title_label = tk.Label(
-            parent,
+            inner_frame,
             text="Удаление файлов из списка",
             font=('Robot', 14, 'bold'),
             bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary']
+            fg=self.app.colors['text_primary'],
+            anchor=tk.W
         )
         title_label.pack(anchor=tk.W, pady=(0, 5))
         
-        # Описание
+        # Описание внутри карточки
         info_label = tk.Label(
-            parent,
+            inner_frame,
             text="Автоматически удалять файлы из списка после успешного переименования или конвертации.",
             font=('Robot', 9),
             bg=self.app.colors['bg_main'],
             fg=self.app.colors['text_secondary'],
-            justify=tk.LEFT
+            justify=tk.LEFT,
+            anchor=tk.W
         )
         info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
         
@@ -393,8 +331,8 @@ class SettingsTab:
                 # Используем ширину scrollable_frame для определения ширины текста
                 scrollable_width = self.content_scrollable_frame.winfo_width()
                 if scrollable_width > 1:
-                    # Вычитаем отступы (padx=20 с каждой стороны = 40)
-                    info_label.config(wraplength=scrollable_width - 40)
+                    # Вычитаем отступы (padx=12 с каждой стороны = 24, плюс padx родителя)
+                    info_label.config(wraplength=scrollable_width - 60)
             except (AttributeError, tk.TclError):
                 pass
         
@@ -403,13 +341,6 @@ class SettingsTab:
             self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
         # Устанавливаем начальное значение после создания виджетов
         parent.after_idle(update_wraplength)
-        
-        # Карточка настроек
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
-        card_frame.pack(fill=tk.X)
-        
-        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
-        inner_frame.pack(fill=tk.X, padx=12, pady=12)
         
         remove_files_var = tk.BooleanVar(value=self.app.settings_manager.get('remove_files_after_operation', False))
         
@@ -428,18 +359,27 @@ class SettingsTab:
             fg=self.app.colors['text_primary'],
             activebackground=self.app.colors['bg_main'],
             activeforeground=self.app.colors['text_primary'],
-            selectcolor='white'
+            selectcolor='white',
+            anchor=tk.W,
+            justify=tk.LEFT
         )
-        remove_files_checkbox.pack(anchor=tk.W)
+        remove_files_checkbox.pack(anchor=tk.W, fill=tk.X)
         
         # Сохраняем ссылку на переменную для использования в других модулях
         self.app.remove_files_after_operation_var = remove_files_var
     
     def create_logs_section(self, parent):
         """Создание секции логов"""
-        # Заголовок
+        # Единая карточка для всего раздела
+        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.FLAT, borderwidth=0)
+        card_frame.pack(fill=tk.X, anchor=tk.W)
+        
+        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
+        inner_frame.pack(fill=tk.X, padx=12, pady=12, anchor=tk.W)
+        
+        # Заголовок внутри карточки
         title_label = tk.Label(
-            parent,
+            inner_frame,
             text="Логи",
             font=('Robot', 14, 'bold'),
             bg=self.app.colors['bg_main'],
@@ -448,9 +388,9 @@ class SettingsTab:
         )
         title_label.pack(anchor=tk.W, pady=(0, 5))
         
-        # Описание
+        # Описание внутри карточки
         info_label = tk.Label(
-            parent,
+            inner_frame,
             text="Просмотр и управление логами программы. Все действия записываются в файл лога.",
             font=('Robot', 9),
             bg=self.app.colors['bg_main'],
@@ -458,7 +398,7 @@ class SettingsTab:
             justify=tk.LEFT,
             anchor=tk.W
         )
-        info_label.pack(anchor=tk.W, pady=(0, 10))
+        info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
         
         # Функция для обновления wraplength при изменении размера
         def update_wraplength(event=None):
@@ -466,8 +406,8 @@ class SettingsTab:
                 # Используем ширину scrollable_frame для определения ширины текста
                 scrollable_width = self.content_scrollable_frame.winfo_width()
                 if scrollable_width > 1:
-                    # Вычитаем отступы (padx=20 с каждой стороны = 40)
-                    info_label.config(wraplength=scrollable_width - 40)
+                    # Вычитаем отступы (padx=12 с каждой стороны = 24, плюс padx родителя)
+                    info_label.config(wraplength=scrollable_width - 60)
             except (AttributeError, tk.TclError):
                 pass
         
@@ -477,22 +417,11 @@ class SettingsTab:
         # Устанавливаем начальное значение после создания виджетов
         parent.after_idle(update_wraplength)
         
-        # Карточка настроек
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.SOLID, borderwidth=1)
-        card_frame.pack(fill=tk.X, anchor=tk.W)
-        
-        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
-        inner_frame.pack(padx=12, pady=12, anchor=tk.W)
-        
         def open_logs():
             """Открытие файла логов"""
             try:
-                # Импорт функции работы с путями
-                try:
-                    from config.paths import get_logs_dir
-                    logs_dir = get_logs_dir()
-                except ImportError:
-                    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+                # Определяем директорию логов
+                logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
                 
                 if not os.path.exists(logs_dir):
                     os.makedirs(logs_dir)

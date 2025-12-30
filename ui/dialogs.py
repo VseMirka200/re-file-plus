@@ -84,7 +84,7 @@ class Dialogs:
         buttons_frame.columnconfigure(1, weight=1)
         
         btn_start = self.app.create_rounded_button(
-            buttons_frame, "▶️ Начать переименование", self.app.start_re_file,
+            buttons_frame, "✓ Применить", self.app.start_re_file,
             self.app.colors['success'], 'white',
             font=('Robot', 9, 'bold'), padx=10, pady=6,
             active_bg=self.app.colors['success_hover'])

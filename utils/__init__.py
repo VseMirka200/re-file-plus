@@ -44,6 +44,7 @@ __all__ = [
     # Из path_processing
     'process_file_argument',
     'filter_cli_args',
+    'normalize_path',
     # Из structured_logging
     'StructuredFormatter',
     'log_action',

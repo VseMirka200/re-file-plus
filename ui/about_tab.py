@@ -184,7 +184,39 @@ class AboutTab:
                                 font=('Robot', 9),
                                 bg=self.colors['bg_main'],
                                 fg=self.colors['text_secondary'])
-        version_label.pack(anchor=tk.CENTER)
+        version_label.pack(anchor=tk.CENTER, pady=(0, 15))
+        
+        # Кнопка "Открыть исходный код" под версией
+        github_frame = tk.Frame(left_inner, bg=self.colors['bg_main'])
+        github_frame.pack(anchor=tk.CENTER)
+        
+        def open_github(event):
+            import webbrowser
+            webbrowser.open("https://github.com/VseMirka200/re-file-plus")
+        
+        try:
+            github_icon_path = os.path.join(os.path.dirname(__file__), "..", "materials", "icon", "GitHUB.png")
+            if os.path.exists(github_icon_path) and HAS_PIL:
+                github_img = Image.open(github_icon_path)
+                github_img = github_img.resize((24, 24), Image.Resampling.LANCZOS)
+                github_photo = ImageTk.PhotoImage(github_img)
+                self._about_icons.append(github_photo)
+                self.icon_photos_list.append(github_photo)
+                github_icon_label = tk.Label(github_frame, image=github_photo, bg=self.colors['bg_main'], cursor='hand2')
+                github_icon_label.pack(side=tk.LEFT, padx=(0, 8))
+                github_icon_label.bind("<Button-1>", open_github)
+        except Exception as e:
+            logger.error(f"Ошибка загрузки иконки GitHub: {e}", exc_info=True)
+        
+        github_label = tk.Label(github_frame, 
+                              text="Открыть исходный код",
+                              font=('Robot', 10),
+                              bg=self.colors['bg_main'], 
+                              fg=self.colors['primary'],
+                              cursor='hand2',
+                              justify=tk.LEFT)
+        github_label.pack(side=tk.LEFT)
+        github_label.bind("<Button-1>", open_github)
         
         # Средний столбец: описание программы
         desc_frame = tk.Frame(about_content_frame, bg=self.colors['bg_main'])
@@ -238,14 +270,14 @@ class AboutTab:
         content_frame.after_idle(update_desc_wraplength)
         content_frame.after(100, update_desc_wraplength)  # Дополнительное обновление через 100мс
         
-        # Разработчики - карточка
-        self._create_developers_card(content_frame)
+        # Разработчики - карточка (удалена)
+        # self._create_developers_card(content_frame)
         
         # Социальные сети - карточка
         self._create_social_card(content_frame)
         
-        # GitHub - карточка
-        self._create_github_card(content_frame)
+        # GitHub - карточка (удалена, содержимое перемещено в карточку "О программе")
+        # self._create_github_card(content_frame)
         
         # Контакты разработчиков - карточка
         self._create_contact_card(content_frame)

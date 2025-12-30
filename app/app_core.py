@@ -17,6 +17,12 @@ from app.app_initializer import AppInitializer
 
 logger = logging.getLogger(__name__)
 
+# Импорт UIComponents для создания кнопок
+try:
+    from ui.ui_components import UIComponents
+except ImportError:
+    UIComponents = None
+
 # Импорт структурированного логирования
 try:
     from utils.structured_logging import log_action, log_batch_action
@@ -240,10 +246,11 @@ class ReFilePlusApp:
         Returns:
             Созданный виджет кнопки или None
         """
-        from ui.ui_components import UIComponents
-        return UIComponents.create_square_icon_button(
-            parent, icon, command, bg_color, fg_color, size, active_bg, tooltip
-        )
+        if UIComponents:
+            return UIComponents.create_square_icon_button(
+                parent, icon, command, bg_color, fg_color, size, active_bg, tooltip
+            )
+        return None
     
     def create_rounded_icon_button(self, parent: 'tk.Widget', icon: str, command: Callable,
                                    bg_color: str = '#667EEA', fg_color: str = 'white', 
@@ -265,10 +272,11 @@ class ReFilePlusApp:
         Returns:
             Созданный виджет кнопки или None
         """
-        from ui.ui_components import UIComponents
-        return UIComponents.create_rounded_icon_button(
-            parent, icon, command, bg_color, fg_color, size, active_bg, tooltip, radius
-        )
+        if UIComponents:
+            return UIComponents.create_rounded_icon_button(
+                parent, icon, command, bg_color, fg_color, size, active_bg, tooltip, radius
+            )
+        return None
     
     def create_rounded_top_tab_button(self, parent: 'tk.Widget', text: str, command: Callable, 
                                       bg_color: str, fg_color: str = '#1A202C',
@@ -294,10 +302,11 @@ class ReFilePlusApp:
         Returns:
             Созданный виджет кнопки или None
         """
-        from ui.ui_components import UIComponents
-        return UIComponents.create_rounded_top_tab_button(
-            parent, text, command, bg_color, fg_color, font, padx, pady, active_bg, active_fg, radius
-        )
+        if UIComponents:
+            return UIComponents.create_rounded_top_tab_button(
+                parent, text, command, bg_color, fg_color, font, padx, pady, active_bg, active_fg, radius
+            )
+        return None
     
     def on_window_resize(self, event: Optional['tk.Event'] = None) -> None:
         """Обработчик изменения размера окна для адаптивного масштабирования."""
@@ -450,9 +459,26 @@ class ReFilePlusApp:
             self.file_list_manager.select_all()
     
     def deselect_all(self) -> None:
-        """Снятие выделения со всех файлов."""
+        """Снятие выделение со всех файлов."""
         if hasattr(self, 'file_list_manager'):
             self.file_list_manager.deselect_all()
+    
+    def clear_all_caches(self) -> None:
+        """Очистка всех кешей приложения."""
+        try:
+            # Очистка кешей валидации и путей
+            from core.methods.file_validation import clear_all_caches
+            clear_all_caches()
+            
+            # Очистка кеша метаданных изображений
+            if hasattr(self, 'metadata_extractor') and self.metadata_extractor:
+                self.metadata_extractor.clear_cache()
+            
+            self.log("Все кеши очищены")
+            logger.info("Все кеши приложения очищены")
+        except Exception as e:
+            logger.error(f"Ошибка при очистке кешей: {e}", exc_info=True)
+            self.log(f"Ошибка при очистке кешей: {e}")
     
     def show_file_context_menu(self, event: 'tk.Event') -> None:
         """Показ контекстного меню для файла.
@@ -502,10 +528,14 @@ class ReFilePlusApp:
         if hasattr(self, 'ui_templates_manager'):
             self.ui_templates_manager.show_saved_templates()
     
-    def _apply_template_immediate(self):
-        """Немедленное применение шаблона"""
+    def _apply_template_immediate(self, force=False):
+        """Немедленное применение шаблона
+        
+        Args:
+            force: Принудительно применить шаблон, даже если он не изменился
+        """
         if hasattr(self, 'ui_templates_manager'):
-            self.ui_templates_manager._apply_template_immediate()
+            self.ui_templates_manager._apply_template_immediate(force=force)
     
     def _apply_template_delayed(self):
         """Отложенное применение шаблона"""

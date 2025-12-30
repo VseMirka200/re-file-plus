@@ -2,7 +2,6 @@
   "auto_apply": true,
   "show_warnings": true,
   "font_size": "16",
-  "backup": false,
   "remove_files_after_operation": true,
   "numbering_start_number": "1",
   "numbering_zeros_count": "0",
@@ -23,19 +22,7 @@
       {
         "folder_name": "Документы",
         "type": "extension",
-        "value": ".pdf,.doc,.docx,.xls,.xlsx,.txt",
-        "enabled": true
-      },
-      {
-        "folder_name": "Видео",
-        "type": "extension",
-        "value": ".mp4,.avi,.mkv,.mov,.wmv",
-        "enabled": true
-      },
-      {
-        "folder_name": "Аудио",
-        "type": "extension",
-        "value": ".mp3,.wav,.flac,.ogg,.m4a",
+        "value": ".pdf,.doc,.docx,.txt",
         "enabled": true
       },
       {

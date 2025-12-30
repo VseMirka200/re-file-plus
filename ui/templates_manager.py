@@ -366,8 +366,12 @@ class TemplatesManager:
             messagebox.showerror("Ошибка", f"Не удалось открыть окно сохраненных шаблонов:\n{e}")
             self.app.log(f"Ошибка открытия сохраненных шаблонов: {e}")
     
-    def _apply_template_immediate(self):
-        """Немедленное применение шаблона (при потере фокуса)"""
+    def _apply_template_immediate(self, force=False):
+        """Немедленное применение шаблона (при потере фокуса)
+        
+        Args:
+            force: Принудительно применить шаблон, даже если он не изменился
+        """
         # Сбрасываем таймер
         self._template_change_timer = None
         
@@ -381,11 +385,14 @@ class TemplatesManager:
             
             # Применяем шаблон, если:
             # 1. Шаблон изменился, ИЛИ
-            # 2. Количество файлов изменилось (добавлены новые файлы)
+            # 2. Количество файлов изменилось (добавлены новые файлы), ИЛИ
+            # 3. Шаблон есть, но еще не применялся (для первого применения), ИЛИ
+            # 4. Принудительное применение (force=True)
             template_changed = template != self._last_applied_template
             files_count_changed = current_files_count != self._last_files_count
+            template_not_applied = template and self._last_applied_template is None
             
-            if template and (template_changed or files_count_changed):
+            if template and (template_changed or files_count_changed or template_not_applied or force):
                 try:
                     self._is_applying_template = True
                     self.apply_template_quick(auto=True)

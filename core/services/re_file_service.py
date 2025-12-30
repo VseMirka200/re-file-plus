@@ -23,18 +23,15 @@ class ReFileService:
     def __init__(
         self,
         metadata_extractor: Optional[Any] = None,
-        backup_manager: Optional[Any] = None,
         error_handler: Optional[ErrorHandler] = None
     ) -> None:
         """Инициализация сервиса.
         
         Args:
             metadata_extractor: Экстрактор метаданных (опционально)
-            backup_manager: Менеджер резервных копий (опционально)
             error_handler: Обработчик ошибок (опционально)
         """
         self.metadata_extractor = metadata_extractor
-        self.backup_manager = backup_manager
         self.error_handler = error_handler or ErrorHandler()
     
     def re_file_files(
@@ -152,19 +149,6 @@ class ReFileService:
                             file.set_error(app_error.message)
                             result.add_error(file, app_error.message)
                             continue
-                        
-                        # Создаем резервную копию, если нужно
-                        if self.backup_manager:
-                            try:
-                                self.backup_manager.create_backup(str(file.path))
-                            except Exception as e:
-                                app_error = AppError(
-                                    ErrorType.PERMISSION_DENIED,
-                                    f"Не удалось создать резервную копию: {e}",
-                                    {'file_path': str(file.path)},
-                                    original_error=e
-                                )
-                                self.error_handler.handle_error(app_error)
                         
                         # Выполняем re-file операции (атомарная операция)
                         # os.rename/path.rename атомарны и сами проверят существование

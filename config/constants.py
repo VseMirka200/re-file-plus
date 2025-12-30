@@ -10,7 +10,6 @@
 APP_VERSION = "1.0.0"
 
 # Таймауты
-PACKAGE_INSTALL_TIMEOUT = 300  # 5 минут для установки пакетов
 COM_OPERATION_DELAY = 0.5  # Задержка после COM операций (секунды)
 
 # Размеры окна
@@ -26,14 +25,6 @@ SUPPORTED_IMAGE_FORMATS = {
 
 SUPPORTED_DOCUMENT_FORMATS = {
     '.png', '.jpg', '.jpeg', '.pdf', '.doc', '.docx', '.odt'
-}
-
-SUPPORTED_AUDIO_FORMATS = {
-    '.mp3', '.wav'
-}
-
-SUPPORTED_VIDEO_FORMATS = {
-    '.mp4', '.mov', '.mkv', '.gif'
 }
 
 # Качество по умолчанию
