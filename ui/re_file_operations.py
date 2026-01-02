@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Импорт структурированного логирования
 try:
-    from utils.structured_logging import log_action, log_file_action, log_batch_action
+    from utils.logging_utils import log_action, log_file_action, log_batch_action
 except ImportError:
     # Fallback если модуль недоступен
     def log_action(logger, level, action, message, **kwargs):
@@ -111,16 +111,49 @@ class ReFileOperations:
             except (OSError, PermissionError, ValueError) as e:
                 # Ошибки файловой системы
                 error_msg = f"Ошибка файловой системы: {str(e)}"
+                # Используем ErrorHandler если доступен
+                if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                    try:
+                        from core.error_handling.errors import ErrorType
+                        self.app.error_handler.handle_error(
+                            e,
+                            error_type=ErrorType.PERMISSION_DENIED if isinstance(e, PermissionError) else ErrorType.INVALID_PATH,
+                            context={'operation': 'apply_methods', 'methods': method_names}
+                        )
+                    except Exception:
+                        pass  # Если ErrorHandler недоступен, продолжаем без него
                 logger.error(f"Ошибка в потоке применения методов: {error_msg}", exc_info=True)
                 self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             except (AttributeError, TypeError) as e:
                 # Ошибки доступа к атрибутам
                 error_msg = f"Ошибка доступа к данным: {str(e)}"
+                # Используем ErrorHandler если доступен
+                if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                    try:
+                        from core.error_handling.errors import ErrorType
+                        self.app.error_handler.handle_error(
+                            e,
+                            error_type=ErrorType.VALIDATION_ERROR,
+                            context={'operation': 'apply_methods', 'methods': method_names}
+                        )
+                    except Exception:
+                        pass  # Если ErrorHandler недоступен, продолжаем без него
                 logger.error(f"Ошибка в потоке применения методов: {error_msg}", exc_info=True)
                 self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             except Exception as e:
                 # Неожиданные ошибки
                 error_msg = f"Неожиданная ошибка: {str(e)}"
+                # Используем ErrorHandler если доступен
+                if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                    try:
+                        from core.error_handling.errors import ErrorType
+                        self.app.error_handler.handle_error(
+                            e,
+                            error_type=ErrorType.UNKNOWN_ERROR,
+                            context={'operation': 'apply_methods', 'methods': method_names}
+                        )
+                    except Exception:
+                        pass  # Если ErrorHandler недоступен, продолжаем без него
                 logger.error(f"Неожиданная ошибка в потоке применения методов: {error_msg}", exc_info=True)
                 self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             finally:

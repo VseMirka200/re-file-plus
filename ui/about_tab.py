@@ -1,6 +1,7 @@
 """Модуль для создания вкладки 'О программе'.
 
 Отображает информацию о программе и разработчиках.
+Использует переиспользуемые компоненты для создания карточек.
 """
 
 import logging
@@ -14,6 +15,9 @@ try:
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
+
+# Локальные импорты
+from ui.components import create_card
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +101,6 @@ class AboutTab:
         Args:
             parent_frame: Родительский Frame для размещения содержимого
         """
-        parent_frame.configure(padx=20, pady=20)
         parent_frame.columnconfigure(0, weight=1)
         self._create_content(parent_frame)
     
@@ -108,9 +111,13 @@ class AboutTab:
             content_frame: Frame для размещения содержимого
         """
         # Описание программы - карточка
-        about_card = ttk.LabelFrame(content_frame, text="О программе", 
-                                    style='Card.TLabelframe', padding=20)
-        about_card.pack(fill=tk.X, pady=(10, 10))
+        about_card = create_card(
+            content_frame,
+            title="О программе",
+            padding=20,
+            padx=20,
+            pady=(20, 10)
+        )
         
         # Контейнер для двух столбцов (изображение, описание)
         about_content_frame = tk.Frame(about_card, bg=self.colors['bg_main'])
@@ -287,9 +294,13 @@ class AboutTab:
     
     def _create_developers_card(self, parent):
         """Создание карточки с информацией о разработчиках"""
-        dev_card = ttk.LabelFrame(parent, text="Команда разработчиков", 
-                                  style='Card.TLabelframe', padding=20)
-        dev_card.pack(fill=tk.X, pady=(0, 10))
+        dev_card = create_card(
+            parent,
+            title="Команда разработчиков",
+            padding=20,
+            padx=20,
+            pady=(0, 10)
+        )
         
         # Ведущий разработчик
         lead_dev_frame = tk.Frame(dev_card, bg=self.colors['bg_main'])
@@ -329,9 +340,13 @@ class AboutTab:
     
     def _create_social_card(self, parent):
         """Создание карточки с нашими сообществами"""
-        social_card = ttk.LabelFrame(parent, text="Наши сообщества", 
-                                     style='Card.TLabelframe', padding=20)
-        social_card.pack(fill=tk.X, pady=(0, 10))
+        social_card = create_card(
+            parent,
+            title="Наши сообщества",
+            padding=20,
+            padx=20,
+            pady=(0, 10)
+        )
         
         def open_vk_social(event):
             import webbrowser
@@ -397,9 +412,13 @@ class AboutTab:
     
     def _create_github_card(self, parent):
         """Создание карточки с GitHub"""
-        github_card = ttk.LabelFrame(parent, text="Открыть исходный код", 
-                                     style='Card.TLabelframe', padding=20)
-        github_card.pack(fill=tk.X, pady=(0, 10))
+        github_card = create_card(
+            parent,
+            title="Открыть исходный код",
+            padding=20,
+            padx=20,
+            pady=(0, 10)
+        )
         
         def open_github(event):
             import webbrowser
@@ -434,9 +453,13 @@ class AboutTab:
     
     def _create_contact_card(self, parent):
         """Создание карточки с контактами"""
-        contact_card = ttk.LabelFrame(parent, text="Техническая поддержка", 
-                                      style='Card.TLabelframe', padding=20)
-        contact_card.pack(fill=tk.X, pady=(0, 10))
+        contact_card = create_card(
+            parent,
+            title="Техническая поддержка",
+            padding=20,
+            padx=20,
+            pady=(0, 10)
+        )
         
         def open_email(event):
             import webbrowser

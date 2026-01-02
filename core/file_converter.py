@@ -3,8 +3,9 @@
 Обеспечивает конвертацию файлов между различными форматами:
 - Изображения: JPG, PNG, BMP, TIFF, WEBP и др. (через Pillow)
 - Изображения в PDF и PDF в изображения (через PyMuPDF и Pillow)
-- Документы: DOCX в PDF, PDF в DOCX
-  (через COM или специализированные библиотеки)
+- Документы: DOCX в PDF, PDF в DOCX (через COM или специализированные библиотеки)
+- Аудио: MP3, WAV, AAC, OGG, FLAC, WMA, M4A, OPUS (через ffmpeg)
+- Видео: MP4, AVI, MKV, MOV, WMV, FLV, WEBM, M4V, 3GP (через ffmpeg)
 """
 
 # Стандартная библиотека
@@ -178,6 +179,37 @@ class FileConverter:
             '.odp': 'ODP'
         }
         
+        # Поддерживаемые форматы аудио
+        self.supported_audio_formats = {
+            '.mp3': 'MP3',
+            '.wav': 'WAV',
+            '.aac': 'AAC',
+            '.ogg': 'OGG',
+            '.flac': 'FLAC',
+            '.wma': 'WMA',
+            '.m4a': 'M4A',
+            '.opus': 'OPUS'
+        }
+        
+        # Поддерживаемые форматы видео
+        self.supported_video_formats = {
+            '.mp4': 'MP4',
+            '.avi': 'AVI',
+            '.mkv': 'MKV',
+            '.mov': 'MOV',
+            '.wmv': 'WMV',
+            '.flv': 'FLV',
+            '.webm': 'WEBM',
+            '.m4v': 'M4V',
+            '.3gp': '3GP'
+        }
+        
+        # Целевые форматы для аудио (все форматы могут конвертироваться между собой через ffmpeg)
+        self.supported_audio_target_formats = self.supported_audio_formats.copy()
+        
+        # Целевые форматы для видео (все форматы могут конвертироваться между собой через ffmpeg)
+        self.supported_video_target_formats = self.supported_video_formats.copy()
+        
         # Инициализируем валидатор форматов
         from core.converter.format_validator import FormatValidator
         self.format_validator = FormatValidator(
@@ -186,6 +218,10 @@ class FileConverter:
             self.supported_presentation_formats,
             self.supported_document_target_formats,
             self.supported_presentation_target_formats,
+            self.supported_audio_formats,
+            self.supported_video_formats,
+            self.supported_audio_target_formats,
+            self.supported_video_target_formats,
             self.Image,
             self.fitz,
             self.Converter,
@@ -236,7 +272,7 @@ class FileConverter:
             file_path: Путь к файлу
             
         Returns:
-            Категория файла: 'image', 'document', 'presentation' или None
+            Категория файла: 'image', 'document', 'presentation', 'audio', 'video' или None
         """
         return self.format_validator.get_file_type_category(file_path)
     
@@ -441,6 +477,29 @@ class FileConverter:
                         )
                     except ImportError:
                         return False, "Модуль конвертации документов недоступен", None
+            
+            # Конвертация аудио файлов
+            if source_ext in self.supported_audio_formats:
+                if target_ext in self.supported_audio_target_formats:
+                    try:
+                        from core.converter.audio_video_converter import convert_audio_video
+                        return convert_audio_video(file_path, output_path, target_ext)
+                    except ImportError:
+                        return False, "Модуль конвертации аудио/видео недоступен", None
+                else:
+                    return False, "Неподдерживаемый формат файла", None
+            
+            # Конвертация видео файлов
+            if source_ext in self.supported_video_formats:
+                if target_ext in self.supported_video_target_formats:
+                    try:
+                        from core.converter.audio_video_converter import convert_audio_video
+                        return convert_audio_video(file_path, output_path, target_ext)
+                    except ImportError:
+                        return False, "Модуль конвертации аудио/видео недоступен", None
+                else:
+                    return False, "Неподдерживаемый формат файла", None
+            
             # PDF в изображения
             elif source_ext == '.pdf' and target_ext in self.supported_image_formats:
                 try:
@@ -492,13 +551,6 @@ class FileConverter:
         """
         success, message, output_path = self.convert(file_path, target_format)
         return output_path if success else None
-    
-    # Старые методы _convert_* удалены - теперь используется делегирование к модулям конвертации
-    # Методы конвертации находятся в:
-    # - core/converter/image_converter.py (изображения)
-    # - core/converter/document_converter.py (документы)
-    # - core/converter/odt_converter.py (ODT)
-    # - core/converter/libreoffice_converter.py (LibreOffice)
     
     def convert_batch(self, file_paths: List[str], target_format: str, 
                      output_dir: Optional[str] = None, quality: int = 95) -> List[Tuple[str, bool, str, Optional[str]]]:

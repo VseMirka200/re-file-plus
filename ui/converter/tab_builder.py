@@ -54,6 +54,161 @@ class ConverterTabBuilder:
         # Создаем только правую панель (левая панель с общим деревом уже существует)
         self._create_right_panel(main_container)
     
+    def create_full_tab_content(self, parent):
+        """Создание полноценной вкладки конвертации с верхней панелью.
+        
+        Args:
+            parent: Родительский контейнер для размещения содержимого (convert_tab_container, используется только для инициализации)
+        """
+        # Этот метод больше не используется, так как верхняя панель создается в files_tab_container
+        # Оставляем пустым для обратной совместимости
+        pass
+    
+    def _create_top_panel(self, main_container):
+        """Создание верхней панели с кнопками и настройками конвертации."""
+        # Панель для вкладки "Конвертация" (кнопки и настройки)
+        top_panel = tk.Frame(main_container, bg=self.app.colors['bg_main'])
+        top_panel.grid(row=0, column=0, sticky="ew", padx=0, pady=(0, 1))
+        top_panel.columnconfigure(1, weight=1)  # Контейнер для настроек растягивается
+        # Сохраняем ссылку на top_panel для управления видимостью
+        self.app.converter_top_panel = top_panel
+        
+        # Контейнер для кнопок слева
+        buttons_left_container = tk.Frame(top_panel, bg=self.app.colors['bg_main'])
+        buttons_left_container.grid(row=0, column=0, sticky="w", padx=(10, 5), pady=5)
+        
+        # Кнопка "Добавить" (квадратная, со значком "+")
+        btn_add = self.app.create_square_icon_button(
+            buttons_left_container,
+            "+",
+            self.converter_tab.add_files_for_conversion,
+            bg_color=self.app.colors['success'],
+            size=28,
+            active_bg=self.app.colors['success_hover']
+        )
+        btn_add.grid(row=0, column=0, padx=(0, 5), pady=0)
+        
+        # Кнопка "Очистить" (квадратная, со значком корзинки)
+        btn_clear = self.app.create_square_icon_button(
+            buttons_left_container,
+            "🗑️",
+            self.converter_tab.clear_converter_files_list,
+            bg_color=self.app.colors['danger'],
+            size=28,
+            active_bg=self.app.colors['danger_hover']
+        )
+        btn_clear.grid(row=0, column=1, padx=(0, 0), pady=0)
+        
+        # Контейнер для настроек конвертации
+        settings_content_frame = tk.Frame(top_panel, bg=self.app.colors['bg_main'])
+        settings_content_frame.grid(row=0, column=1, sticky="ew", padx=0, pady=5)
+        settings_content_frame.columnconfigure(3, weight=1)  # Поле формата растягивается
+        
+        # Метка "Тип:"
+        type_label = tk.Label(
+            settings_content_frame,
+            text="Тип:",
+            font=('Robot', 9, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            anchor='w'
+        )
+        type_label.grid(row=0, column=0, sticky="w", padx=(0, 5), pady=0)
+        
+        # Frame для Combobox типа с фиксированной высотой 28px (как у кнопок)
+        type_combo_frame = tk.Frame(settings_content_frame, bg=self.app.colors['bg_main'], height=28, width=120)
+        type_combo_frame.grid(row=0, column=1, sticky="ew", padx=(0, 5), pady=0)
+        type_combo_frame.grid_propagate(False)
+        type_combo_frame.pack_propagate(False)
+        
+        # Выпадающее меню с типами файлов
+        filter_var = tk.StringVar(value="Все")
+        filter_combo = ttk.Combobox(
+            type_combo_frame,
+            textvariable=filter_var,
+            values=["Все", "Изображения", "Документы", "Презентации", "Аудио", "Видео"],
+            state='readonly',
+            width=12,
+            font=('Robot', 9)
+        )
+        filter_combo.pack(fill=tk.BOTH, expand=True)
+        filter_combo.bind('<<ComboboxSelected>>', lambda e: self.converter_tab.filter_converter_files_by_type())
+        self.app.converter_filter_var = filter_var
+        self.app.converter_filter_combo = filter_combo
+        
+        # Метка "Формат:"
+        format_label = tk.Label(
+            settings_content_frame,
+            text="Формат:",
+            font=('Robot', 9, 'bold'),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary'],
+            anchor='w'
+        )
+        format_label.grid(row=0, column=2, sticky="w", padx=(0, 5), pady=0)
+        
+        # Frame для Combobox формата с фиксированной высотой 28px (как у кнопок)
+        format_combo_frame = tk.Frame(settings_content_frame, bg=self.app.colors['bg_main'], height=28)
+        format_combo_frame.grid(row=0, column=3, sticky="ew", padx=(0, 5), pady=0)
+        format_combo_frame.grid_propagate(False)
+        format_combo_frame.pack_propagate(False)
+        
+        # Выпадающее меню с форматами
+        formats = self.app.file_converter.get_supported_formats() if hasattr(self.app, 'file_converter') else []
+        format_var = tk.StringVar(value=formats[0] if formats else '.png')
+        format_combo = ttk.Combobox(
+            format_combo_frame,
+            textvariable=format_var,
+            values=formats,
+            state='readonly',
+            width=15,
+            font=('Robot', 9)
+        )
+        format_combo.pack(fill=tk.BOTH, expand=True)
+        self.app.converter_format_var = format_var
+        self.app.converter_format_combo = format_combo
+        
+        # Кнопка "Конвертировать" (квадратная, со значком галочки)
+        btn_convert = self.app.create_square_icon_button(
+            settings_content_frame,
+            "✓",
+            self.converter_tab.convert_files,
+            bg_color=self.app.colors['success'],
+            size=28,
+            active_bg=self.app.colors['success_hover']
+        )
+        btn_convert.grid(row=0, column=4, padx=(0, 10), pady=0, sticky="n")
+        
+        # Применяем фильтр при инициализации
+        self.app.root.after(100, lambda: self.converter_tab.filter_converter_files_by_type())
+    
+    def _create_files_list_panel(self, main_container):
+        """Создание панели со списком файлов."""
+        # Панель со списком файлов
+        files_count = len(self.app.converter_files) if hasattr(self.app, 'converter_files') else 0
+        files_panel = ttk.LabelFrame(
+            main_container,
+            text=f"Список файлов (Файлов: {files_count})",
+            style='Card.TLabelframe',
+            padding=(6, 12, 6, 12)
+        )
+        files_panel.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        files_panel.columnconfigure(0, weight=1)
+        files_panel.rowconfigure(0, weight=1)
+        
+        # Сохраняем ссылку на панель для обновления заголовка
+        self.app.converter_left_panel = files_panel
+        
+        # Таблица файлов
+        list_frame, tree = self._create_file_tree(files_panel)
+        
+        # Настройка drag and drop
+        self.converter_tab.setup_converter_drag_drop(list_frame, tree, main_container)
+        
+        # Инициализация списка файлов
+        if not hasattr(self.app, 'converter_files'):
+            self.app.converter_files = []
+    
     def _create_left_panel(self, main_container, converter_tab):
         """Создание левой панели со списком файлов."""
         # Левая часть - список файлов (как во вкладке "Файлы")
@@ -106,9 +261,9 @@ class ConverterTabBuilder:
             active_bg=self.app.colors['warning_hover'])
         btn_clear_left.grid(row=0, column=1, sticky="ew")
     
-    def _create_file_tree(self, left_panel):
+    def _create_file_tree(self, parent_panel):
         """Создание таблицы файлов с прокруткой."""
-        list_frame = ttk.Frame(left_panel)
+        list_frame = ttk.Frame(parent_panel)
         list_frame.pack(fill=tk.BOTH, expand=True)
         
         scrollbar_y = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
@@ -251,7 +406,7 @@ class ConverterTabBuilder:
         filter_combo = ttk.Combobox(
             settings_frame,
             textvariable=filter_var,
-            values=["Все", "Изображения", "Документы", "Презентации"],
+            values=["Все", "Изображения", "Документы", "Презентации", "Аудио", "Видео"],
             state='readonly',
             width=15
         )

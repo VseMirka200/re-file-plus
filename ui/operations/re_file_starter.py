@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Импорт структурированного логирования
 try:
-    from utils.structured_logging import log_action
+    from utils.logging_utils import log_action
 except ImportError:
     # Fallback если модуль недоступен
     def log_action(logger, level, action, message, **kwargs):

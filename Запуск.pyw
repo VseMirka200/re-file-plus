@@ -21,9 +21,8 @@ if sys.version_info < (3, 7):
     sys.exit(1)
 
 # Настройка логирования
-# Упрощенное логирование: только WARNING и выше по умолчанию
-# INFO только если установлена переменная окружения
-log_level = logging.INFO if os.getenv('VERBOSE', '').lower() == 'true' else logging.WARNING
+# Логируем все действия (INFO и выше)
+log_level = logging.INFO
 
 # Получаем путь к файлу лога из констант
 # Важно: используем абсолютный путь к файлу скрипта, чтобы работать корректно
@@ -98,17 +97,9 @@ if log_file_path:
             print(f"Ошибка: Нет прав на запись в директорию логов {log_dir}: {e}")
             log_file_path = None
 
-# Очищаем старый лог при запуске
-if log_file_path and os.path.exists(log_file_path):
-    try:
-        with open(log_file_path, 'w', encoding='utf-8') as f:
-            f.write('')  # Очищаем файл
-    except (OSError, PermissionError) as e:
-        print(f"Предупреждение: Не удалось очистить файл лога {log_file_path}: {e}")
-
 # Импортируем структурированный форматтер
 try:
-    from utils.structured_logging import StructuredFormatter
+    from utils.logging_utils import StructuredFormatter
 except ImportError:
     # Fallback форматтер, если модуль недоступен
     class StructuredFormatter(logging.Formatter):
@@ -122,7 +113,13 @@ handlers = []
 # Добавляем файловый обработчик только если путь к файлу лога доступен
 if log_file_path:
     try:
-        file_handler = logging.FileHandler(log_file_path, encoding='utf-8', mode='a')
+        # Используем кастомный обработчик с ограничением количества записей (100 последних)
+        try:
+            from utils.logging_utils import RotatingLogHandler
+            file_handler = RotatingLogHandler(log_file_path, max_lines=100, encoding='utf-8', mode='a')
+        except ImportError:
+            # Fallback на стандартный FileHandler, если кастомный недоступен
+            file_handler = logging.FileHandler(log_file_path, encoding='utf-8', mode='a')
         file_handler.setFormatter(StructuredFormatter())
         handlers.append(file_handler)
         # Проверяем, что файл действительно создан или существует

@@ -22,9 +22,10 @@ from utils.path_processing import (
     filter_cli_args
 )
 
-# Импорты из structured_logging
-from utils.structured_logging import (
+# Импорты из logging_utils
+from utils.logging_utils import (
     StructuredFormatter,
+    RotatingLogHandler,
     log_action,
     log_file_action,
     log_batch_action
@@ -45,8 +46,9 @@ __all__ = [
     'process_file_argument',
     'filter_cli_args',
     'normalize_path',
-    # Из structured_logging
+    # Из logging_utils
     'StructuredFormatter',
+    'RotatingLogHandler',
     'log_action',
     'log_file_action',
     'log_batch_action',

@@ -9,6 +9,9 @@
 import os
 import subprocess
 import sys
+import urllib.request
+import zipfile
+import shutil
 
 # Кодировка для Windows консоли
 if sys.platform == 'win32':
@@ -45,6 +48,115 @@ def upgrade_pip():
         print("  ✓ pip обновлен")
     except Exception as e:
         print(f"  ⚠ Не удалось обновить pip: {e}")
+
+def install_ffmpeg_to_project():
+    """Установка FFmpeg в папку проекта."""
+    print("\n[FFmpeg] Начало установки...")
+    
+    # Определяем пути
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    tools_dir = os.path.join(script_dir, "tools")
+    ffmpeg_dir = os.path.join(tools_dir, "ffmpeg")
+    bin_dir = os.path.join(ffmpeg_dir, "bin")
+    zip_path = os.path.join(ffmpeg_dir, "ffmpeg.zip")
+    
+    # Проверяем, не установлен ли уже FFmpeg
+    ffmpeg_exe = os.path.join(bin_dir, "ffmpeg.exe")
+    if os.path.exists(ffmpeg_exe):
+        print("  ✓ FFmpeg уже установлен в проекте")
+        return
+    
+    try:
+        # Создаем папки
+        os.makedirs(bin_dir, exist_ok=True)
+        
+        # URL для скачивания FFmpeg (статическая сборка для Windows)
+        ffmpeg_url = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+        
+        print(f"  ⬇ Скачивание FFmpeg...")
+        print(f"     URL: {ffmpeg_url}")
+        
+        # Скачиваем архив
+        def show_progress(block_num, block_size, total_size):
+            downloaded = block_num * block_size
+            percent = min(downloaded * 100 / total_size, 100)
+            print(f"\r     Прогресс: {percent:.1f}%", end='', flush=True)
+        
+        urllib.request.urlretrieve(ffmpeg_url, zip_path, show_progress)
+        print()  # Новая строка после прогресса
+        
+        if not os.path.exists(zip_path) or os.path.getsize(zip_path) < 1000:
+            print("  ✗ Ошибка: архив не скачан или поврежден")
+            return
+        
+        print(f"  📦 Распаковка архива...")
+        
+        # Распаковываем архив
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(ffmpeg_dir)
+        
+        # Ищем ffmpeg.exe в распакованных файлах
+        ffmpeg_exe_found = None
+        for root, dirs, files in os.walk(ffmpeg_dir):
+            if 'ffmpeg.exe' in files:
+                ffmpeg_exe_found = os.path.join(root, 'ffmpeg.exe')
+                break
+        
+        if not ffmpeg_exe_found:
+            print("  ✗ Ошибка: ffmpeg.exe не найден в архиве")
+            return
+        
+        # Копируем ffmpeg.exe и ffprobe.exe в bin/
+        ffprobe_exe_found = ffmpeg_exe_found.replace('ffmpeg.exe', 'ffprobe.exe')
+        
+        shutil.copy2(ffmpeg_exe_found, bin_dir)
+        print(f"  ✓ Скопирован ffmpeg.exe")
+        
+        if os.path.exists(ffprobe_exe_found):
+            shutil.copy2(ffprobe_exe_found, bin_dir)
+            print(f"  ✓ Скопирован ffprobe.exe")
+        
+        # Удаляем архив и временные файлы
+        try:
+            os.remove(zip_path)
+            # Удаляем распакованную папку (оставляем только bin/)
+            for item in os.listdir(ffmpeg_dir):
+                item_path = os.path.join(ffmpeg_dir, item)
+                if item != 'bin' and os.path.isdir(item_path):
+                    shutil.rmtree(item_path, ignore_errors=True)
+                elif item != 'bin' and item != 'ffmpeg.zip':
+                    try:
+                        os.remove(item_path)
+                    except:
+                        pass
+        except Exception as e:
+            print(f"  ⚠ Не удалось очистить временные файлы: {e}")
+        
+        # Проверяем, что всё работает
+        try:
+            result = subprocess.run(
+                [ffmpeg_exe, '-version'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5
+            )
+            if result.returncode == 0:
+                print(f"  ✓ FFmpeg успешно установлен в {bin_dir}")
+            else:
+                print(f"  ⚠ FFmpeg установлен, но проверка не прошла")
+        except Exception as e:
+            print(f"  ⚠ FFmpeg установлен, но проверка не выполнена: {e}")
+    
+    except urllib.error.URLError as e:
+        print(f"  ✗ Ошибка скачивания: {e}")
+        print(f"     Проверьте подключение к интернету")
+    except zipfile.BadZipFile:
+        print(f"  ✗ Ошибка: архив поврежден или не является ZIP файлом")
+    except Exception as e:
+        print(f"  ✗ Ошибка установки FFmpeg: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 def install_package(package, description=""):
     """Установка пакета."""
@@ -121,6 +233,16 @@ def main():
         
         for package, desc in windows_packages:
             install_package(package, desc)
+    
+    # Установка FFmpeg (для конвертации аудио/видео)
+    print_header("Установка FFmpeg (опционально)")
+    print("FFmpeg необходим для конвертации аудио и видео файлов.")
+    install_ffmpeg = input("Установить FFmpeg в папку проекта? (y/n, по умолчанию n): ").strip().lower()
+    
+    if install_ffmpeg in ('y', 'yes', 'д', 'да', 'у', 'установить'):
+        install_ffmpeg_to_project()
+    else:
+        print("  ⏭ Пропущено")
     
     # Итоги
     print_header("Установка завершена!")

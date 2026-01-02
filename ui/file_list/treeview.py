@@ -36,14 +36,16 @@ class TreeViewManager:
         # Создаем Treeview
         tree = ttk.Treeview(
             tree_frame,
-            columns=("files", "path"),
+            columns=("files", "new_name", "path"),
             show="headings",
             style='Custom.Treeview'
         )
         tree.heading("files", text="Имя файла")
+        tree.heading("new_name", text="Новое имя")
         tree.heading("path", text="Путь")
-        tree.column("files", width=300, minwidth=150, stretch=False)
-        tree.column("path", width=400, minwidth=200, stretch=True)
+        tree.column("files", width=300, minwidth=150, stretch=True)
+        tree.column("new_name", width=300, minwidth=150, stretch=True)
+        tree.column("path", width=300, minwidth=200, stretch=True)
         
         # Создаем скроллбар
         scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
@@ -249,8 +251,9 @@ class TreeViewManager:
                         # Для статуса 'Готов' при добавлении (без конвертации) - без тега (без цвета)
                         tags = ()
                 
-                # Вставляем имя файла и путь
-                self.app.tree.insert("", tk.END, values=(display_text, file_path_display), tags=tags)
+                # Вставляем имя файла, новое имя и путь
+                new_display_name_full = new_full_name if new_full_name != old_full_name else ""
+                self.app.tree.insert("", tk.END, values=(old_display_name, new_display_name_full, file_path_display), tags=tags)
         
         # Обновляем видимость скроллбаров
         if (hasattr(self.app, 'tree_scrollbar_y') and
@@ -280,12 +283,12 @@ class TreeViewManager:
         """Сортировка по колонке.
         
         Args:
-            col: Имя колонки для сортировки ("files" или "path")
+            col: Имя колонки для сортировки ("files", "new_name" или "path")
         """
         if not hasattr(self.app, 'tree') or not self.app.tree:
             return
         
-        if col in ("files", "path"):
+        if col in ("files", "new_name", "path"):
             sort_col = col
         else:
             sort_col = "files"

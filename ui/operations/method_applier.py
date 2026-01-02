@@ -72,7 +72,7 @@ class MethodApplier:
             check_conflicts,
             validate_filename,
         )
-        from utils.structured_logging import log_file_action
+        from utils.logging_utils import log_file_action
         
         # Сброс счетчиков нумерации перед применением
         for method in methods:

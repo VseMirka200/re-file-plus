@@ -8,13 +8,22 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindowActions:
-    """Класс для создания содержимого действий главного окна."""
+    """Класс для создания содержимого действий главного окна.
+    
+    Отвечает за создание и управление содержимым для различных действий:
+    - Переименование файлов (re-file операции)
+    - Конвертация файлов
+    - Настройки методов переименования
+    
+    Управляет переключением между различными панелями действий
+    и созданием соответствующих UI компонентов.
+    """
     
     def __init__(self, app):
         """Инициализация.
         
         Args:
-            app: Экземпляр главного приложения
+            app: Экземпляр главного приложения (ReFilePlusApp)
         """
         self.app = app
     
@@ -54,38 +63,17 @@ class MainWindowActions:
             if frame:
                 try:
                     if frame.winfo_exists():
-                        frame.grid(row=0, column=1, sticky="ew")
+                        frame.grid(row=0, column=0, sticky="ew")
                     else:
                         # Frame уничтожен, создаем заново
                         self.create_re_file_action_content(parent)
-                        self.app.tab_contents["re_file"].grid(row=0, column=1, sticky="ew")
+                        self.app.tab_contents["re_file"].grid(row=0, column=0, sticky="ew")
                 except (tk.TclError, AttributeError):
                     # Frame не существует, создаем заново
                     self.create_re_file_action_content(parent)
-                    self.app.tab_contents["re_file"].grid(row=0, column=1, sticky="ew")
+                    self.app.tab_contents["re_file"].grid(row=0, column=0, sticky="ew")
             # Обновляем колонки для переименования
             self.app.root.after(100, lambda act="re_file": self.app.main_window_handler.update_tree_columns_for_action(act))
-        elif action == "Конвертировать":
-            if "convert" not in self.app.tab_contents or self.app.tab_contents["convert"] is None:
-                self.create_convert_action_content(parent)
-            frame = self.app.tab_contents.get("convert")
-            if frame:
-                try:
-                    if frame.winfo_exists():
-                        frame.grid(row=0, column=1, sticky="ew")
-                    else:
-                        # Frame уничтожен, создаем заново
-                        self.create_convert_action_content(parent)
-                        self.app.tab_contents["convert"].grid(row=0, column=1, sticky="ew")
-                except (tk.TclError, AttributeError):
-                    # Frame не существует, создаем заново
-                    self.create_convert_action_content(parent)
-                    self.app.tab_contents["convert"].grid(row=0, column=1, sticky="ew")
-            # Обновляем колонки для конвертации
-            self.app.root.after(100, lambda act="convert": self.app.main_window_handler.update_tree_columns_for_action(act))
-            # Автоматически определяем тип файла и обновляем форматы, если есть файлы
-            if hasattr(self.app, 'converter_tab_handler'):
-                self.app.root.after(150, lambda: self.app.converter_tab_handler.update_available_formats())
     
     def create_re_file_action_content(self, parent) -> None:
         """Создание содержимого для действия 'Переименовать' в одну линию.
@@ -104,7 +92,7 @@ class MainWindowActions:
         
         # Создаем Frame для содержимого действия переименования
         re_file_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        re_file_frame.grid(row=0, column=1, sticky="ew", padx=0, pady=0)
+        re_file_frame.grid(row=0, column=0, sticky="ew", padx=0, pady=0)
         # Настраиваем веса колонок для правильного растяжения
         re_file_frame.columnconfigure(1, weight=1)  # Поле шаблона растягивается
         

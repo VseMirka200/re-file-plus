@@ -1,23 +1,41 @@
-"""Модуль для создания UI вкладки сортировки."""
+"""Модуль для создания UI вкладки сортировки.
+
+Использует переиспользуемые компоненты для создания прокручиваемого контента.
+"""
 
 import logging
 import os
 import tkinter as tk
 from tkinter import ttk
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.app_core import ReFilePlusApp
+
+# Локальные импорты
+from ui.components import create_scrollable_frame
 
 logger = logging.getLogger(__name__)
 
 
 class SorterUI:
-    """Класс для создания UI вкладки сортировки."""
+    """Класс для создания UI вкладки сортировки.
     
-    def __init__(self, app):
+    Отвечает за создание и управление UI элементов вкладки сортировки:
+    - Панель выбора папки
+    - Панель фильтров с прокруткой
+    - Кнопки управления
+    
+    Использует переиспользуемые компоненты для создания прокручиваемого контента.
+    """
+    
+    def __init__(self, app: 'ReFilePlusApp') -> None:
         """Инициализация.
         
         Args:
             app: Экземпляр главного приложения
         """
-        self.app = app
+        self.app: 'ReFilePlusApp' = app
     
     def create_tab(self):
         """Создание вкладки сортировки файлов на главном экране"""
@@ -110,7 +128,7 @@ class SorterUI:
         """
         # Создаем Frame для содержимого вкладки сортировки
         sort_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        sort_frame.grid(row=0, column=0, sticky="nsew", pady=(5, 0))
+        sort_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 0))
         sort_frame.columnconfigure(0, weight=1)
         sort_frame.rowconfigure(1, weight=1)  # settings_panel растягивается
         sort_frame.rowconfigure(0, weight=0)  # actions_panel не растягивается
@@ -124,7 +142,7 @@ class SorterUI:
         
         # Контейнер для кнопок (чтобы они были "за границей" основного контейнера)
         buttons_container = tk.Frame(actions_panel, bg=self.app.colors['bg_main'])
-        buttons_container.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        buttons_container.grid(row=0, column=0, sticky="w", padx=(10, 5), pady=5)
         
         # Кнопки управления сортировкой (квадратные, только иконки)
         # Добавить правило
@@ -137,7 +155,7 @@ class SorterUI:
             active_bg=self.app.colors['success_hover'],
             tooltip="Добавить правило"
         )
-        btn_add_filter.grid(row=0, column=0, padx=(0, 5), pady=0)
+        btn_add_filter.grid(row=0, column=0, padx=(0, 2), pady=0)
         
         # Сохранить
         btn_save = self.app.create_square_icon_button(
@@ -149,7 +167,7 @@ class SorterUI:
             active_bg=self.app.colors['info_hover'],
             tooltip="Сохранить правила"
         )
-        btn_save.grid(row=0, column=1, padx=(0, 5), pady=0)
+        btn_save.grid(row=0, column=1, padx=(0, 2), pady=0)
         
         # Предпросмотр
         btn_preview = self.app.create_square_icon_button(
@@ -161,7 +179,7 @@ class SorterUI:
             active_bg=self.app.colors['info_hover'],
             tooltip="Предпросмотр сортировки"
         )
-        btn_preview.grid(row=0, column=2, padx=(0, 5), pady=0)
+        btn_preview.grid(row=0, column=2, padx=(0, 2), pady=0)
         
         # Начать сортировку
         btn_start_sort = self.app.create_square_icon_button(
@@ -173,7 +191,7 @@ class SorterUI:
             active_bg=self.app.colors['success_hover'],
             tooltip="Начать сортировку"
         )
-        btn_start_sort.grid(row=0, column=3, padx=(0, 5), pady=0)
+        btn_start_sort.grid(row=0, column=3, padx=(0, 2), pady=0)
         
         # Контейнер для панели настроек (как files_container во вкладке "Файлы")
         settings_container = tk.Frame(sort_frame, bg=self.app.colors['bg_main'])
@@ -182,13 +200,11 @@ class SorterUI:
         settings_container.rowconfigure(0, weight=1)
         
         # Панель с настройками и действиями
-        settings_panel = ttk.LabelFrame(
+        settings_panel = tk.Frame(
             settings_container,
-            text="Настройки сортировки",
-            style='Card.TLabelframe',
-            padding=(6, 12, 6, 12)
+            bg=self.app.colors['bg_main']
         )
-        settings_panel.pack(fill=tk.BOTH, expand=True, padx=5, pady=(5, 1))
+        settings_panel.pack(fill=tk.BOTH, expand=True, padx=11, pady=(5, 13))
         settings_panel.columnconfigure(0, weight=1)
         
         # Выбор папки для сортировки
@@ -250,62 +266,24 @@ class SorterUI:
                 bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary']).pack(anchor=tk.W, pady=(0, 10))
         
-        # Canvas для прокрутки фильтров
-        filters_canvas = tk.Canvas(filters_frame, bg=self.app.colors['bg_main'],
-                                   highlightthickness=0)
-        filters_scrollbar = ttk.Scrollbar(filters_frame, orient="vertical",
-                                          command=filters_canvas.yview)
-        filters_scrollable = tk.Frame(filters_canvas, bg=self.app.colors['bg_main'])
+        # Создаем прокручиваемый фрейм используя переиспользуемый компонент
+        filters_scrollable, scrollable = create_scrollable_frame(
+            filters_frame,
+            bg_color=self.app.colors['bg_main'],
+            bind_mousewheel_func=getattr(self.app, 'bind_mousewheel', None)
+        )
         
-        filters_canvas_window = filters_canvas.create_window((0, 0),
-                                                             window=filters_scrollable,
-                                                             anchor="nw")
-        
-        # Функция для автоматического показа/скрытия скроллбара
-        def update_scrollbar_visibility(*args):
-            try:
-                canvas_height = filters_canvas.winfo_height()
-                scrollable_height = filters_scrollable.winfo_reqheight()
-                
-                if scrollable_height > canvas_height:
-                    filters_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-                else:
-                    filters_scrollbar.pack_forget()
-            except (tk.TclError, AttributeError):
-                pass
-        
-        def on_filters_canvas_configure(event):
-            if event.widget == filters_canvas:
-                canvas_width = event.width
-                filters_canvas.itemconfig(filters_canvas_window, width=canvas_width)
-                # Обновляем видимость скроллбара при изменении размера canvas
-                filters_canvas.after(10, update_scrollbar_visibility)
-        
-        filters_canvas.bind('<Configure>', on_filters_canvas_configure)
-        
-        def on_scroll(*args):
-            filters_scrollbar.set(*args)
-        
-        filters_canvas.configure(yscrollcommand=on_scroll)
-        
-        def on_mousewheel_filters(event):
-            scroll_amount = int(-1 * (event.delta / 120))
-            filters_canvas.yview_scroll(scroll_amount, "units")
-        
-        filters_canvas.bind("<MouseWheel>", on_mousewheel_filters)
-        
-        # Обновляем видимость скроллбара при изменении содержимого
-        def on_scrollable_configure(event):
-            filters_canvas.configure(scrollregion=filters_canvas.bbox("all"))
-            filters_canvas.after(10, update_scrollbar_visibility)
-        
-        filters_scrollable.bind("<Configure>", on_scrollable_configure)
-        
-        filters_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        filters_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # Размещаем scrollable компонент
+        scrollable.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         # Сохраняем ссылку на функцию обновления для вызова из refresh_filters_display
-        self.app.update_filters_scrollbar = update_scrollbar_visibility
+        # Обертка для совместимости с существующим кодом
+        def update_filters_scrollbar(*args):
+            scrollable._update_scrollbar_visibility()
+        self.app.update_filters_scrollbar = update_filters_scrollbar
+        
+        # Первоначальная проверка видимости скроллбара
+        scrollable.canvas.after(100, scrollable._update_scrollbar_visibility)
         
         # Контейнер для списка фильтров
         self.app.sorter_filters_frame = filters_scrollable

@@ -1,67 +1,55 @@
-"""Модуль для создания вкладки 'О программе'."""
+"""Модуль для создания вкладки 'О программе'.
+
+Использует переиспользуемые компоненты для создания прокручиваемого контента.
+"""
 
 import tkinter as tk
-from tkinter import ttk
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.app_core import ReFilePlusApp
+
+# Локальные импорты
+from ui.components import create_scrollable_frame
 
 
 class MainWindowAbout:
-    """Класс для создания вкладки 'О программе'."""
+    """Класс для создания вкладки 'О программе'.
     
-    def __init__(self, app):
+    Использует переиспользуемый компонент ScrollableFrame для создания
+    прокручиваемого контента с автоматической настройкой scrollbar.
+    """
+    
+    def __init__(self, app: 'ReFilePlusApp') -> None:
         """Инициализация.
         
         Args:
             app: Экземпляр главного приложения
         """
-        self.app = app
+        self.app: 'ReFilePlusApp' = app
     
-    def create_about_tab_content(self, parent):
+    def create_about_tab_content(self, parent: tk.Widget) -> None:
         """Создание содержимого вкладки 'О программе'.
         
+        Создает прокручиваемый контейнер с содержимым о программе,
+        используя переиспользуемый компонент ScrollableFrame.
+        
         Args:
-            parent: Родительский контейнер (Frame)
+            parent: Родительский контейнер (Frame или Toplevel)
         """
         from ui.about_tab import AboutTab
         
-        # Создаем Canvas для прокрутки
-        canvas = tk.Canvas(parent, bg=self.app.colors['bg_main'], highlightthickness=0)
-        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=self.app.colors['bg_main'])
-        
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        # Создаем прокручиваемый фрейм используя переиспользуемый компонент
+        scrollable_frame, scrollable = create_scrollable_frame(
+            parent,
+            bg_color=self.app.colors['bg_main'],
+            bind_mousewheel_func=self.app.bind_mousewheel
         )
         
-        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        
-        def on_canvas_configure(event):
-            if event.widget == canvas:
-                try:
-                    canvas_width = event.width
-                    canvas.itemconfig(canvas_window, width=canvas_width)
-                    # Обновляем wraplength для текста в about_tab
-                    scrollable_frame.update_idletasks()
-                except (AttributeError, tk.TclError):
-                    pass
-        
-        canvas.bind('<Configure>', on_canvas_configure)
-        def on_window_configure(event):
-            if event.widget == parent:
-                try:
-                    canvas_width = parent.winfo_width() - scrollbar.winfo_width() - 4
-                    canvas.itemconfig(canvas_window, width=max(canvas_width, 100))
-                    # Обновляем wraplength для текста в about_tab
-                    scrollable_frame.update_idletasks()
-                except (AttributeError, tk.TclError):
-                    pass
-        
-        parent.bind('<Configure>', on_window_configure)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # Привязка прокрутки колесом мыши
-        self.app.bind_mousewheel(canvas, canvas)
-        self.app.bind_mousewheel(scrollable_frame, canvas)
+        # Размещаем scrollable компонент
+        scrollable.grid(row=0, column=0, sticky="nsew")
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(0, weight=1)
         
         # Создаем AboutTab и используем его метод для создания содержимого
         about_tab_handler = AboutTab(
@@ -73,9 +61,4 @@ class MainWindowAbout:
         
         # Вызываем метод для создания содержимого на Frame
         about_tab_handler.create_content(scrollable_frame)
-        
-        canvas.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        parent.grid_columnconfigure(0, weight=1)
-        parent.grid_rowconfigure(0, weight=1)
 

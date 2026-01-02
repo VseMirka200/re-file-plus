@@ -10,6 +10,8 @@ import subprocess
 import sys
 
 import tkinter as tk
+import tkinter.messagebox as messagebox
+from tkinter import ttk
 
 
 logger = logging.getLogger(__name__)
@@ -98,45 +100,51 @@ class SettingsTab:
         ]
         
         # Переменная для хранения выбранного пункта меню
-        self.selected_menu_item = tk.StringVar(value="remove_files")
+        self.selected_menu_item = tk.StringVar(value=menu_items[0][1])
         
         # Создаем кнопки меню
         self.menu_buttons = {}
-        for idx, (text, value) in enumerate(menu_items):
-            # Контейнер с фиксированной высотой, как у вкладок (pady*2 + 20 = 28px при pady=4)
-            btn_container = tk.Frame(menu_frame, bg=self.app.colors['bg_main'], height=28)
-            btn_container.pack(fill=tk.X, padx=0, pady=0)
-            btn_container.pack_propagate(False)
-            
+        for text, value in menu_items:
             btn = tk.Button(
-                btn_container,
+                menu_frame,
                 text=text,
-                font=('Robot', 11, 'bold'),
+                font=('Robot', 10),
                 bg=self.app.colors['bg_main'],
                 fg=self.app.colors['text_primary'],
-                activebackground=self.app.colors['bg_main'],
-                activeforeground=self.app.colors['text_primary'],
+                activebackground=self.app.colors['primary'],
+                activeforeground='white',
                 relief=tk.FLAT,
-                anchor=tk.W,
-                padx=10,
-                pady=4,  # Такой же отступ, как у верхних вкладок
-                cursor='hand2',
+                anchor='w',
+                padx=15,
+                pady=10,
                 command=lambda v=value: self.switch_section(v)
             )
-            btn.pack(fill=tk.BOTH, expand=True, anchor=tk.W)
+            btn.pack(fill=tk.X, padx=0, pady=0)
             self.menu_buttons[value] = btn
         
-        # Визуальная граница между меню и содержимым
-        separator = tk.Frame(main_container, bg=self.app.colors['border'], width=1)
-        separator.grid(row=0, column=1, sticky="ns", padx=0, pady=0)
+        # Добавляем "О программе" внизу меню
+        about_label = tk.Label(
+            menu_frame,
+            text="О программе",
+            font=('Robot', 10),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors.get('text_muted', self.app.colors.get('secondary', '#718096')),  # Голубовато-серый цвет
+            cursor='hand2',
+            anchor='w',
+            padx=15,
+            pady=10
+        )
+        about_label.pack(side=tk.BOTTOM, fill=tk.X, padx=0, pady=0)
+        about_label.bind("<Button-1>", lambda e: self.open_about_window())
+        self.menu_buttons["about"] = about_label
         
-        # Правая панель - контейнер для содержимого настроек
+        # Правая панель - содержимое настроек
         content_container = tk.Frame(main_container, bg=self.app.colors['bg_main'])
-        content_container.grid(row=0, column=2, sticky="nsew", padx=0, pady=0)
+        content_container.grid(row=0, column=1, columnspan=2, sticky="nsew", padx=0, pady=0)
         content_container.columnconfigure(0, weight=1)
         content_container.rowconfigure(0, weight=1)
         
-        # Простой Frame для содержимого (без прокрутки)
+        # Простой Frame для содержимого (без прокрутки для упрощения)
         scrollable_frame = tk.Frame(content_container, bg=self.app.colors['bg_main'])
         scrollable_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -151,9 +159,17 @@ class SettingsTab:
         # Обновляем выделение в меню
         for value, btn in self.menu_buttons.items():
             if value == section_name:
-                btn.config(bg=self.app.colors['primary'], fg='white')
+                if value == "about":
+                    # Для "О программе" не меняем стиль, оставляем как есть
+                    pass
+                else:
+                    btn.config(bg=self.app.colors['primary'], fg='white')
             else:
-                btn.config(bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
+                if value == "about":
+                    # Для "О программе" не меняем стиль
+                    pass
+                else:
+                    btn.config(bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
         
         # Удаляем старое содержимое
         for frame in self.section_frames.values():
@@ -175,290 +191,306 @@ class SettingsTab:
             self.create_remove_files_section(section_frame)
         elif section_name == "logs":
             self.create_logs_section(section_frame)
+        elif section_name == "about":
+            self.create_about_section(section_frame)
     
     def create_general_section(self, parent):
-        """Создание секции общих настроек"""
-        # Заголовок
+        """Создание секции общих настроек.
+        
+        Args:
+            parent: Родительский виджет для размещения секции
+        """
+        self._create_section_header(parent, "Общие настройки")
+        # Здесь можно добавить общие настройки
+    
+    def create_remove_files_section(self, parent):
+        """Создание секции настроек удаления файлов.
+        
+        Args:
+            parent: Родительский виджет для размещения секции
+        """
+        self._create_section_header(parent, "Удаление файлов", "Настройки поведения при удалении файлов")
+        
+        # Чекбоксы для настроек удаления файлов
+        settings_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
+        settings_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Настройка удаления файлов из списка после операции
+        self._create_remove_files_checkbox(settings_frame)
+    
+    def create_logs_section(self, parent):
+        """Создание секции настроек логов.
+        
+        Args:
+            parent: Родительский виджет для размещения секции
+        """
+        self._create_section_header(parent, "Логи", "Настройки логирования приложения")
+        
+        # Получаем путь к логам
+        logs_path = self._get_logs_path()
+        
+        # Отображаем путь к логам
+        self._create_logs_path_display(parent, logs_path)
+        
+        # Кнопки открытия папки и файла логов
+        logs_buttons_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
+        logs_buttons_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        self._create_open_logs_folder_button(logs_buttons_frame, logs_path)
+        self._create_open_log_file_button(logs_buttons_frame)
+    
+    def open_about_window(self):
+        """Открытие отдельного окна 'О программе'."""
+        # Проверяем, не открыто ли уже окно
+        if hasattr(self.app, '_about_window') and self.app._about_window is not None:
+            try:
+                if self.app._about_window.winfo_exists():
+                    # Окно уже открыто, поднимаем его на передний план
+                    self.app._about_window.lift()
+                    self.app._about_window.focus_force()
+                    return
+            except (tk.TclError, AttributeError):
+                # Окно было закрыто, но ссылка осталась
+                pass
+        
+        # Создаем новое окно
+        about_window = tk.Toplevel(self.app.root)
+        about_window.title("О программе")
+        about_window.geometry("800x600")
+        about_window.minsize(600, 400)
+        about_window.configure(bg=self.app.colors['bg_main'])
+        
+        # Установка иконки
+        try:
+            from ui.ui_components import set_window_icon
+            set_window_icon(about_window, self.app._icon_photos)
+        except (ImportError, AttributeError, tk.TclError, OSError):
+            pass
+        
+        about_window.columnconfigure(0, weight=1)
+        about_window.rowconfigure(0, weight=1)
+        
+        # Сохраняем ссылку на окно
+        self.app._about_window = about_window
+        
+        # Создаем содержимое окна
+        if hasattr(self.app, 'main_window_handler') and hasattr(self.app.main_window_handler, 'about'):
+            self.app.main_window_handler.about.create_about_tab_content(about_window)
+        else:
+            # Если нет доступа к main_window_handler, создаем напрямую
+            from ui.window.about import MainWindowAbout
+            about_handler = MainWindowAbout(self.app)
+            about_handler.create_about_tab_content(about_window)
+        
+        # Обработчик закрытия окна
+        def on_close():
+            self.app._about_window = None
+            about_window.destroy()
+        
+        about_window.protocol("WM_DELETE_WINDOW", on_close)
+    
+    def create_about_section(self, parent):
+        """Создание секции 'О программе'.
+        
+        Args:
+            parent: Родительский виджет для размещения секции (section_frame)
+        """
+        from ui.about_tab import AboutTab
+        
+        # Создаем экземпляр AboutTab для использования его метода создания содержимого
+        about_tab_handler = AboutTab(
+            None,  # notebook не нужен
+            self.app.colors,
+            self.app.bind_mousewheel,
+            self.app._icon_photos
+        )
+        
+        # Используем метод создания содержимого напрямую в parent
+        # (как и другие секции, просто добавляем контент в section_frame)
+        about_tab_handler._create_content(parent)
+    
+    def _create_section_header(self, parent, title, description=None):
+        """Создание заголовка и описания для секции настроек.
+        
+        Args:
+            parent: Родительский виджет
+            title: Заголовок секции
+            description: Описание секции (опционально)
+        """
         title_label = tk.Label(
             parent,
-            text="Общие настройки",
+            text=title,
             font=('Robot', 14, 'bold'),
             bg=self.app.colors['bg_main'],
             fg=self.app.colors['text_primary']
         )
-        title_label.pack(anchor=tk.W, pady=(0, 5))
+        title_label.pack(anchor=tk.W, pady=(0, 20))
         
-        # Карточка настроек
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.FLAT, borderwidth=0)
-        card_frame.pack(fill=tk.X, pady=(0, 8))
+        if description:
+            description_label = tk.Label(
+                parent,
+                text=description,
+                font=('Robot', 10),
+                bg=self.app.colors['bg_main'],
+                fg=self.app.colors['text_secondary']
+            )
+            description_label.pack(anchor=tk.W, pady=(0, 15))
+    
+    def _create_remove_files_checkbox(self, parent):
+        """Создание чекбокса для настройки удаления файлов из списка после операции.
         
-        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
-        inner_frame.pack(fill=tk.X, padx=12, pady=12)
+        Args:
+            parent: Родительский виджет для размещения чекбокса
+        """
+        # Инициализируем переменную, если её еще нет
+        if not hasattr(self.app, 'remove_files_after_operation_var'):
+            default_value = False
+            if hasattr(self.app, 'settings_manager'):
+                default_value = self.app.settings_manager.get('remove_files_after_operation', False)
+            self.app.remove_files_after_operation_var = tk.BooleanVar(value=default_value)
         
-        # Автоприменение
-        auto_apply_container = tk.Frame(inner_frame, bg=self.app.colors['bg_main'])
-        auto_apply_container.pack(fill=tk.X, anchor=tk.W, pady=(0, 8))
+        def on_remove_files_change(*args):
+            """Обработчик изменения настройки удаления файлов"""
+            if hasattr(self.app, 'settings_manager'):
+                value = self.app.remove_files_after_operation_var.get()
+                self.app.settings_manager.set('remove_files_after_operation', value)
+                self.app.settings_manager.save_settings()
         
-        auto_apply_var = tk.BooleanVar(value=self.app.settings_manager.get('auto_apply', False))
+        self.app.remove_files_after_operation_var.trace('w', on_remove_files_change)
         
-        def on_auto_apply_change():
-            """Обработчик изменения автоприменения"""
-            self.app.settings_manager.set('auto_apply', auto_apply_var.get())
-            self.app.settings_manager.save_settings()
-        
-        auto_apply_checkbox = tk.Checkbutton(
-            auto_apply_container,
-            text="Автоматически применять методы при добавлении файлов",
-            variable=auto_apply_var,
-            command=on_auto_apply_change,
+        checkbox = tk.Checkbutton(
+            parent,
+            text="Удалять файлы из списка после операции",
             font=('Robot', 10),
             bg=self.app.colors['bg_main'],
             fg=self.app.colors['text_primary'],
             activebackground=self.app.colors['bg_main'],
             activeforeground=self.app.colors['text_primary'],
-            selectcolor='white'
-        )
-        auto_apply_checkbox.pack(anchor=tk.W)
-        
-        # Сохраняем ссылку на переменную
-        self.app.auto_apply_var = auto_apply_var
-        
-        # Размер шрифта
-        font_size_container = tk.Frame(inner_frame, bg=self.app.colors['bg_main'])
-        font_size_container.pack(fill=tk.X, anchor=tk.W, pady=(0, 8))
-        
-        font_size_label = tk.Label(
-            font_size_container,
-            text="Размер шрифта:",
-            font=('Robot', 10, 'bold'),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
+            selectcolor=self.app.colors['bg_main'],
+            variable=self.app.remove_files_after_operation_var,
             anchor='w'
         )
-        font_size_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        font_size_var = tk.StringVar(value=self.app.settings_manager.get('font_size', '10'))
-        
-        def on_font_size_change():
-            """Обработчик изменения размера шрифта"""
-            self.app.settings_manager.set('font_size', font_size_var.get())
-            self.app.settings_manager.save_settings()
-        
-        font_size_spinbox = tk.Spinbox(
-            font_size_container,
-            from_=8,
-            to=20,
-            textvariable=font_size_var,
-            width=10,
-            font=('Robot', 10),
-            bg='white',
-            fg=self.app.colors['text_primary'],
-            relief=tk.SOLID,
-            borderwidth=1,
-            justify=tk.CENTER,
-            command=on_font_size_change
-        )
-        font_size_spinbox.pack(anchor=tk.W)
-        font_size_spinbox.bind('<KeyRelease>', lambda e: on_font_size_change())
-        font_size_spinbox.bind('<FocusOut>', lambda e: on_font_size_change())
-        
-        # Сохраняем ссылку на переменную
-        self.app.font_size_var = font_size_var
-        
-        # Показ предупреждений
-        show_warnings_container = tk.Frame(inner_frame, bg=self.app.colors['bg_main'])
-        show_warnings_container.pack(fill=tk.X, anchor=tk.W)
-        
-        show_warnings_var = tk.BooleanVar(value=self.app.settings_manager.get('show_warnings', True))
-        
-        def on_show_warnings_change():
-            """Обработчик изменения показа предупреждений"""
-            self.app.settings_manager.set('show_warnings', show_warnings_var.get())
-            self.app.settings_manager.save_settings()
-        
-        show_warnings_checkbox = tk.Checkbutton(
-            show_warnings_container,
-            text="Показывать предупреждения",
-            variable=show_warnings_var,
-            command=on_show_warnings_change,
-            font=('Robot', 10),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
-            activebackground=self.app.colors['bg_main'],
-            activeforeground=self.app.colors['text_primary'],
-            selectcolor='white'
-        )
-        show_warnings_checkbox.pack(anchor=tk.W)
-        
-        # Сохраняем ссылку на переменную
-        self.app.show_warnings_var = show_warnings_var
+        checkbox.pack(anchor=tk.W, pady=(0, 10))
     
-    def create_remove_files_section(self, parent):
-        """Создание секции удаления файлов из списка"""
-        # Единая карточка для всего раздела
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.FLAT, borderwidth=0)
-        card_frame.pack(fill=tk.X, anchor=tk.W)
+    def _get_logs_path(self):
+        """Получение пути к директории с логами.
         
-        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
-        inner_frame.pack(fill=tk.X, padx=12, pady=12, anchor=tk.W)
-        
-        # Заголовок внутри карточки
-        title_label = tk.Label(
-            inner_frame,
-            text="Удаление файлов из списка",
-            font=('Robot', 14, 'bold'),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
-            anchor=tk.W
+        Returns:
+            str: Путь к директории с логами
+        """
+        return os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
+            "logs"
         )
-        title_label.pack(anchor=tk.W, pady=(0, 5))
+    
+    def _create_logs_path_display(self, parent, logs_path):
+        """Создание отображения пути к логам.
         
-        # Описание внутри карточки
-        info_label = tk.Label(
-            inner_frame,
-            text="Автоматически удалять файлы из списка после успешного переименования или конвертации.",
+        Args:
+            parent: Родительский виджет
+            logs_path: Путь к директории с логами
+        """
+        logs_path_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
+        logs_path_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        logs_path_label = tk.Label(
+            logs_path_frame,
+            text="Путь к логам:",
+            font=('Robot', 10),
+            bg=self.app.colors['bg_main'],
+            fg=self.app.colors['text_primary']
+        )
+        logs_path_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        logs_path_text = tk.Label(
+            logs_path_frame,
+            text=logs_path,
             font=('Robot', 9),
             bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_secondary'],
-            justify=tk.LEFT,
-            anchor=tk.W
+            fg=self.app.colors['text_secondary']
         )
-        info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
-        
-        # Функция для обновления wraplength при изменении размера
-        def update_wraplength(event=None):
-            try:
-                # Используем ширину scrollable_frame для определения ширины текста
-                scrollable_width = self.content_scrollable_frame.winfo_width()
-                if scrollable_width > 1:
-                    # Вычитаем отступы (padx=12 с каждой стороны = 24, плюс padx родителя)
-                    info_label.config(wraplength=scrollable_width - 60)
-            except (AttributeError, tk.TclError):
-                pass
-        
-        # Привязываем обновление к изменению размера scrollable_frame
-        if hasattr(self, 'content_scrollable_frame'):
-            self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
-        # Устанавливаем начальное значение после создания виджетов
-        parent.after_idle(update_wraplength)
-        
-        remove_files_var = tk.BooleanVar(value=self.app.settings_manager.get('remove_files_after_operation', False))
-        
-        def on_remove_files_change():
-            """Обработчик изменения удаления файлов из списка"""
-            self.app.settings_manager.set('remove_files_after_operation', remove_files_var.get())
-            self.app.settings_manager.save_settings()
-        
-        remove_files_checkbox = tk.Checkbutton(
-            inner_frame,
-            text="Удалять файлы из списка после операции",
-            variable=remove_files_var,
-            command=on_remove_files_change,
-            font=('Robot', 10),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
-            activebackground=self.app.colors['bg_main'],
-            activeforeground=self.app.colors['text_primary'],
-            selectcolor='white',
-            anchor=tk.W,
-            justify=tk.LEFT
-        )
-        remove_files_checkbox.pack(anchor=tk.W, fill=tk.X)
-        
-        # Сохраняем ссылку на переменную для использования в других модулях
-        self.app.remove_files_after_operation_var = remove_files_var
+        logs_path_text.pack(side=tk.LEFT)
     
-    def create_logs_section(self, parent):
-        """Создание секции логов"""
-        # Единая карточка для всего раздела
-        card_frame = tk.Frame(parent, bg=self.app.colors['bg_main'], relief=tk.FLAT, borderwidth=0)
-        card_frame.pack(fill=tk.X, anchor=tk.W)
+    def _open_path_in_system(self, path):
+        """Открытие пути в системе по умолчанию.
         
-        inner_frame = tk.Frame(card_frame, bg=self.app.colors['bg_main'])
-        inner_frame.pack(fill=tk.X, padx=12, pady=12, anchor=tk.W)
+        Args:
+            path: Путь к файлу или директории
+            
+        Raises:
+            Exception: Если не удалось открыть путь
+        """
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            logger.error(f"Ошибка при открытии пути {path}: {e}")
+            raise
+    
+    def _create_open_logs_folder_button(self, parent, logs_path):
+        """Создание кнопки для открытия папки с логами.
         
-        # Заголовок внутри карточки
-        title_label = tk.Label(
-            inner_frame,
-            text="Логи",
-            font=('Robot', 14, 'bold'),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
-            anchor=tk.W
-        )
-        title_label.pack(anchor=tk.W, pady=(0, 5))
-        
-        # Описание внутри карточки
-        info_label = tk.Label(
-            inner_frame,
-            text="Просмотр и управление логами программы. Все действия записываются в файл лога.",
-            font=('Robot', 9),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_secondary'],
-            justify=tk.LEFT,
-            anchor=tk.W
-        )
-        info_label.pack(anchor=tk.W, pady=(0, 10), fill=tk.X)
-        
-        # Функция для обновления wraplength при изменении размера
-        def update_wraplength(event=None):
+        Args:
+            parent: Родительский виджет
+            logs_path: Путь к директории с логами
+        """
+        def open_logs_folder():
+            """Открытие папки с логами"""
             try:
-                # Используем ширину scrollable_frame для определения ширины текста
-                scrollable_width = self.content_scrollable_frame.winfo_width()
-                if scrollable_width > 1:
-                    # Вычитаем отступы (padx=12 с каждой стороны = 24, плюс padx родителя)
-                    info_label.config(wraplength=scrollable_width - 60)
-            except (AttributeError, tk.TclError):
-                pass
-        
-        # Привязываем обновление к изменению размера scrollable_frame
-        if hasattr(self, 'content_scrollable_frame'):
-            self.content_scrollable_frame.bind('<Configure>', lambda e: update_wraplength())
-        # Устанавливаем начальное значение после создания виджетов
-        parent.after_idle(update_wraplength)
-        
-        def open_logs():
-            """Открытие файла логов"""
-            try:
-                # Определяем директорию логов
-                logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-                
-                if not os.path.exists(logs_dir):
-                    os.makedirs(logs_dir)
-                
-                # Находим последний файл лога
-                log_files = [f for f in os.listdir(logs_dir) if f.endswith('.log')]
-                if not log_files:
-                    self.app.log("Файлы логов не найдены")
-                    return
-                
-                latest_log = max(log_files, key=lambda f: os.path.getmtime(os.path.join(logs_dir, f)))
-                log_path = os.path.join(logs_dir, latest_log)
-                
-                # Открываем файл в системном редакторе
-                if sys.platform == 'win32':
-                    os.startfile(log_path)
-                elif sys.platform == 'darwin':
-                    subprocess.run(['open', log_path])
-                else:
-                    subprocess.run(['xdg-open', log_path])
+                self._open_path_in_system(logs_path)
             except Exception as e:
-                logger.error(f"Ошибка открытия логов: {e}", exc_info=True)
-                self.app.log(f"Ошибка открытия логов: {e}")
+                messagebox.showerror("Ошибка", f"Не удалось открыть папку с логами:\n{e}")
         
-        open_logs_button = tk.Button(
-            inner_frame,
-            text="Открыть файл логов",
-            command=open_logs,
-            font=('Robot', 8),
+        open_logs_btn = tk.Button(
+            parent,
+            text="Открыть папку",
+            font=('Robot', 9),
             bg=self.app.colors['primary'],
             fg='white',
             activebackground=self.app.colors['primary_hover'],
             activeforeground='white',
             relief=tk.FLAT,
-            cursor='hand2',
-            padx=6,
-            pady=3,
-            anchor=tk.W
+            padx=15,
+            pady=5,
+            command=open_logs_folder
         )
-        open_logs_button.pack(anchor=tk.W)
+        open_logs_btn.pack(side=tk.LEFT)
+    
+    def _create_open_log_file_button(self, parent):
+        """Создание кнопки для открытия файла логов.
+        
+        Args:
+            parent: Родительский виджет
+        """
+        open_log_file_btn = tk.Button(
+            parent,
+            text="Открыть файл логов",
+            font=('Robot', 9),
+            bg=self.app.colors['info'],
+            fg='white',
+            activebackground=self.app.colors['info_hover'],
+            activeforeground='white',
+            relief=tk.FLAT,
+            padx=15,
+            pady=5,
+            command=self._open_log_file
+        )
+        open_log_file_btn.pack(side=tk.LEFT, padx=(10, 0))
+    
+    def _open_log_file(self):
+        """Открытие файла логов в редакторе по умолчанию"""
+        logs_path = self._get_logs_path()
+        log_file_path = os.path.join(logs_path, "re-file-plus.log")
+        
+        try:
+            if os.path.exists(log_file_path):
+                self._open_path_in_system(log_file_path)
+            else:
+                messagebox.showinfo("Информация", "Файл логов не найден")
+        except Exception as e:
+            logger.error(f"Ошибка при открытии файла логов: {e}")
+            messagebox.showerror("Ошибка", f"Не удалось открыть файл логов:\n{e}")

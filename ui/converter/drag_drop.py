@@ -129,7 +129,9 @@ class ConverterDragDrop:
                             category_mapping = {
                                 'image': 'Изображения',
                                 'document': 'Документы',
-                                'presentation': 'Презентации'
+                                'presentation': 'Презентации',
+                                'audio': 'Аудио',
+                                'video': 'Видео'
                             }
                             filter_name = category_mapping.get(file_category)
                             if filter_name:

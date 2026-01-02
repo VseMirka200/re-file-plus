@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Импорт структурированного логирования
 try:
-    from utils.structured_logging import log_batch_action
+    from utils.logging_utils import log_batch_action
 except ImportError:
     # Fallback если модуль недоступен
     def log_batch_action(logger, action, message, file_count, **kwargs):

@@ -55,6 +55,14 @@ class ConverterTab:
         """
         return self.tab_builder.create_tab_content(parent)
     
+    def create_full_tab_content(self, parent):
+        """Создание полноценной вкладки конвертации с левой и правой панелями.
+        
+        Args:
+            parent: Родительский контейнер для размещения содержимого
+        """
+        return self.tab_builder.create_full_tab_content(parent)
+    
     def process_files_from_args(self):
         """Обработка файлов из аргументов командной строки."""
         return self.args_processor.process_files_from_args()

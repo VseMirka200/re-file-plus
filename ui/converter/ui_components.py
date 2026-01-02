@@ -156,7 +156,9 @@ class ConverterUIComponents:
             "Все": None,
             "Изображения": "image",
             "Документы": "document",
-            "Презентации": "presentation"
+            "Презентации": "presentation",
+            "Аудио": "audio",
+            "Видео": "video"
         }
         
         target_category = filter_mapping.get(filter_type)
@@ -168,6 +170,10 @@ class ConverterUIComponents:
                 final_formats = list(self.app.file_converter.supported_document_formats.keys())
             elif target_category == "presentation":
                 final_formats = list(self.app.file_converter.supported_presentation_formats.keys())
+            elif target_category == "audio":
+                final_formats = list(self.app.file_converter.supported_audio_formats.keys())
+            elif target_category == "video":
+                final_formats = list(self.app.file_converter.supported_video_formats.keys())
             else:
                 final_formats = self.app.file_converter.get_supported_formats()
             

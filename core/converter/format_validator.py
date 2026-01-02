@@ -22,6 +22,10 @@ class FormatValidator:
         supported_presentation_formats: dict,
         supported_document_target_formats: dict,
         supported_presentation_target_formats: dict,
+        supported_audio_formats: dict,
+        supported_video_formats: dict,
+        supported_audio_target_formats: dict,
+        supported_video_target_formats: dict,
         Image_module,
         fitz_module,
         Converter_class,
@@ -39,6 +43,10 @@ class FormatValidator:
             supported_presentation_formats: Словарь поддерживаемых форматов презентаций
             supported_document_target_formats: Словарь целевых форматов для документов
             supported_presentation_target_formats: Словарь целевых форматов для презентаций
+            supported_audio_formats: Словарь поддерживаемых форматов аудио
+            supported_video_formats: Словарь поддерживаемых форматов видео
+            supported_audio_target_formats: Словарь целевых форматов для аудио
+            supported_video_target_formats: Словарь целевых форматов для видео
             Image_module: Модуль Pillow (PIL.Image) или None
             fitz_module: Модуль PyMuPDF (fitz) или None
             Converter_class: Класс pdf2docx.Converter или None
@@ -53,6 +61,10 @@ class FormatValidator:
         self.supported_presentation_formats = supported_presentation_formats
         self.supported_document_target_formats = supported_document_target_formats
         self.supported_presentation_target_formats = supported_presentation_target_formats
+        self.supported_audio_formats = supported_audio_formats
+        self.supported_video_formats = supported_video_formats
+        self.supported_audio_target_formats = supported_audio_target_formats
+        self.supported_video_target_formats = supported_video_target_formats
         self.Image = Image_module
         self.fitz = fitz_module
         self.Converter = Converter_class
@@ -179,6 +191,26 @@ class FormatValidator:
                 # Конвертация не поддерживается без LibreOffice
                 return False
         
+        # Проверяем конвертацию аудио (через ffmpeg)
+        if source_ext in self.supported_audio_formats:
+            if target_ext in self.supported_audio_target_formats:
+                # Проверяем, установлен ли ffmpeg
+                try:
+                    from core.converter.audio_video_converter import check_ffmpeg_installed
+                    return check_ffmpeg_installed()
+                except ImportError:
+                    return False
+        
+        # Проверяем конвертацию видео (через ffmpeg)
+        if source_ext in self.supported_video_formats:
+            if target_ext in self.supported_video_target_formats:
+                # Проверяем, установлен ли ffmpeg
+                try:
+                    from core.converter.audio_video_converter import check_ffmpeg_installed
+                    return check_ffmpeg_installed()
+                except ImportError:
+                    return False
+        
         return False
     
     def get_supported_formats(self) -> List[str]:
@@ -192,6 +224,10 @@ class FormatValidator:
         formats.extend(list(self.supported_document_formats.keys()))
         # Всегда включаем форматы презентаций (LibreOffice может быть установлен)
         formats.extend(list(self.supported_presentation_formats.keys()))
+        # Добавляем форматы аудио
+        formats.extend(list(self.supported_audio_formats.keys()))
+        # Добавляем форматы видео
+        formats.extend(list(self.supported_video_formats.keys()))
         # Удаляем дубликаты и сортируем
         formats = sorted(list(set(formats)))
         return formats
@@ -234,6 +270,18 @@ class FormatValidator:
         # Презентации PowerPoint
         if source_ext in self.supported_presentation_formats:
             for ext in self.supported_presentation_target_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Аудио файлы
+        if source_ext in self.supported_audio_formats:
+            for ext in self.supported_audio_target_formats.keys():
+                if ext != source_ext and self.can_convert(file_path, ext):
+                    target_formats.append(ext)
+        
+        # Видео файлы
+        if source_ext in self.supported_video_formats:
+            for ext in self.supported_video_target_formats.keys():
                 if ext != source_ext and self.can_convert(file_path, ext):
                     target_formats.append(ext)
         
@@ -282,6 +330,20 @@ class FormatValidator:
         }
         if ext in presentation_extensions:
             return 'presentation'
+        
+        # Аудио файлы
+        audio_extensions = {
+            '.mp3', '.wav', '.aac', '.ogg', '.flac', '.wma', '.m4a', '.opus'
+        }
+        if ext in audio_extensions:
+            return 'audio'
+        
+        # Видео файлы
+        video_extensions = {
+            '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.3gp'
+        }
+        if ext in video_extensions:
+            return 'video'
         
         return None
 

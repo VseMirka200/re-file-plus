@@ -8,8 +8,7 @@ from core.domain.file_info import FileInfo, FileStatus
 from core.domain.re_file_result import ReFileResult, ReFiledFile
 from core.re_file_methods import ReFileMethod
 from core.re_file_methods import validate_filename
-from core.error_handling.error_handler import ErrorHandler
-from core.error_handling.error_types import ErrorType, AppError
+from core.error_handling.errors import ErrorHandler, ErrorType, AppError
 
 logger = logging.getLogger(__name__)
 

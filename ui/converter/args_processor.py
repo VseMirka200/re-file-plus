@@ -65,24 +65,11 @@ class ConverterArgsProcessor:
     
     def _switch_to_converter_tab(self):
         """Переключение на вкладку конвертации."""
-        if hasattr(self.app, 'main_notebook') and self.app.main_notebook:
-            # Находим индекс вкладки "Конвертация файлов"
-            tab_found = False
-            for i in range(self.app.main_notebook.index('end')):
-                tab_text = self.app.main_notebook.tab(i, 'text')
-                if tab_text == 'Конвертация файлов':
-                    self.app.main_notebook.select(i)
-                    tab_found = True
-                    self.app.log("Переключились на вкладку 'Конвертация файлов'")
-                    break
-            
-            if not tab_found:
-                self.app.log("Вкладка 'Конвертация файлов' не найдена!")
-                for i in range(self.app.main_notebook.index('end')):
-                    tab_text = self.app.main_notebook.tab(i, 'text')
-                    self.app.log(f"Найдена вкладка: {tab_text}")
+        if hasattr(self.app, 'main_window_handler') and hasattr(self.app.main_window_handler, 'switch_tab'):
+            self.app.main_window_handler.switch_tab('convert')
+            self.app.log("Переключились на вкладку 'Конвертация'")
         else:
-            self.app.log("main_notebook не найден!")
+            self.app.log("Не удалось переключиться на вкладку конвертации")
     
     def _create_file_data(self, file_path):
         """Создание данных файла для добавления в список конвертации.
@@ -133,7 +120,9 @@ class ConverterArgsProcessor:
             category_mapping = {
                 'image': 'Изображения',
                 'document': 'Документы',
-                'presentation': 'Презентации'
+                'presentation': 'Презентации',
+                'audio': 'Аудио',
+                'video': 'Видео'
             }
             filter_name = category_mapping.get(file_category)
             if filter_name:

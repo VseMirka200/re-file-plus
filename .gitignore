@@ -215,3 +215,6 @@ test_data/
 # Project specific - Lock files (if using package managers)
 package-lock.json
 yarn.lock
+
+# Project specific - External tools (ffmpeg, etc.)
+tools/

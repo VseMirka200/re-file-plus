@@ -6,6 +6,8 @@
 - styles: Управление стилями
 - themes: Управление темами
 - window_utils: Утилиты для работы с окнами
+- scrollable: Прокручиваемые компоненты
+- cards: Карточки (cards)
 """
 
 # Импортируем для обратной совместимости
@@ -19,6 +21,8 @@ from .window_utils import (
     bind_mousewheel,
     setup_window_resize_handler,
 )
+from .scrollable import ScrollableFrame, create_scrollable_frame
+from .cards import create_card, create_card_with_content
 
 __all__ = [
     'ToolTip',
@@ -29,5 +33,9 @@ __all__ = [
     'set_window_icon',
     'bind_mousewheel',
     'setup_window_resize_handler',
+    'ScrollableFrame',
+    'create_scrollable_frame',
+    'create_card',
+    'create_card_with_content',
 ]
 

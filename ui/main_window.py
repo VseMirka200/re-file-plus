@@ -10,6 +10,10 @@
 import logging
 import tkinter as tk
 from tkinter import ttk
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from app.app_core import ReFilePlusApp
 
 # Локальные импорты
 from ui.window.widgets import MainWindowWidgets
@@ -28,13 +32,13 @@ class MainWindow:
     Теперь является координатором, делегирующим работу подмодулям.
     """
     
-    def __init__(self, app) -> None:
+    def __init__(self, app: 'ReFilePlusApp') -> None:
         """Инициализация главного окна.
         
         Args:
             app: Экземпляр главного приложения (для доступа к методам и данным)
         """
-        self.app = app
+        self.app: 'ReFilePlusApp' = app
         # Инициализируем подмодули
         self.widgets = MainWindowWidgets(app)
         self.tabs = MainWindowTabs(app)
@@ -56,16 +60,20 @@ class MainWindow:
         """Переключение между вкладками.
         
         Args:
-            tab_id: Идентификатор вкладки ('files', 'sort', 'settings', 'about')
+            tab_id: Идентификатор вкладки ('files', 'convert', 'sort', 'settings')
         """
         # Делегируем переключение вкладок подмодулю
         self.tabs.switch_tab(tab_id)
     
-    def _create_files_list_in_container(self, parent):
-        """Создание списка файлов в контейнере (делегируется widgets)."""
+    def _create_files_list_in_container(self, parent: tk.Widget) -> None:
+        """Создание списка файлов в контейнере (делегируется widgets).
+        
+        Args:
+            parent: Родительский контейнер для списка файлов
+        """
         return self.widgets._create_files_list_in_container(parent)
     
-    def create_rename_tab_content(self, parent) -> None:
+    def create_rename_tab_content(self, parent: tk.Widget) -> None:
         """Создание содержимого вкладки переименования (делегируется actions).
         
         Args:
@@ -81,7 +89,7 @@ class MainWindow:
         """
         return self.actions.on_action_changed(action)
     
-    def create_re_file_action_content(self, parent) -> None:
+    def create_re_file_action_content(self, parent: tk.Widget) -> None:
         """Создание содержимого для действия 'Переименовать' (делегируется actions).
         
         Args:
@@ -89,11 +97,11 @@ class MainWindow:
         """
         return self.actions.create_re_file_action_content(parent)
     
-    def show_templates_guide(self):
+    def show_templates_guide(self) -> None:
         """Показ окна руководства по шаблонам (делегируется templates_guide)."""
         return self.templates_guide.show_templates_guide()
     
-    def create_convert_action_content(self, parent) -> None:
+    def create_convert_action_content(self, parent: tk.Widget) -> None:
         """Создание содержимого для действия 'Конвертировать' (делегируется actions).
         
         Args:
@@ -113,7 +121,7 @@ class MainWindow:
         """Обновление размеров колонок таблицы (делегируется resize)."""
         return self.resize.update_tree_columns()
     
-    def _create_about_tab_content(self, parent):
+    def _create_about_tab_content(self, parent: tk.Widget) -> None:
         """Создание содержимого вкладки 'О программе' (делегируется about).
         
         Args:
@@ -122,7 +130,7 @@ class MainWindow:
         return self.about.create_about_tab_content(parent)
     
     def update_scrollbar_visibility(
-        self, widget, scrollbar, orientation: str = 'vertical'
+        self, widget: tk.Widget, scrollbar: ttk.Scrollbar, orientation: str = 'vertical'
     ) -> None:
         """Автоматическое управление видимостью скроллбара (делегируется resize).
         
@@ -133,8 +141,12 @@ class MainWindow:
         """
         return self.resize.update_scrollbar_visibility(widget, scrollbar, orientation)
     
-    def on_window_resize(self, event=None) -> None:
-        """Обработчик изменения размера окна (делегируется resize)."""
+    def on_window_resize(self, event: Optional[tk.Event] = None) -> None:
+        """Обработчик изменения размера окна (делегируется resize).
+        
+        Args:
+            event: Событие изменения размера окна
+        """
         return self.resize.on_window_resize(event)
 
 

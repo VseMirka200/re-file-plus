@@ -8,7 +8,15 @@ logger = logging.getLogger(__name__)
 
 
 class MainWindowResize:
-    """Класс для обработки изменения размера окна и управления колонками."""
+    """Класс для управления изменением размеров главного окна.
+    
+    Отвечает за:
+    - Динамическое изменение размеров колонок Treeview при изменении размера окна
+    - Автоматическое управление видимостью scrollbar в зависимости от содержимого
+    - Адаптация UI элементов к изменению размеров окна
+    
+    Обеспечивает корректное отображение содержимого при любых размерах окна.
+    """
     
     def __init__(self, app):
         """Инициализация.
@@ -30,19 +38,20 @@ class MainWindowResize:
         try:
             current_columns = list(self.app.tree['columns'])
             
-            # Всегда используем две колонки: "Добавленные файлы" и "Путь"
-            required_columns = ("files", "path")
+            # Используем три колонки: "Имя файла", "Новое имя" и "Путь"
+            required_columns = ("files", "new_name", "path")
             if current_columns != list(required_columns):
                 self.app.tree['columns'] = required_columns
                 # Настраиваем заголовки
-                self.app.tree.heading("files", text="Добавленные файлы", command=lambda: self.app.file_list_manager.sort_column("files"))
+                self.app.tree.heading("files", text="Имя файла", command=lambda: self.app.file_list_manager.sort_column("files"))
+                self.app.tree.heading("new_name", text="Новое имя", command=lambda: self.app.file_list_manager.sort_column("new_name"))
                 self.app.tree.heading("path", text="Путь", command=lambda: self.app.file_list_manager.sort_column("path"))
-                # Настраиваем колонки
+                # Настраиваем колонки (равной ширины)
                 list_frame_width = self.app.list_frame.winfo_width() if hasattr(self.app, 'list_frame') else 900
-                files_width = max(int(list_frame_width * 0.4), 200)
-                path_width = max(int(list_frame_width * 0.5), 200)
-                self.app.tree.column("files", width=files_width, anchor='w', minwidth=150, stretch=tk.YES)
-                self.app.tree.column("path", width=path_width, anchor='w', minwidth=200, stretch=tk.YES)
+                column_width = max(int(list_frame_width / 3), 200)
+                self.app.tree.column("files", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
+                self.app.tree.column("new_name", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
+                self.app.tree.column("path", width=column_width, anchor='w', minwidth=200, stretch=tk.YES)
             
             # Вызываем обновление размеров
             self.app.root.after(100, self.update_tree_columns)
@@ -55,24 +64,51 @@ class MainWindowResize:
         has_tree = hasattr(self.app, 'tree')
         if has_list_frame and has_tree and self.app.list_frame and self.app.tree:
             try:
+                # Определяем активную вкладку
+                current_tab = getattr(self.app, 'current_tab', 'files')
+                
                 list_frame_width = self.app.list_frame.winfo_width()
                 if list_frame_width > 100:
-                    # Распределяем ширину между двумя колонками
-                    files_width = max(int(list_frame_width * 0.4), 150)
-                    path_width = max(int(list_frame_width * 0.55), 200)
-                    
-                    self.app.tree.column(
-                        "files",
-                        width=files_width,
-                        minwidth=150,
-                        stretch=tk.NO
-                    )
-                    self.app.tree.column(
-                        "path",
-                        width=path_width,
-                        minwidth=200,
-                        stretch=tk.YES
-                    )
+                    if current_tab == 'convert':
+                        # Для конвертера: только "Имя файла" и "Путь" (без "Новое имя")
+                        column_width = max(int(list_frame_width / 2), 200)
+                        
+                        # Скрываем колонку "new_name" для конвертера
+                        self.app.tree.column("new_name", width=0, minwidth=0, stretch=tk.NO)
+                        self.app.tree.heading("new_name", text="")
+                        
+                        self.app.tree.column(
+                            "files",
+                            width=column_width,
+                            minwidth=200,
+                            stretch=tk.YES
+                        )
+                        self.app.tree.column(
+                            "path",
+                            width=column_width,
+                            minwidth=200,
+                            stretch=tk.YES
+                        )
+                    else:
+                        # Для переименовщика: все три колонки
+                        column_width = max(int(list_frame_width / 3), 150)
+                        
+                        # Показываем колонку "new_name" для переименовщика
+                        self.app.tree.heading("new_name", text="Новое имя", command=lambda: self.app.file_list_manager.sort_column("new_name"))
+                        self.app.tree.column("new_name", width=column_width, minwidth=150, stretch=tk.YES)
+                        
+                        self.app.tree.column(
+                            "files",
+                            width=column_width,
+                            minwidth=150,
+                            stretch=tk.YES
+                        )
+                        self.app.tree.column(
+                            "path",
+                            width=column_width,
+                            minwidth=200,
+                            stretch=tk.YES
+                        )
                     
                     if hasattr(self.app, 'tree_scrollbar_x'):
                         self.app.root.after_idle(lambda: self.update_scrollbar_visibility(

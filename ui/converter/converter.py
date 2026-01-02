@@ -8,7 +8,7 @@ from tkinter import messagebox
 import tkinter as tk
 
 from utils.path_processing import normalize_path
-from utils.structured_logging import log_action, log_batch_action, log_file_action
+from utils.logging_utils import log_action, log_batch_action, log_file_action
 
 logger = logging.getLogger(__name__)
 
