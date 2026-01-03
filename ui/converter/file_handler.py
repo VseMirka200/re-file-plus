@@ -127,35 +127,9 @@ class ConverterFileHandler:
                 }
                 self.app.converter_files.append(file_data)
                 
-                # Автоматически устанавливаем фильтр по типу файла при первом добавлении
+                # Автоматически устанавливаем тип файла при первом добавлении
                 if added_count == 1 and file_category:
-                    if not hasattr(self.app, 'converter_filter_var'):
-                        import tkinter as tk
-                        self.app.converter_filter_var = tk.StringVar(value="Все")
-                    
-                    if hasattr(self.app, 'converter_filter_var'):
-                        current_filter = self.app.converter_filter_var.get()
-                        if not current_filter or current_filter == "Все" or current_filter == "":
-                            category_mapping = {
-                                'image': 'Изображения',
-                                'document': 'Документы',
-                                'presentation': 'Презентации',
-                                'audio': 'Аудио',
-                                'video': 'Видео'
-                            }
-                            filter_name = category_mapping.get(file_category)
-                            if filter_name:
-                                self.app.converter_filter_var.set(filter_name)
-                                
-                                def update_filter_ui():
-                                    try:
-                                        if hasattr(self.app, 'converter_filter_combo') and self.app.converter_filter_combo:
-                                            self.app.converter_filter_combo.set(filter_name)
-                                    except (AttributeError, TypeError, RuntimeError):
-                                        # Игнорируем ошибки UI операций (не критично)
-                                        pass
-                                if hasattr(self.app, 'root'):
-                                    self.app.root.after(10, update_filter_ui)
+                    self._auto_set_file_type(file_category)
             
             if hasattr(self.app, 'converter_left_panel'):
                 count = len(self.app.converter_files)
@@ -170,6 +144,45 @@ class ConverterFileHandler:
                 self.app.file_list_manager.refresh_treeview()
             
             self.app.log(f"Добавлено файлов для конвертации: {added_count}")
+    
+    def _auto_set_file_type(self, file_category: str):
+        """Автоматическая установка типа файла в фильтре.
+        
+        Args:
+            file_category: Категория файла (image, document, presentation, audio, video)
+        """
+        if not file_category:
+            return
+        
+        if not hasattr(self.app, 'converter_filter_var'):
+            import tkinter as tk
+            self.app.converter_filter_var = tk.StringVar(value="Все")
+        
+        category_mapping = {
+            'image': 'Изображения',
+            'document': 'Документы',
+            'presentation': 'Презентации',
+            'audio': 'Аудио',
+            'video': 'Видео'
+        }
+        
+        filter_name = category_mapping.get(file_category)
+        if filter_name:
+            self.app.converter_filter_var.set(filter_name)
+            
+            def update_filter_ui():
+                try:
+                    if hasattr(self.app, 'converter_filter_combo') and self.app.converter_filter_combo:
+                        self.app.converter_filter_combo.set(filter_name)
+                    # Обновляем список форматов для выбранного типа
+                    if hasattr(self.app, 'converter_tab_handler'):
+                        self.app.converter_tab_handler.filter_converter_files_by_type()
+                except (AttributeError, TypeError, RuntimeError):
+                    # Игнорируем ошибки UI операций (не критично)
+                    pass
+            
+            if hasattr(self.app, 'root'):
+                self.app.root.after(10, update_filter_ui)
     
     def clear_converter_files_list(self):
         """Очистка списка файлов конвертации."""

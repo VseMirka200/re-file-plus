@@ -201,12 +201,24 @@ class ReplaceMethod(ReFileMethod):
                 # Регистронезависимая замена - используем кэшированный паттерн
                 # для лучшей производительности при множественных вызовах
                 if self._compiled_pattern:
-                    new_name = self._compiled_pattern.sub(self.replace, name)
+                    try:
+                        new_name = self._compiled_pattern.sub(self.replace, name)
+                    except re.error as e:
+                        # Ошибка regex при применении замены (например, "unbalanced parenthesis" в строке замены)
+                        logger.warning(f"Ошибка regex при замене '{self.find}' на '{self.replace}': {e}")
+                        # Используем простое строковое сравнение в нижнем регистре как fallback
+                        new_name = name
                 else:
                     # Fallback: если компиляция не удалась при инициализации,
                     # компилируем паттерн здесь (менее эффективно, но работает)
-                    pattern = re.compile(re.escape(self.find), re.IGNORECASE)
-                    new_name = pattern.sub(self.replace, name)
+                    try:
+                        pattern = re.compile(re.escape(self.find), re.IGNORECASE)
+                        new_name = pattern.sub(self.replace, name)
+                    except re.error as e:
+                        # Ошибка regex при компиляции или применении
+                        logger.warning(f"Ошибка regex при замене '{self.find}' на '{self.replace}': {e}")
+                        # Используем простое строковое сравнение в нижнем регистре как fallback
+                        new_name = name
         
         return new_name, extension
 
@@ -393,12 +405,15 @@ class RegexMethod(ReFileMethod):
         self.pattern = pattern
         self.replace = replace
         self.compiled_pattern = None
+        self.pattern_error = None  # Сохраняем ошибку компиляции для отладки
         
         if pattern:
             try:
                 self.compiled_pattern = re.compile(pattern)
-            except re.error:
+            except re.error as e:
                 self.compiled_pattern = None
+                self.pattern_error = str(e)
+                logger.debug(f"Не удалось скомпилировать regex паттерн '{pattern}': {e}")
     
     def apply(self, name: str, extension: str, file_path: str) -> Tuple[str, str]:
         """Применение метода регулярных выражений.
@@ -415,14 +430,29 @@ class RegexMethod(ReFileMethod):
             return name, extension
         
         try:
+            # Применяем regex замену
+            # Важно: ошибка может возникнуть как при компиляции паттерна (уже обработано в __init__),
+            # так и при применении sub() из-за некорректной строки замены (например, несоответствие групп)
             new_name = self.compiled_pattern.sub(self.replace, name)
             return new_name, extension
-        except (re.error, ValueError, TypeError, AttributeError) as e:
+        except (re.error, ValueError) as e:
+            # Ошибка regex (например, "unbalanced parenthesis" в строке замены)
+            # Может возникнуть, если в строке замены есть обратные ссылки \1, \2 и т.д.,
+            # но в паттерне нет соответствующих групп
+            # ValueError может возникнуть при некорректных обратных ссылках в строке замены
+            error_msg = str(e)
+            logger.warning(
+                f"Ошибка regex при применении паттерна '{self.pattern}' с заменой '{self.replace}': {error_msg}. "
+                f"Файл останется без изменений."
+            )
+            return name, extension
+        except (ValueError, TypeError, AttributeError) as e:
             logger.warning(f"Ошибка данных при применении regex паттерна '{self.pattern}': {e}")
             return name, extension
         except (MemoryError, RecursionError) as e:
             # Ошибки памяти/рекурсии
-            pass
+            logger.warning(f"Ошибка памяти/рекурсии при применении regex паттерна '{self.pattern}': {e}")
+            return name, extension
         # Финальный catch для неожиданных исключений (критично для стабильности)
         except BaseException as e:
             if isinstance(e, (KeyboardInterrupt, SystemExit)):
@@ -507,7 +537,12 @@ class NewNameMethod(ReFileMethod):
         # Регулярное выражение ищет {n}, {n:5} или {n:5:3} где:
         # - первая группа (\d+) - начальный номер
         # - вторая группа (\d+) - количество ведущих нулей
-        n_pattern = re.compile(r'\{n(?::(\d+)(?::(\d+))?)?)?\}')
+        try:
+            n_pattern = re.compile(r'\{n(?::(\d+)(?::(\d+))?)?\}')
+        except re.error as e:
+            # Ошибка компиляции паттерна (не должна возникать, так как паттерн фиксированный)
+            logger.warning(f"Ошибка компиляции паттерна для {{n}} в шаблоне '{self.template}': {e}")
+            n_pattern = None
         
         def replace_n(match):
             """Замена {n} или {n:start:zeros} на номер"""
@@ -548,7 +583,13 @@ class NewNameMethod(ReFileMethod):
         
         # Заменяем все вхождения {n} или {n:start:zeros} за один проход
         # sub() автоматически находит все совпадения и вызывает replace_n для каждого
-        new_name = n_pattern.sub(replace_n, new_name)
+        if n_pattern:
+            try:
+                new_name = n_pattern.sub(replace_n, new_name)
+            except (re.error, ValueError) as e:
+                # Ошибка при применении regex (не должна возникать, но на всякий случай)
+                logger.warning(f"Ошибка regex при замене {{n}} в шаблоне '{self.template}': {e}")
+                # Продолжаем выполнение без замены {n}
         
         # Метаданные (если доступны): извлекаем только те теги, которые используются в шаблоне
         # Это оптимизация - не извлекаем все метаданные, а только нужные
@@ -567,55 +608,78 @@ class NewNameMethod(ReFileMethod):
         # Условная логика в шаблонах: {if:condition:then:else}
         # Позволяет использовать условия в шаблонах, например:
         # {if:{ext}==jpg:photo:document} - если расширение jpg, то "photo", иначе "document"
-        conditional_pattern = r'\{if:([^:]+):([^:]+):([^}]+)\}'
-        matches = re.finditer(conditional_pattern, new_name)
-        # Обрабатываем совпадения в обратном порядке, чтобы индексы не сдвигались
-        # при замене (если заменить с начала, индексы последующих совпадений изменятся)
-        for match in reversed(list(matches)):
-            condition = match.group(1)  # Условие для проверки
-            then_part = match.group(2)   # Текст, если условие истинно
-            else_part = match.group(3)   # Текст, если условие ложно
+        try:
+            try:
+                conditional_pattern = re.compile(r'\{if:([^:]+):([^:]+):([^}]+)\}')
+            except re.error as compile_error:
+                # Ошибка компиляции паттерна (не должна возникать, так как паттерн фиксированный)
+                logger.warning(f"Ошибка компиляции паттерна условной логики в шаблоне '{self.template}': {compile_error}")
+                conditional_pattern = None
             
-            result = False
-            # Поддерживаем разные операторы сравнения
-            if '==' in condition:
-                # Равенство: проверяем, равны ли левая и правая части
-                parts = condition.split('==', 1)
-                left = parts[0].strip().strip('"\'')  # Убираем пробелы и кавычки
-                right = parts[1].strip().strip('"\'')
-                # Подставляем переменные в обе части перед сравнением
-                left = self._substitute_variables(left, name, extension, file_path)
-                result = left == right
-            elif '!=' in condition:
-                # Неравенство: проверяем, не равны ли части
-                parts = condition.split('!=', 1)
-                left = parts[0].strip().strip('"\'')
-                right = parts[1].strip().strip('"\'')
-                left = self._substitute_variables(left, name, extension, file_path)
-                result = left != right
-            elif 'in' in condition:
-                # Проверка вхождения: проверяем, содержится ли left в right
-                parts = condition.split(' in ', 1)
-                left = parts[0].strip().strip('"\'')
-                right = parts[1].strip().strip('"\'')
-                left = self._substitute_variables(left, name, extension, file_path)
-                right = self._substitute_variables(right, name, extension, file_path)
-                result = left in right
+            if not conditional_pattern:
+                # Если паттерн не скомпилирован, пропускаем условную логику
+                matches = []
             else:
-                # Если оператор не найден, проверяем, не пуста ли переменная
-                # (truthy проверка: значение существует и не пустое)
-                var = self._substitute_variables(condition, name, extension, file_path)
-                result = bool(var and str(var).strip())
-            
-            # Выбираем нужную часть в зависимости от результата условия
-            replacement = then_part if result else else_part
-            # Подставляем переменные в выбранную часть
-            replacement = self._substitute_variables(replacement, name, extension, file_path)
-            # Если в replacement есть {n}, заменяем его тоже
-            if '{n' in replacement:
-                replacement = n_pattern.sub(replace_n, replacement)
-            # Заменяем весь блок {if:...} на вычисленное значение
-            new_name = new_name[:match.start()] + replacement + new_name[match.end():]
+                matches = conditional_pattern.finditer(new_name)
+            # Обрабатываем совпадения в обратном порядке, чтобы индексы не сдвигались
+            # при замене (если заменить с начала, индексы последующих совпадений изменятся)
+            for match in reversed(list(matches)):
+                condition = match.group(1)  # Условие для проверки
+                then_part = match.group(2)   # Текст, если условие истинно
+                else_part = match.group(3)   # Текст, если условие ложно
+                
+                result = False
+                # Поддерживаем разные операторы сравнения
+                if '==' in condition:
+                    # Равенство: проверяем, равны ли левая и правая части
+                    parts = condition.split('==', 1)
+                    left = parts[0].strip().strip('"\'')  # Убираем пробелы и кавычки
+                    right = parts[1].strip().strip('"\'')
+                    # Подставляем переменные в обе части перед сравнением
+                    left = self._substitute_variables(left, name, extension, file_path)
+                    result = left == right
+                elif '!=' in condition:
+                    # Неравенство: проверяем, не равны ли части
+                    parts = condition.split('!=', 1)
+                    left = parts[0].strip().strip('"\'')
+                    right = parts[1].strip().strip('"\'')
+                    left = self._substitute_variables(left, name, extension, file_path)
+                    result = left != right
+                elif 'in' in condition:
+                    # Проверка вхождения: проверяем, содержится ли left в right
+                    parts = condition.split(' in ', 1)
+                    left = parts[0].strip().strip('"\'')
+                    right = parts[1].strip().strip('"\'')
+                    left = self._substitute_variables(left, name, extension, file_path)
+                    right = self._substitute_variables(right, name, extension, file_path)
+                    result = left in right
+                else:
+                    # Если оператор не найден, проверяем, не пуста ли переменная
+                    # (truthy проверка: значение существует и не пустое)
+                    var = self._substitute_variables(condition, name, extension, file_path)
+                    result = bool(var and str(var).strip())
+                
+                # Выбираем нужную часть в зависимости от результата условия
+                replacement = then_part if result else else_part
+                # Подставляем переменные в выбранную часть
+                replacement = self._substitute_variables(replacement, name, extension, file_path)
+                # Если в replacement есть {n}, заменяем его тоже
+                if '{n' in replacement and n_pattern:
+                    try:
+                        replacement = n_pattern.sub(replace_n, replacement)
+                    except (re.error, ValueError) as e:
+                        # Ошибка при применении regex (не должна возникать, но на всякий случай)
+                        logger.warning(f"Ошибка regex при замене {{n}} в replacement шаблона '{self.template}': {e}")
+                        # Продолжаем без замены {n}
+                # Заменяем весь блок {if:...} на вычисленное значение
+                new_name = new_name[:match.start()] + replacement + new_name[match.end():]
+        except re.error as e:
+            # Ошибка regex при обработке условной логики (например, "unbalanced parenthesis")
+            logger.warning(f"Ошибка regex при обработке условной логики в шаблоне '{self.template}': {e}")
+            # Продолжаем выполнение без условной логики
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.warning(f"Ошибка данных при обработке условной логики в шаблоне '{self.template}': {e}")
+            # Продолжаем выполнение без условной логики
         
         # Замена {name} в самом конце (если есть в шаблоне)
         # Это делается последним, чтобы {name} можно было использовать в условных блоках

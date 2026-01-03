@@ -214,23 +214,36 @@ class ConverterProgress:
                         # Обновляем статус в колонке, если есть колонка status
                         try:
                             tree.set(item, 'status', 'Готов')
-                        except (tk.TclError, AttributeError):
-                            pass
+                        except (tk.TclError, AttributeError) as e:
+                            logger.debug(f"Ошибка при установке статуса в treeview: {e}")
                         # Применяем зеленый тег
-                        tree.item(item, tags=('ready',))  # Зеленый - сконвертирован
-                        tree.update_idletasks()
+                        try:
+                            tree.item(item, tags=('ready',))  # Зеленый - сконвертирован
+                            # Принудительно обновляем отображение
+                            tree.update_idletasks()
+                            # Дополнительное обновление для гарантии применения тегов
+                            self.app.root.update_idletasks()
+                        except (tk.TclError, AttributeError) as e:
+                            logger.debug(f"Ошибка при применении тегов в treeview: {e}")
                     else:
                         try:
                             tree.set(item, 'status', message)
-                        except (tk.TclError, AttributeError):
-                            pass
-                        tree.item(item, tags=('error',))
-                        tree.update_idletasks()
+                        except (tk.TclError, AttributeError) as e:
+                            logger.debug(f"Ошибка при установке статуса ошибки в treeview: {e}")
+                        try:
+                            tree.item(item, tags=('error',))
+                            tree.update_idletasks()
+                            self.app.root.update_idletasks()
+                        except (tk.TclError, AttributeError) as e:
+                            logger.debug(f"Ошибка при применении тегов ошибки в treeview: {e}")
                     break
             
-            # Вызываем refresh_treeview для применения тегов при перерисовке
-            if hasattr(self.app, 'file_list_manager') and hasattr(self.app.file_list_manager, 'refresh_treeview'):
-                self.app.root.after_idle(lambda: self.app.file_list_manager.refresh_treeview())
+            if not found:
+                logger.warning(f"Файл {file_name} не найден в treeview для обновления статуса")
+            
+            # Не вызываем refresh_treeview сразу, так как теги уже применены
+            # refresh_treeview будет вызван при следующем обновлении интерфейса
+            # Это позволяет избежать перерисовки, которая может сбросить только что установленные теги
         except (tk.TclError, AttributeError, RuntimeError, TypeError):
             # Игнорируем ошибки UI операций (не критично)
             pass

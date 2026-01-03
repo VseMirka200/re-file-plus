@@ -132,50 +132,9 @@ class ConverterDragDrop:
                 self.app.converter_files.append(file_data)
                 added_count += 1
                 
-                # Автоматически устанавливаем фильтр по типу файла
+                # Автоматически устанавливаем тип файла при первом добавлении
                 if added_count == 1 and file_category:
-                    if not hasattr(self.app, 'converter_filter_var'):
-                        import tkinter as tk
-                        self.app.converter_filter_var = tk.StringVar(value="Все")
-                    
-                    if hasattr(self.app, 'converter_filter_var'):
-                        current_filter = self.app.converter_filter_var.get()
-                        if not current_filter or current_filter == "Все" or current_filter == "":
-                            category_mapping = {
-                                'image': 'Изображения',
-                                'document': 'Документы',
-                                'presentation': 'Презентации',
-                                'audio': 'Аудио',
-                                'video': 'Видео'
-                            }
-                            filter_name = category_mapping.get(file_category)
-                            if filter_name:
-                                logger.info(f"Автоматическая установка типа файла (drag-drop): {file_category} -> {filter_name} для файла {os.path.basename(file_path)}")
-                                self.app.converter_filter_var.set(filter_name)
-                                
-                                def update_filter_ui():
-                                    try:
-                                        if hasattr(self.app, 'converter_filter_combo') and self.app.converter_filter_combo:
-                                            self.app.converter_filter_combo.set(filter_name)
-                                            logger.debug(f"Combobox обновлен (drag-drop): {filter_name}")
-                                    except (AttributeError, TypeError, RuntimeError) as e:
-                                        logger.debug(f"Ошибка при обновлении combobox: {e}")
-                                    except (MemoryError, RecursionError) as e:
-
-                                        # Ошибки памяти/рекурсии
-
-                                        pass
-
-                                    # Финальный catch для неожиданных исключений (критично для стабильности)
-
-                                    except BaseException as e:
-
-                                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
-
-                                            raise
-                                        logger.debug(f"Неожиданная ошибка при обновлении combobox: {e}")
-                                if hasattr(self.app, 'root'):
-                                    self.app.root.after(10, update_filter_ui)
+                    self._auto_set_file_type(file_category)
             
             if added_count > 0:
                 if hasattr(self.app, 'converter_left_panel'):
@@ -205,4 +164,46 @@ class ConverterDragDrop:
                     logger.debug(f"Ошибка в ErrorHandler при обработке drag&drop: {handler_error}")
                     pass
             logger.error(f"Ошибка при обработке перетаскивания файлов для конвертации: {e}", exc_info=True)
+    
+    def _auto_set_file_type(self, file_category: str):
+        """Автоматическая установка типа файла в фильтре.
+        
+        Args:
+            file_category: Категория файла (image, document, presentation, audio, video)
+        """
+        if not file_category:
+            return
+        
+        if not hasattr(self.app, 'converter_filter_var'):
+            import tkinter as tk
+            self.app.converter_filter_var = tk.StringVar(value="Все")
+        
+        category_mapping = {
+            'image': 'Изображения',
+            'document': 'Документы',
+            'presentation': 'Презентации',
+            'audio': 'Аудио',
+            'video': 'Видео'
+        }
+        
+        filter_name = category_mapping.get(file_category)
+        if filter_name:
+            logger.info(f"Автоматическая установка типа файла (drag-drop): {file_category} -> {filter_name}")
+            self.app.converter_filter_var.set(filter_name)
+            
+            def update_filter_ui():
+                try:
+                    if hasattr(self.app, 'converter_filter_combo') and self.app.converter_filter_combo:
+                        self.app.converter_filter_combo.set(filter_name)
+                        logger.debug(f"Combobox обновлен (drag-drop): {filter_name}")
+                    # Обновляем список форматов для выбранного типа
+                    if hasattr(self.app, 'converter_tab_handler'):
+                        self.app.converter_tab_handler.filter_converter_files_by_type()
+                except (AttributeError, TypeError, RuntimeError) as e:
+                    logger.debug(f"Ошибка при обновлении combobox: {e}")
+                except (MemoryError, RecursionError):
+                    pass
+            
+            if hasattr(self.app, 'root'):
+                self.app.root.after(10, update_filter_ui)
 

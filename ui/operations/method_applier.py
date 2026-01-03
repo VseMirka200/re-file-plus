@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 from typing import List
 
 logger = logging.getLogger(__name__)
@@ -216,6 +217,23 @@ class MethodApplier:
                         method_name='apply_methods',
                         details={'methods': method_names}
                     )
+            except re.error as e:
+                # Ошибка regex (например, "unbalanced parenthesis" в строке замены)
+                # Может возникнуть при применении RegexMethod или в условной логике NewNameMethod
+                # Примечание: ошибки regex должны обрабатываться внутри методов (RegexMethod.apply(), NewNameMethod.apply()),
+                # но на случай, если они все же прорываются, перехватываем их здесь
+                error_count += 1
+                error_msg = str(e)
+                logger.warning(
+                    f"Ошибка regex при применении методов к файлу {file_path}: {error_msg}. "
+                    f"Файл останется без изменений. Методы: {method_names}"
+                )
+                # Устанавливаем new_name на старое имя, так как применение методов не удалось
+                if hasattr(file_data, 'new_name'):
+                    file_data.new_name = old_name_before or ''
+                elif isinstance(file_data, dict):
+                    file_data['new_name'] = old_name_before or ''
+                # Цветовая индикация убрана - тег "ошибка" не устанавливается
             except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
                 error_count += 1
                 logger.error(f"Ошибка при применении методов к файлу {file_path}: {e}", exc_info=True)
@@ -237,8 +255,17 @@ class MethodApplier:
                 if isinstance(e, (KeyboardInterrupt, SystemExit)):
 
                     raise
-                error_count += 1
-                logger.error(f"Неожиданная ошибка при применении методов к файлу {file_path}: {e}", exc_info=True)
+                # Проверяем, не является ли это ошибкой regex (может быть обернута в другой тип)
+                error_str = str(e)
+                if isinstance(e, re.error) or (hasattr(e, 'args') and len(e.args) > 0 and ('unbalanced parenthesis' in str(e.args[0]) or 'regex' in error_str.lower())):
+                    error_count += 1
+                    logger.warning(
+                        f"Ошибка regex при применении методов к файлу {file_path}: {error_str}. "
+                        f"Файл останется без изменений. Методы: {method_names}"
+                    )
+                else:
+                    error_count += 1
+                    logger.error(f"Неожиданная ошибка при применении методов к файлу {file_path}: {e}", exc_info=True)
                 # Цветовая индикация убрана - тег "ошибка" не устанавливается
                 
                 # Получаем old_name в зависимости от типа данных
