@@ -144,21 +144,62 @@ class UIComponents:
                         # Показываем ошибку пользователю
                         try:
                             mb.showerror("Ошибка", "Команда кнопки не является вызываемой функцией")
-                        except Exception:
+                        except (tk.TclError, RuntimeError):
+                            pass
+                        except (ValueError, TypeError, AttributeError):
+                            pass
+                        except (MemoryError, RecursionError):
+                            pass
+                        # Финальный catch для неожиданных исключений (критично для стабильности)
+                        except BaseException:
                             pass
                 else:
                     # Показываем ошибку пользователю
                     try:
                         mb.showerror("Ошибка", "Команда кнопки не найдена")
-                    except Exception:
+                    except (tk.TclError, RuntimeError):
                         pass
-            except Exception as ex:
+                    except (MemoryError, RecursionError):
+                        pass
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+                    except BaseException:
+                        pass
+            except (TypeError, AttributeError, ValueError) as ex:
+                # Ошибки типа/данных при нажатии кнопки
+                logger.error(f"Ошибка типа/данных при нажатии кнопки: {ex}", exc_info=True)
+                try:
+                    mb.showerror("Ошибка", f"Ошибка данных при выполнении команды кнопки:\n{ex}")
+                except (tk.TclError, RuntimeError):
+                    pass
+                except (MemoryError, RecursionError):
+                    pass
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
+                    pass
+            except (MemoryError, RecursionError) as ex:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as ex:
+
+                if isinstance(ex, (KeyboardInterrupt, SystemExit)):
+
+                    raise
                 # Логируем ошибку в файл, так как консоль может быть недоступна
-                logger.error(f"Ошибка при нажатии кнопки: {ex}", exc_info=True)
+                logger.error(f"Неожиданная ошибка при нажатии кнопки: {ex}", exc_info=True)
                 # Также показываем сообщение пользователю
                 try:
-                    mb.showerror("Ошибка", f"Ошибка при выполнении команды кнопки:\n{ex}")
-                except Exception:
+                    mb.showerror("Ошибка", f"Неожиданная ошибка при выполнении команды кнопки:\n{ex}")
+                except (tk.TclError, RuntimeError):
+                    pass
+                except (MemoryError, RecursionError):
+                    pass
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
                     pass
             finally:
                 # Сбрасываем флаг после небольшой задержки (300мс)
@@ -228,7 +269,14 @@ class UIComponents:
                         color_hex = str(color) if color else '#6366F1'
                         if not color_hex.startswith('#'):
                             color_hex = '#6366F1'
-                    except Exception:
+                    except (TypeError, ValueError, AttributeError):
+                        color_hex = '#6366F1'
+                    except (KeyError, IndexError):
+                        color_hex = '#6366F1'
+                    except (MemoryError, RecursionError):
+                        color_hex = '#6366F1'
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+                    except BaseException:
                         color_hex = '#6366F1'
                 
                 # Рисуем закругленный прямоугольник с тегом для привязки событий
@@ -257,7 +305,14 @@ class UIComponents:
                     pass
                 try:
                     canvas.tag_bind(tag, '<Button-1>', on_click)
-                except Exception:
+                except (tk.TclError, AttributeError, RuntimeError):
+                    pass
+                except (ValueError, TypeError, KeyError):
+                    pass
+                except (MemoryError, RecursionError):
+                    pass
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
                     pass
             finally:
                 canvas._drawing = False
@@ -345,8 +400,24 @@ class UIComponents:
             if hasattr(canvas, 'btn_command') and canvas.btn_command and callable(canvas.btn_command):
                 try:
                     canvas.btn_command()
-                except Exception as ex:
-                    logger.error(f"Ошибка при нажатии кнопки: {ex}", exc_info=True)
+                except (TypeError, AttributeError, ValueError) as ex:
+                    logger.error(f"Ошибка типа/данных при нажатии кнопки: {ex}", exc_info=True)
+                except (RuntimeError, KeyError, IndexError) as ex:
+                    logger.error(f"Ошибка выполнения при нажатии кнопки: {ex}", exc_info=True)
+                except (MemoryError, RecursionError) as ex:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as ex:
+
+                    if isinstance(ex, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    logger.error(f"Неожиданная ошибка при нажатии кнопки: {ex}", exc_info=True)
         
         def on_enter(e):
             if canvas.btn_state != 'active':
@@ -414,7 +485,10 @@ class UIComponents:
                 pass
             try:
                 canvas.tag_bind('button_item', '<Button-1>', on_click)
-            except Exception:
+            except (MemoryError, RecursionError):
+                pass
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException:
                 pass
         
         # Привязка событий
@@ -523,8 +597,24 @@ class UIComponents:
             if hasattr(canvas, 'btn_command') and canvas.btn_command and callable(canvas.btn_command):
                 try:
                     canvas.btn_command()
-                except Exception as ex:
-                    logger.error(f"Ошибка при нажатии кнопки: {ex}", exc_info=True)
+                except (TypeError, AttributeError, ValueError) as ex:
+                    logger.error(f"Ошибка типа/данных при нажатии кнопки: {ex}", exc_info=True)
+                except (RuntimeError, KeyError, IndexError) as ex:
+                    logger.error(f"Ошибка выполнения при нажатии кнопки: {ex}", exc_info=True)
+                except (MemoryError, RecursionError) as ex:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as ex:
+
+                    if isinstance(ex, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    logger.error(f"Неожиданная ошибка при нажатии кнопки: {ex}", exc_info=True)
         
         def on_enter(e):
             if canvas.btn_state != 'active':
@@ -591,7 +681,14 @@ class UIComponents:
                     pass
                 try:
                     canvas.tag_bind(tag, '<Button-1>', on_click)
-                except Exception:
+                except (tk.TclError, AttributeError, RuntimeError):
+                    pass
+                except (ValueError, TypeError, KeyError):
+                    pass
+                except (MemoryError, RecursionError):
+                    pass
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
                     pass
             finally:
                 canvas._drawing = False

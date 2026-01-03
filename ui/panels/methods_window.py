@@ -51,7 +51,12 @@ class MethodsWindow:
         window.configure(bg=self.app.colors['bg_main'])
         try:
             set_window_icon(window, self.app._icon_photos)
-        except Exception:
+        except (AttributeError, tk.TclError, OSError, RuntimeError, TypeError):
+            pass
+        except (MemoryError, RecursionError):
+            pass
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException:
             pass
         
         window.columnconfigure(0, weight=1)
@@ -626,8 +631,24 @@ class MethodsWindow:
                 self.update_methods_window_list()
                 self.app.log(f"Добавлен метод: {method_name}")
                 self.app.apply_methods()
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось добавить метод: {e}")
+        except (ValueError, TypeError, AttributeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка данных при добавлении метода: {e}")
+        except (OSError, RuntimeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка выполнения при добавлении метода: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка при добавлении метода: {e}")
     
     def remove_method_from_window(self):
         """Удаление метода"""

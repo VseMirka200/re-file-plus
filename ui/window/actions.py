@@ -242,7 +242,8 @@ class MainWindowActions:
                     context_menu.tk_popup(event.x_root, event.y_root)
                 finally:
                     context_menu.grab_release()
-            except Exception:
+            except (tk.TclError, RuntimeError, AttributeError):
+                # Игнорируем ошибки контекстного меню (не критично)
                 pass
         
         template_entry.bind('<Button-3>', show_context_menu)  # Правая кнопка мыши (Windows/Linux)

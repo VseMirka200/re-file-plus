@@ -8,6 +8,27 @@ import os
 import subprocess
 from typing import Optional, Tuple
 
+# Импорт утилит безопасности
+try:
+    from utils.security_utils import (
+        sanitize_path_for_subprocess,
+        validate_path_for_subprocess
+    )
+except ImportError:
+    # Fallback если утилиты недоступны
+    def sanitize_path_for_subprocess(path: str) -> Optional[str]:
+        try:
+            return os.path.abspath(os.path.normpath(path))
+        except (OSError, ValueError):
+            return None
+    
+    def validate_path_for_subprocess(path: str, must_exist: bool = True, must_be_file: bool = False) -> Tuple[bool, Optional[str]]:
+        if not os.path.exists(path) and must_exist:
+            return False, "Путь не существует"
+        if must_be_file and not os.path.isfile(path):
+            return False, "Путь не является файлом"
+        return True, None
+
 logger = logging.getLogger(__name__)
 
 
@@ -49,7 +70,28 @@ def check_ffmpeg_installed() -> bool:
                 timeout=5
             )
             return result.returncode == 0
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+        except (OSError, ValueError, RuntimeError) as e:
+            logger.debug(f"Ошибка проверки локального ffmpeg: {e}")
+            pass
+        except (subprocess.SubprocessError, AttributeError) as e:
+            logger.debug(f"Ошибка subprocess/атрибутов при проверке локального ffmpeg: {e}")
+            pass
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.warning(f"Неожиданная ошибка при проверке локального ffmpeg: {e}", exc_info=True)
             pass
     
     # Проверяем системную версию
@@ -61,7 +103,28 @@ def check_ffmpeg_installed() -> bool:
             timeout=5
         )
         return result.returncode == 0
-    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    except (OSError, ValueError, RuntimeError) as e:
+        logger.debug(f"Ошибка проверки системного ffmpeg: {e}")
+        return False
+    except (subprocess.SubprocessError, AttributeError) as e:
+        logger.debug(f"Ошибка subprocess/атрибутов при проверке системного ffmpeg: {e}")
+        return False
+    except (MemoryError, RecursionError) as e:
+
+        # Ошибки памяти/рекурсии
+
+        pass
+
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+    except BaseException as e:
+
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+            raise
+        logger.warning(f"Неожиданная ошибка при проверке системного ffmpeg: {e}", exc_info=True)
         return False
 
 
@@ -90,14 +153,55 @@ def convert_audio_video(
         if not check_ffmpeg_installed():
             return False, "ffmpeg не установлен. Установите ffmpeg для конвертации аудио/видео файлов.", None
         
-        # Нормализуем пути
-        file_path = os.path.abspath(file_path)
-        output_path = os.path.abspath(output_path)
+        # Валидируем и нормализуем пути
+        validated_file_path = sanitize_path_for_subprocess(file_path)
+        if not validated_file_path:
+            return False, "Небезопасный путь к исходному файлу", None
+        
+        validated_output_path = sanitize_path_for_subprocess(output_path)
+        if not validated_output_path:
+            return False, "Небезопасный путь к выходному файлу", None
+        
+        file_path = validated_file_path
+        output_path = validated_output_path
+        
+        # Валидируем путь к ffmpeg
+        if ffmpeg_path != 'ffmpeg':  # Системная версия уже проверена
+            validated_ffmpeg = sanitize_path_for_subprocess(ffmpeg_path)
+            if not validated_ffmpeg:
+                return False, "Небезопасный путь к ffmpeg", None
+            ffmpeg_path = validated_ffmpeg
         
         # Создаем директорию для выходного файла, если её нет
         output_dir = os.path.dirname(output_path)
         if output_dir and not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
+            try:
+                os.makedirs(output_dir, exist_ok=True)
+            except (OSError, PermissionError) as e:
+                return False, f"Не удалось создать директорию для выходного файла: {e}", None
+        
+        # Валидация путей перед использованием в subprocess
+        try:
+            from utils.security_utils import validate_path_for_subprocess
+            # Валидируем входной файл
+            is_safe_input, error_msg_input = validate_path_for_subprocess(file_path, must_exist=True, must_be_file=True)
+            if not is_safe_input:
+                return False, f"Небезопасный путь к входному файлу: {error_msg_input}", None
+            
+            # Валидируем путь к ffmpeg
+            is_safe_ffmpeg, error_msg_ffmpeg = validate_path_for_subprocess(ffmpeg_path, must_exist=True, must_be_file=True)
+            if not is_safe_ffmpeg:
+                return False, f"Небезопасный путь к ffmpeg: {error_msg_ffmpeg}", None
+            
+            # Валидируем выходной путь (может не существовать)
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                is_safe_output_dir, error_msg_output = validate_path_for_subprocess(output_dir, must_exist=False, must_be_file=False)
+                if not is_safe_output_dir:
+                    return False, f"Небезопасный путь к выходной директории: {error_msg_output}", None
+        except ImportError:
+            # Если security_utils недоступен, продолжаем без валидации (fallback)
+            logger.warning("Модуль security_utils недоступен, валидация путей пропущена")
         
         # Строим команду ffmpeg
         # -i: входной файл
@@ -112,12 +216,19 @@ def convert_audio_video(
         ]
         
         # Запускаем ffmpeg
-        result = subprocess.run(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=300  # Таймаут 5 минут
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=300,  # Таймаут 5 минут
+                check=False  # Не выбрасываем исключение при ненулевом коде возврата
+            )
+        except subprocess.TimeoutExpired:
+            return False, "Превышено время ожидания конвертации (5 минут)", None
+        except (OSError, ValueError) as e:
+            logger.error(f"Ошибка запуска subprocess для ffmpeg: {e}", exc_info=True)
+            return False, f"Ошибка запуска конвертации: {str(e)}", None
         
         # Проверяем результат
         if result.returncode == 0:
@@ -129,9 +240,7 @@ def convert_audio_video(
             error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Неизвестная ошибка"
             return False, f"Ошибка ffmpeg: {error_msg[:200]}", None
             
-    except subprocess.TimeoutExpired:
-        return False, "Превышено время ожидания конвертации (5 минут)", None
-    except Exception as e:
+    except (OSError, PermissionError, ValueError) as e:
         logger.error(f"Ошибка при конвертации аудио/видео {file_path}: {e}", exc_info=True)
         return False, f"Ошибка конвертации: {str(e)}", None
 

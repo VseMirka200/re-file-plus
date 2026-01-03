@@ -120,8 +120,8 @@ class ReFileOperations:
                             error_type=ErrorType.PERMISSION_DENIED if isinstance(e, PermissionError) else ErrorType.INVALID_PATH,
                             context={'operation': 'apply_methods', 'methods': method_names}
                         )
-                    except Exception:
-                        pass  # Если ErrorHandler недоступен, продолжаем без него
+                    except (AttributeError, TypeError, RuntimeError, ValueError):
+                        pass  # Если ErrorHandler недоступен или выбросил ошибку, продолжаем без него
                 logger.error(f"Ошибка в потоке применения методов: {error_msg}", exc_info=True)
                 self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             except (AttributeError, TypeError) as e:
@@ -136,11 +136,23 @@ class ReFileOperations:
                             error_type=ErrorType.VALIDATION_ERROR,
                             context={'operation': 'apply_methods', 'methods': method_names}
                         )
-                    except Exception:
-                        pass  # Если ErrorHandler недоступен, продолжаем без него
+                    except (AttributeError, TypeError, RuntimeError, ValueError):
+                        pass  # Если ErrorHandler недоступен или выбросил ошибку, продолжаем без него
                 logger.error(f"Ошибка в потоке применения методов: {error_msg}", exc_info=True)
                 self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
-            except Exception as e:
+            except (KeyboardInterrupt, SystemExit):
+                # Системные исключения не перехватываем
+                raise
+            except (MemoryError, RecursionError) as e:
+                # Ошибки памяти/рекурсии
+                pass
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
                 # Неожиданные ошибки
                 error_msg = f"Неожиданная ошибка: {str(e)}"
                 # Используем ErrorHandler если доступен
@@ -152,8 +164,8 @@ class ReFileOperations:
                             error_type=ErrorType.UNKNOWN_ERROR,
                             context={'operation': 'apply_methods', 'methods': method_names}
                         )
-                    except Exception:
-                        pass  # Если ErrorHandler недоступен, продолжаем без него
+                    except (AttributeError, TypeError, RuntimeError, ValueError):
+                        pass  # Если ErrorHandler недоступен или выбросил ошибку, продолжаем без него
                 logger.error(f"Неожиданная ошибка в потоке применения методов: {error_msg}", exc_info=True)
                 self.app.root.after(0, lambda: self._apply_methods_error(error_msg))
             finally:

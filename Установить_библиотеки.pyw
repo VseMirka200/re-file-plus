@@ -19,7 +19,13 @@ if sys.platform == 'win32':
         import ctypes
         kernel32 = ctypes.windll.kernel32
         kernel32.SetConsoleOutputCP(65001)
-    except Exception:
+    except (OSError, AttributeError, RuntimeError):
+        pass
+    except (MemoryError, RecursionError):
+        # Ошибки памяти/рекурсии
+        pass
+    except BaseException:
+        # Финальный catch для неожиданных исключений
         pass
 
 def print_header(text):
@@ -46,8 +52,15 @@ def upgrade_pip():
             capture_output=True
         )
         print("  ✓ pip обновлен")
-    except Exception as e:
-        print(f"  ⚠ Не удалось обновить pip: {e}")
+    except (subprocess.SubprocessError, OSError, FileNotFoundError) as e:
+        print(f"  ⚠ Ошибка выполнения при обновлении pip: {e}")
+    except (MemoryError, RecursionError) as e:
+        # Ошибки памяти/рекурсии
+        print(f"  ⚠ Ошибка памяти/рекурсии при обновлении pip: {e}")
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        print(f"  ⚠ Неожиданная ошибка при обновлении pip: {e}")
 
 def install_ffmpeg_to_project():
     """Установка FFmpeg в папку проекта."""
@@ -127,10 +140,23 @@ def install_ffmpeg_to_project():
                 elif item != 'bin' and item != 'ffmpeg.zip':
                     try:
                         os.remove(item_path)
-                    except:
+                    except (OSError, PermissionError):
                         pass
-        except Exception as e:
-            print(f"  ⚠ Не удалось очистить временные файлы: {e}")
+                    except (MemoryError, RecursionError):
+                        # Ошибки памяти/рекурсии
+                        pass
+                    except BaseException:
+                        # Финальный catch для неожиданных исключений
+                        pass
+        except (OSError, PermissionError, IOError) as e:
+            print(f"  ⚠ Ошибка доступа при очистке временных файлов: {e}")
+        except (MemoryError, RecursionError) as e:
+            # Ошибки памяти/рекурсии
+            print(f"  ⚠ Ошибка памяти/рекурсии при очистке временных файлов: {e}")
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            print(f"  ⚠ Неожиданная ошибка при очистке временных файлов: {e}")
         
         # Проверяем, что всё работает
         try:
@@ -144,7 +170,16 @@ def install_ffmpeg_to_project():
                 print(f"  ✓ FFmpeg успешно установлен в {bin_dir}")
             else:
                 print(f"  ⚠ FFmpeg установлен, но проверка не прошла")
-        except Exception as e:
+        except (subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            print(f"  ⚠ FFmpeg установлен, но проверка не выполнена (ошибка subprocess): {e}")
+        except (OSError, FileNotFoundError) as e:
+            print(f"  ⚠ FFmpeg установлен, но проверка не выполнена (ошибка доступа): {e}")
+        except (MemoryError, RecursionError) as e:
+            # Ошибки памяти/рекурсии
+            print(f"  ⚠ FFmpeg установлен, но проверка не выполнена (ошибка памяти/рекурсии): {e}")
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
             print(f"  ⚠ FFmpeg установлен, но проверка не выполнена: {e}")
     
     except urllib.error.URLError as e:
@@ -152,8 +187,23 @@ def install_ffmpeg_to_project():
         print(f"     Проверьте подключение к интернету")
     except zipfile.BadZipFile:
         print(f"  ✗ Ошибка: архив поврежден или не является ZIP файлом")
-    except Exception as e:
-        print(f"  ✗ Ошибка установки FFmpeg: {e}")
+    except (OSError, PermissionError, IOError) as e:
+        print(f"  ✗ Ошибка доступа при установке FFmpeg: {e}")
+        import traceback
+        traceback.print_exc()
+    except (ValueError, TypeError) as e:
+        print(f"  ✗ Ошибка данных при установке FFmpeg: {e}")
+        import traceback
+        traceback.print_exc()
+    except (MemoryError, RecursionError) as e:
+        # Ошибки памяти/рекурсии
+        print(f"  ✗ Ошибка памяти/рекурсии при установке FFmpeg: {e}")
+        import traceback
+        traceback.print_exc()
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        print(f"  ✗ Неожиданная ошибка установки FFmpeg: {e}")
         import traceback
         traceback.print_exc()
 
@@ -177,7 +227,16 @@ def install_package(package, description=""):
     except subprocess.TimeoutExpired:
         print(f"  ✗ {description or package}: таймаут")
         return False
-    except Exception as e:
+    except (OSError, FileNotFoundError) as e:
+        print(f"  ✗ {description or package}: ошибка доступа - {e}")
+        return False
+    except (MemoryError, RecursionError) as e:
+        # Ошибки памяти/рекурсии
+        print(f"  ✗ {description or package}: ошибка памяти/рекурсии - {e}")
+        return False
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
         print(f"  ✗ {description or package}: {e}")
         return False
 
@@ -259,7 +318,29 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\n\n[ОТМЕНЕНО] Установка прервана пользователем.")
         sys.exit(1)
-    except Exception as e:
+    except (OSError, PermissionError, IOError) as e:
+        print(f"\n[ОШИБКА] Критическая ошибка доступа: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\nНажмите Enter для выхода...")
+        sys.exit(1)
+    except (ValueError, TypeError, AttributeError) as e:
+        print(f"\n[ОШИБКА] Критическая ошибка данных: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\nНажмите Enter для выхода...")
+        sys.exit(1)
+    except (MemoryError, RecursionError) as e:
+        # Ошибки памяти/рекурсии
+        print(f"\n[ОШИБКА] Критическая ошибка памяти/рекурсии: {e}")
+        import traceback
+        traceback.print_exc()
+        input("\nНажмите Enter для выхода...")
+        sys.exit(1)
+    except BaseException as e:
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
         print(f"\n[ОШИБКА] Критическая ошибка: {e}")
         import traceback
         traceback.print_exc()

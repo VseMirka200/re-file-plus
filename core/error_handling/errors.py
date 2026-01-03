@@ -129,15 +129,47 @@ class ErrorHandler:
             for callback in self._error_callbacks[error_type]:
                 try:
                     callback(app_error)
-                except Exception as e:
-                    logger.error(f"Ошибка в callback обработки ошибок: {e}", exc_info=True)
+                except (TypeError, AttributeError, ValueError) as e:
+                    logger.error(f"Ошибка типа/значения в callback обработки ошибок: {e}", exc_info=True)
+                except (RuntimeError, OSError) as e:
+                    logger.error(f"Ошибка выполнения в callback обработки ошибок: {e}", exc_info=True)
+                except (MemoryError, RecursionError) as e:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as e:
+
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    logger.error(f"Неожиданная ошибка в callback обработки ошибок: {e}", exc_info=True)
         
         # Вызываем callback по умолчанию, если есть
         if self._default_callback:
             try:
                 self._default_callback(app_error)
-            except Exception as e:
-                logger.error(f"Ошибка в default callback: {e}", exc_info=True)
+            except (TypeError, AttributeError, ValueError) as e:
+                logger.error(f"Ошибка типа/значения в default callback: {e}", exc_info=True)
+            except (RuntimeError, OSError) as e:
+                logger.error(f"Ошибка выполнения в default callback: {e}", exc_info=True)
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка в default callback: {e}", exc_info=True)
         
         return app_error
     

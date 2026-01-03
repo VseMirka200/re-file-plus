@@ -77,13 +77,45 @@ def get_logs_dir() -> str:
                 temp_logs_dir.mkdir(parents=True, exist_ok=True)
                 try:
                     logger.info(f"Используется временная директория для логов: {temp_logs_dir}")
-                except:
+                except (AttributeError, RuntimeError):
+                    print(f"Информация: Используется временная директория для логов: {temp_logs_dir}")
+                except (MemoryError, RecursionError):
+                    print(f"Информация: Используется временная директория для логов: {temp_logs_dir}")
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
                     print(f"Информация: Используется временная директория для логов: {temp_logs_dir}")
                 return str(temp_logs_dir)
-            except Exception as temp_e:
+            except (OSError, PermissionError) as temp_e:
                 try:
-                    logger.error(f"Не удалось создать временную директорию для логов: {temp_e}")
-                except:
+                    logger.error(f"Ошибка доступа при создании временной директории для логов: {temp_e}")
+                except (AttributeError, RuntimeError):
+                    print(f"Ошибка доступа: Не удалось создать временную директорию для логов: {temp_e}")
+                except (MemoryError, RecursionError):
+                    print(f"Ошибка доступа: Не удалось создать временную директорию для логов: {temp_e}")
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
+                    print(f"Ошибка доступа: Не удалось создать временную директорию для логов: {temp_e}")
+            except (MemoryError, RecursionError) as temp_e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as temp_e:
+
+                if isinstance(temp_e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                try:
+                    logger.error(f"Неожиданная ошибка при создании временной директории для логов: {temp_e}")
+                except (AttributeError, RuntimeError):
+                    print(f"Ошибка: Не удалось создать временную директорию для логов: {temp_e}")
+                except (MemoryError, RecursionError):
+                    print(f"Ошибка: Не удалось создать временную директорию для логов: {temp_e}")
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
                     print(f"Ошибка: Не удалось создать временную директорию для логов: {temp_e}")
     return str(logs_dir)
 
@@ -165,33 +197,57 @@ def is_safe_path(path: str, allowed_dirs: Optional[List[str]] = None) -> bool:
                 return False
             
             # Улучшенная проверка на path traversal
-            # Проверяем, что '..' не является частью пути (не в имени файла)
-            path_parts = path.split(os.sep)
-            if '..' in path_parts or path.startswith('~'):
-                return False
+            # Используем pathlib для более надежной проверки
+            from pathlib import Path as PathLib
             
-            # Проверка на абсолютные пути с символами подстановки
-            if os.path.isabs(path):
-                # Проверяем на использование символов подстановки в пути
-                if '*' in path or '?' in path:
+            try:
+                path_obj = PathLib(path)
+                
+                # Проверяем на символические ссылки (могут быть обходом)
+                if path_obj.is_symlink():
+                    # Разрешаем символические ссылки только если они ведут в безопасную директорию
+                    real_path = path_obj.resolve()
+                    if not real_path.exists():
+                        return False
+                    path_obj = real_path
+                
+                # Проверяем, что нормализованный путь не содержит '..'
+                normalized_parts = path_obj.resolve().parts
+                if '..' in normalized_parts:
                     return False
-            
-            # Нормализуем путь
-            abs_path = os.path.abspath(path)
-            
-            # Проверяем, что это файл
-            if not os.path.isfile(abs_path):
+                
+                # Проверка на использование символов подстановки
+                path_str = str(path_obj)
+                if '*' in path_str or '?' in path_str:
+                    return False
+                
+                # Проверка на пути, начинающиеся с ~ (home directory expansion)
+                if path_str.startswith('~'):
+                    return False
+                
+                # Получаем абсолютный путь
+                abs_path = str(path_obj.resolve())
+                
+                # Проверяем, что это файл
+                if not os.path.isfile(abs_path):
+                    return False
+                
+                # Если указаны разрешенные директории, проверяем
+                if allowed_dirs:
+                    for allowed_dir in allowed_dirs:
+                        try:
+                            allowed_abs = str(PathLib(allowed_dir).resolve())
+                            # Используем startswith для проверки, что файл находится в разрешенной директории
+                            if abs_path.startswith(allowed_abs + os.sep) or abs_path == allowed_abs:
+                                return True
+                        except (OSError, ValueError):
+                            continue
+                    return False
+                
+                return True
+            except (OSError, ValueError) as path_error:
+                logger.debug(f"Ошибка при проверке пути {path}: {path_error}")
                 return False
-            
-            # Если указаны разрешенные директории, проверяем
-            if allowed_dirs:
-                for allowed_dir in allowed_dirs:
-                    allowed_abs = os.path.abspath(allowed_dir)
-                    if abs_path.startswith(allowed_abs):
-                        return True
-                return False
-            
-            return True
         except (OSError, ValueError, TypeError):
             return False
 

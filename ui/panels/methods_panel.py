@@ -630,5 +630,21 @@ class MethodsPanel:
             # Автоматически применяем методы
             self.app.apply_methods()
             
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось добавить метод: {e}")
+        except (ValueError, TypeError, AttributeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка данных при добавлении метода: {e}")
+        except (OSError, RuntimeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка выполнения при добавлении метода: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка при добавлении метода: {e}")

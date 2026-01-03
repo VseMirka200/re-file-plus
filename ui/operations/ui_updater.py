@@ -48,7 +48,7 @@ class UIUpdater:
                         item_values = self.app.tree.item(item, 'values')
                         display_text = item_values[0] if item_values and len(item_values) > 0 else ''
                         path_text = item_values[1] if item_values and len(item_values) > 1 else ''
-                        self.app.tree.item(item, values=(display_text, path_text), tags=('in_progress',))
+                        self.app.tree.item(item, values=(display_text, path_text), tags=())
                         break
             actual_file_index += 1
     
@@ -81,7 +81,7 @@ class UIUpdater:
                         item_values = self.app.tree.item(item, 'values')
                         display_text = item_values[0] if item_values and len(item_values) > 0 else ''
                         path_text = item_values[1] if item_values and len(item_values) > 1 else ''
-                        self.app.tree.item(item, values=(display_text, path_text), tags=('ready',))
+                        self.app.tree.item(item, values=(display_text, path_text), tags=())
                         break
             actual_file_index += 1
     
@@ -114,7 +114,7 @@ class UIUpdater:
                         item_values = self.app.tree.item(item, 'values')
                         display_text = item_values[0] if item_values and len(item_values) > 0 else ''
                         path_text = item_values[1] if item_values and len(item_values) > 1 else ''
-                        self.app.tree.item(item, values=(display_text, path_text), tags=('error',))
+                        self.app.tree.item(item, values=(display_text, path_text), tags=())
                         break
             actual_file_index += 1
     
@@ -137,6 +137,22 @@ class UIUpdater:
             
             if current % 10 == 0 or current == total:
                 self.app.refresh_treeview()
-        except Exception as e:
-            logger.debug(f"Ошибка обновления UI прогресса: {e}")
+        except (tk.TclError, RuntimeError, AttributeError) as e:
+            logger.debug(f"Ошибка выполнения при обновлении UI прогресса: {e}")
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            logger.debug(f"Ошибка данных при обновлении UI прогресса: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка обновления UI прогресса: {e}")
 

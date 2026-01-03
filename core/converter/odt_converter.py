@@ -102,9 +102,24 @@ def convert_odt_with_word(
             error_msg = str(open_error)
             logger.error(f"Ошибка при открытии ODT файла в Word: {error_msg}")
             return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
-        except Exception as open_error:
+        except (ValueError, TypeError) as open_error:
             error_msg = str(open_error)
-            logger.error(f"Неожиданная ошибка при открытии ODT файла в Word: {error_msg}")
+            logger.error(f"Ошибка типа/значения при открытии ODT файла в Word: {error_msg}")
+            return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
+        except (KeyError, IndexError) as open_error:
+            error_msg = str(open_error)
+            logger.error(f"Ошибка доступа к данным при открытии ODT файла в Word: {error_msg}")
+            return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
+        except (MemoryError, RecursionError) as open_error:
+            error_msg = str(open_error)
+            logger.error(f"Ошибка памяти/рекурсии при открытии ODT файла в Word: {error_msg}")
+            return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as open_error:
+            if isinstance(open_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(open_error)
+            logger.error(f"Критическая ошибка при открытии ODT файла в Word: {error_msg}", exc_info=True)
             return False, f"Не удалось открыть ODT файл в Word: {error_msg[:200]}", None
         
         # Сохраняем в нужном формате
@@ -132,18 +147,54 @@ def convert_odt_with_word(
                     doc.SaveAs(FileName=output_path_abs, FileFormat=file_format)
                 except (OSError, PermissionError, RuntimeError) as retry_error:
                     return False, f"Не удалось сохранить файл: {retry_error}", None
-                except Exception as retry_error:
-                    return False, f"Неожиданная ошибка при повторной попытке сохранения: {retry_error}", None
-        except Exception as save_error:
+                except (ValueError, TypeError) as retry_error:
+                    return False, f"Ошибка типа/значения при повторной попытке сохранения: {retry_error}", None
+                except (KeyError, IndexError) as retry_error:
+                    return False, f"Ошибка доступа к данным при повторной попытке сохранения: {retry_error}", None
+                except (MemoryError, RecursionError) as retry_error:
+                    return False, f"Ошибка памяти/рекурсии при повторной попытке сохранения: {retry_error}", None
+                # Финальный catch для неожиданных исключений (критично для стабильности COM)
+                except BaseException as retry_error:
+                    if isinstance(retry_error, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    return False, f"Критическая ошибка при повторной попытке сохранения: {retry_error}", None
+        except (ValueError, TypeError) as save_error:
             error_msg = str(save_error)
-            logger.error(f"Неожиданная ошибка при сохранении файла: {error_msg}")
+            logger.error(f"Ошибка типа/значения при сохранении файла: {error_msg}")
+            return False, f"Ошибка при сохранении файла: {error_msg[:200]}", None
+        except (KeyError, IndexError) as save_error:
+            error_msg = str(save_error)
+            logger.error(f"Ошибка доступа к данным при сохранении файла: {error_msg}")
+            return False, f"Ошибка доступа к данным при сохранении файла: {error_msg[:200]}", None
+        except (MemoryError, RecursionError) as save_error:
+            error_msg = str(save_error)
+            logger.error(f"Ошибка памяти/рекурсии при сохранении файла: {error_msg}")
+            return False, f"Ошибка памяти/рекурсии при сохранении файла: {error_msg[:200]}", None
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as save_error:
+            if isinstance(save_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(save_error)
+            logger.error(f"Критическая ошибка при сохранении файла: {error_msg}", exc_info=True)
             return False, f"Ошибка при сохранении файла: {error_msg[:200]}", None
         
         return True, f"ODT файл успешно конвертирован через Microsoft Word в {target_ext}", output_path_abs
         
-    except Exception as e:
-        logger.error(f"Ошибка при конвертации ODT через Word {file_path}: {e}", exc_info=True)
+    except (OSError, RuntimeError, AttributeError, PermissionError) as e:
+        logger.error(f"Ошибка выполнения при конвертации ODT через Word {file_path}: {e}", exc_info=True)
         return False, f"Ошибка: {str(e)}", None
+    except (ValueError, TypeError, KeyError, IndexError) as e:
+        logger.error(f"Ошибка данных при конвертации ODT через Word {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка данных: {str(e)}", None
+    except (MemoryError, RecursionError) as e:
+        logger.error(f"Ошибка памяти/рекурсии при конвертации ODT через Word {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка памяти/рекурсии: {str(e)}", None
+    # Финальный catch для неожиданных исключений (критично для стабильности COM)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        logger.error(f"Критическая ошибка при конвертации ODT через Word {file_path}: {e}", exc_info=True)
+        return False, f"Неожиданная ошибка: {str(e)}", None
     finally:
         cleanup_word_document(doc)
         cleanup_word_application(word_app)
@@ -204,8 +255,20 @@ def convert_odt_without_libreoffice(
                             with open(output_path, 'w', encoding='utf-8') as f:
                                 f.write(text)
                             return True, "Текст успешно извлечен из ODT файла", output_path
-            except Exception as e:
-                logger.debug(f"Ошибка извлечения текста из ODT: {e}")
+            except (OSError, PermissionError, ValueError, TypeError, KeyError) as e:
+                logger.debug(f"Ошибка выполнения при извлечении текста из ODT: {e}")
+                return False, f"Не удалось извлечь текст: {str(e)}", None
+            except (IndexError, AttributeError) as e:
+                logger.debug(f"Ошибка доступа к данным при извлечении текста из ODT: {e}")
+                return False, f"Ошибка доступа к данным: {str(e)}", None
+            except (MemoryError, RecursionError) as e:
+                logger.debug(f"Ошибка памяти/рекурсии при извлечении текста из ODT: {e}")
+                return False, f"Ошибка памяти/рекурсии: {str(e)}", None
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.debug(f"Критическая ошибка извлечения текста из ODT: {e}", exc_info=True)
                 return False, f"Не удалось извлечь текст: {str(e)}", None
         
         elif target_ext == '.html':
@@ -235,8 +298,20 @@ def convert_odt_without_libreoffice(
                         with open(output_path, 'w', encoding='utf-8') as f:
                             f.write('\n'.join(html_content))
                         return True, "ODT файл конвертирован в HTML", output_path
-            except Exception as e:
-                logger.debug(f"Ошибка конвертации ODT в HTML: {e}")
+            except (OSError, PermissionError, ValueError, TypeError, KeyError) as e:
+                logger.debug(f"Ошибка выполнения при конвертации ODT в HTML: {e}")
+                return False, f"Не удалось конвертировать в HTML: {str(e)}", None
+            except (IndexError, AttributeError) as e:
+                logger.debug(f"Ошибка доступа к данным при конвертации ODT в HTML: {e}")
+                return False, f"Ошибка доступа к данным: {str(e)}", None
+            except (MemoryError, RecursionError) as e:
+                logger.debug(f"Ошибка памяти/рекурсии при конвертации ODT в HTML: {e}")
+                return False, f"Ошибка памяти/рекурсии: {str(e)}", None
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.debug(f"Критическая ошибка конвертации ODT в HTML: {e}", exc_info=True)
                 return False, f"Не удалось конвертировать в HTML: {str(e)}", None
         
         elif target_ext == '.docx' and docx_available and docx_module:
@@ -264,13 +339,37 @@ def convert_odt_without_libreoffice(
                         
                         doc.save(output_path)
                         return True, "ODT файл конвертирован в DOCX (базовая конвертация)", output_path
-            except Exception as e:
-                logger.debug(f"Ошибка конвертации ODT в DOCX: {e}")
+            except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
+                logger.debug(f"Ошибка выполнения при конвертации ODT в DOCX: {e}")
+                return False, f"Не удалось конвертировать в DOCX: {str(e)}", None
+            except (KeyError, IndexError) as e:
+                logger.debug(f"Ошибка доступа к данным при конвертации ODT в DOCX: {e}")
+                return False, f"Ошибка доступа к данным: {str(e)}", None
+            except (MemoryError, RecursionError) as e:
+                logger.debug(f"Ошибка памяти/рекурсии при конвертации ODT в DOCX: {e}")
+                return False, f"Ошибка памяти/рекурсии: {str(e)}", None
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.debug(f"Критическая ошибка конвертации ODT в DOCX: {e}", exc_info=True)
                 return False, f"Не удалось конвертировать в DOCX: {str(e)}", None
         
         return False, f"Конвертация ODT в {target_ext} без LibreOffice не поддерживается", None
         
-    except Exception as e:
-        logger.error(f"Ошибка при конвертации ODT без LibreOffice {file_path}: {e}", exc_info=True)
+    except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
+        logger.error(f"Ошибка выполнения при конвертации ODT без LibreOffice {file_path}: {e}", exc_info=True)
         return False, f"Ошибка: {str(e)}", None
+    except (KeyError, IndexError) as e:
+        logger.error(f"Ошибка доступа к данным при конвертации ODT без LibreOffice {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка доступа к данным: {str(e)}", None
+    except (MemoryError, RecursionError) as e:
+        logger.error(f"Ошибка памяти/рекурсии при конвертации ODT без LibreOffice {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка памяти/рекурсии: {str(e)}", None
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        logger.error(f"Критическая ошибка при конвертации ODT без LibreOffice {file_path}: {e}", exc_info=True)
+        return False, f"Неожиданная ошибка: {str(e)}", None
 

@@ -53,8 +53,26 @@ class ImageMetadataExtractor:
                 result = (width, height, exifdata)
                 self._image_cache[file_path] = result
                 return result
-        except Exception as e:
-            logger.debug(f"Не удалось извлечь данные изображения {file_path}: {e}")
+        except (OSError, PermissionError, IOError, FileNotFoundError) as e:
+            logger.debug(f"Ошибка доступа при извлечении данных изображения {file_path}: {e}")
+            return None
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.debug(f"Ошибка данных при извлечении данных изображения {file_path}: {e}")
+            return None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при извлечении данных изображения {file_path}: {e}")
             return None
     
     def extract_dimensions(self, file_path: str) -> Optional[str]:

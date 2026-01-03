@@ -1,7 +1,8 @@
 """Состояние приложения."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
+from pathlib import Path
 from .file_info import FileInfo
 
 
@@ -14,8 +15,8 @@ class ApplicationState:
     cancel_flag: bool = False
     
     # Данные для вкладок
-    converter_files: List = field(default_factory=list)
-    sorter_filters: List = field(default_factory=list)
+    converter_files: List[Dict[str, Any]] = field(default_factory=list)
+    sorter_filters: List[Dict[str, Any]] = field(default_factory=list)
     
     def add_file(self, file: FileInfo) -> bool:
         """Добавление файла.
@@ -61,7 +62,6 @@ class ApplicationState:
         Returns:
             FileInfo или None
         """
-        from pathlib import Path
         target_path = Path(path)
         for file in self.files:
             if file.path == target_path:

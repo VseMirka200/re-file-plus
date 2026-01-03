@@ -37,8 +37,24 @@ def run_gui(files_from_args: Optional[List[str]] = None) -> None:
         try:
             root = TkinterDnD.Tk()
             logger.info("Root окно создано как TkinterDnD.Tk()")
-        except Exception as e:
-            logger.error(f"Не удалось создать TkinterDnD.Tk(): {e}", exc_info=True)
+        except (AttributeError, RuntimeError, TypeError) as e:
+            logger.error(f"Ошибка выполнения при создании TkinterDnD.Tk(): {e}", exc_info=True)
+            root = tk.Tk()
+            logger.warning("Root окно создано как обычный tk.Tk() - drag and drop недоступен")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при создании TkinterDnD.Tk(): {e}", exc_info=True)
             root = tk.Tk()
             logger.warning("Root окно создано как обычный tk.Tk() - drag and drop недоступен")
     else:
@@ -57,7 +73,22 @@ def run_gui(files_from_args: Optional[List[str]] = None) -> None:
         root.mainloop()
     except KeyboardInterrupt:
         logger.info("Приложение прервано пользователем")
-    except Exception as e:
+    except (SystemExit, RuntimeError) as e:
+        logger.error(f"Системная ошибка в главном цикле: {e}", exc_info=True)
+        raise
+    except (MemoryError, RecursionError) as e:
+
+        # Ошибки памяти/рекурсии
+
+        pass
+
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+    except BaseException as e:
+
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+            raise
         logger.error(f"Критическая ошибка в главном цикле: {e}", exc_info=True)
         raise
     finally:

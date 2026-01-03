@@ -295,7 +295,7 @@ class SettingsTab:
         Args:
             parent: Родительский виджет для размещения секции (section_frame)
         """
-        from ui.about_tab import AboutTab
+        from ui.tabs.about_tab import AboutTab
         
         # Создаем экземпляр AboutTab для использования его метода создания содержимого
         about_tab_handler = AboutTab(
@@ -421,14 +421,42 @@ class SettingsTab:
             Exception: Если не удалось открыть путь
         """
         try:
+            # Валидация пути перед использованием
+            from utils.security_utils import validate_path_for_subprocess
+            is_safe, error_msg = validate_path_for_subprocess(path, must_exist=True, must_be_file=False)
+            if not is_safe:
+                logger.warning(f"Небезопасный путь отклонен: {path} - {error_msg}")
+                raise ValueError(f"Небезопасный путь: {error_msg}")
+            
             if sys.platform == "win32":
                 os.startfile(path)
             elif sys.platform == "darwin":
                 subprocess.Popen(["open", path])
             else:
                 subprocess.Popen(["xdg-open", path])
-        except Exception as e:
+        except (OSError, PermissionError, ValueError) as e:
             logger.error(f"Ошибка при открытии пути {path}: {e}")
+            raise
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.error(f"Ошибка subprocess при открытии пути {path}: {e}", exc_info=True)
+            raise
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при открытии пути {path}: {e}", exc_info=True)
+            raise
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при открытии пути {path}: {e}", exc_info=True)
             raise
     
     def _create_open_logs_folder_button(self, parent, logs_path):
@@ -442,8 +470,26 @@ class SettingsTab:
             """Открытие папки с логами"""
             try:
                 self._open_path_in_system(logs_path)
-            except Exception as e:
+            except (OSError, PermissionError, ValueError, subprocess.SubprocessError) as e:
                 messagebox.showerror("Ошибка", f"Не удалось открыть папку с логами:\n{e}")
+            except (TypeError, KeyError, IndexError) as e:
+                messagebox.showerror("Ошибка", f"Ошибка данных при открытии папки с логами:\n{e}")
+                logger.error(f"Ошибка данных при открытии папки с логами: {e}", exc_info=True)
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                messagebox.showerror("Ошибка", f"Неожиданная ошибка при открытии папки с логами:\n{e}")
+                logger.error(f"Неожиданная ошибка при открытии папки с логами: {e}", exc_info=True)
         
         open_logs_btn = tk.Button(
             parent,
@@ -491,6 +537,24 @@ class SettingsTab:
                 self._open_path_in_system(log_file_path)
             else:
                 messagebox.showinfo("Информация", "Файл логов не найден")
-        except Exception as e:
-            logger.error(f"Ошибка при открытии файла логов: {e}")
+        except (OSError, PermissionError, ValueError, subprocess.SubprocessError) as e:
+            logger.error(f"Ошибка при открытии файла логов: {e}", exc_info=True)
             messagebox.showerror("Ошибка", f"Не удалось открыть файл логов:\n{e}")
+        except (TypeError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при открытии файла логов: {e}", exc_info=True)
+            messagebox.showerror("Ошибка", f"Ошибка данных при открытии файла логов:\n{e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при открытии файла логов: {e}", exc_info=True)
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка при открытии файла логов:\n{e}")

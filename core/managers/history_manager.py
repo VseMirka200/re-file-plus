@@ -45,8 +45,26 @@ class HistoryManager:
                     self.history = json.load(f)
                 if not isinstance(self.history, list):
                     self.history = []
-        except Exception as e:
-            logger.error(f"Ошибка загрузки истории: {e}")
+        except (OSError, PermissionError, IOError, FileNotFoundError) as e:
+            logger.error(f"Ошибка доступа при загрузке истории: {e}")
+            self.history = []
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.error(f"Ошибка данных при загрузке истории: {e}")
+            self.history = []
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки истории: {e}")
             self.history = []
     
     def save_history(self) -> bool:
@@ -59,8 +77,26 @@ class HistoryManager:
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(self.history, f, ensure_ascii=False, indent=2)
             return True
-        except Exception as e:
-            logger.error(f"Ошибка сохранения истории: {e}")
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при сохранении истории: {e}")
+            return False
+        except (ValueError, TypeError, json.JSONEncodeError) as e:
+            logger.error(f"Ошибка данных при сохранении истории: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка сохранения истории: {e}")
             return False
     
     def add_operation(self, operation_type: str, files: List[Dict], 
@@ -121,7 +157,25 @@ class HistoryManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.history, f, ensure_ascii=False, indent=2)
             return True
-        except Exception as e:
-            logger.error(f"Ошибка экспорта истории: {e}")
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при экспорте истории: {e}")
+            return False
+        except (ValueError, TypeError, json.JSONEncodeError) as e:
+            logger.error(f"Ошибка данных при экспорте истории: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка экспорта истории: {e}")
             return False
 

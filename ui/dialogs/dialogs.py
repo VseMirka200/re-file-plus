@@ -51,7 +51,21 @@ class Dialogs:
             set_window_icon(window, self.app._icon_photos)
         except (AttributeError, tk.TclError, OSError) as e:
             logger.debug(f"Не удалось установить иконку окна: {e}")
-        except Exception as e:
+        except (RuntimeError, TypeError) as e:
+            logger.debug(f"Ошибка выполнения при установке иконки: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         # Настройка адаптивности окна
@@ -156,7 +170,21 @@ class Dialogs:
             set_window_icon(window, self.app._icon_photos)
         except (AttributeError, tk.TclError, OSError) as e:
             logger.debug(f"Не удалось установить иконку окна: {e}")
-        except Exception as e:
+        except (RuntimeError, TypeError) as e:
+            logger.debug(f"Ошибка выполнения при установке иконки: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         window.columnconfigure(0, weight=1)

@@ -70,15 +70,39 @@ def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
         if hasattr(event, 'data'):
             try:
                 data = event.data
-            except Exception as e:
-                logger.warning(f"Ошибка получения event.data: {e}")
+            except (AttributeError, TypeError, ValueError) as e:
+                if logger.isEnabledFor(logging.WARNING):
+                    logger.warning(f"Ошибка получения event.data: {e}")
+            except (RuntimeError, KeyError) as e:
+                logger.warning(f"Ошибка доступа к event.data: {e}")
+            except (MemoryError, RecursionError) as e:
+                logger.warning(f"Ошибка памяти/рекурсии при получении event.data: {e}", exc_info=True)
+            except (SystemError, GeneratorExit) as e:
+                logger.warning(f"Системная ошибка при получении event.data: {e}", exc_info=True)
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.warning(f"Критическая ошибка получения event.data: {e}", exc_info=True)
         
         # Метод 2: Через getattr (для совместимости)
         if not data:
             try:
                 data = getattr(event, 'data', None)
-            except Exception as e:
-                logger.warning(f"Ошибка получения через getattr: {e}")
+            except (AttributeError, TypeError) as e:
+                if logger.isEnabledFor(logging.WARNING):
+                    logger.warning(f"Ошибка получения через getattr: {e}")
+            except (RuntimeError, KeyError) as e:
+                logger.warning(f"Ошибка доступа через getattr: {e}")
+            except (MemoryError, RecursionError) as e:
+                logger.warning(f"Ошибка памяти/рекурсии при получении через getattr: {e}", exc_info=True)
+            except (SystemError, GeneratorExit) as e:
+                logger.warning(f"Системная ошибка при получении через getattr: {e}", exc_info=True)
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.warning(f"Критическая ошибка получения через getattr: {e}", exc_info=True)
         
         # Метод 3: Пробуем другие возможные атрибуты
         if not data and hasattr(event, '__dict__'):
@@ -87,15 +111,28 @@ def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
                     if hasattr(event, attr):
                         data = getattr(event, attr)
                         break
-            except Exception as e:
-                logger.warning(f"Ошибка получения через другие атрибуты: {e}")
+            except (AttributeError, TypeError) as e:
+                if logger.isEnabledFor(logging.WARNING):
+                    logger.warning(f"Ошибка получения через другие атрибуты: {e}")
+            except (RuntimeError, KeyError) as e:
+                logger.warning(f"Ошибка доступа к другим атрибутам: {e}")
+            except (MemoryError, RecursionError) as e:
+                logger.warning(f"Ошибка памяти/рекурсии при получении через другие атрибуты: {e}", exc_info=True)
+            except (SystemError, GeneratorExit) as e:
+                logger.warning(f"Системная ошибка при получении через другие атрибуты: {e}", exc_info=True)
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.warning(f"Критическая ошибка получения через другие атрибуты: {e}", exc_info=True)
         
         # Метод 4: Пробуем получить через метод get() если есть
         if not data:
             try:
                 if hasattr(event, 'get'):
                     data = event.get('data')
-            except Exception:
+            except (AttributeError, TypeError, RuntimeError):
+                # Игнорируем ошибки доступа к атрибутам события
                 pass
         
         if not data:
@@ -187,8 +224,17 @@ def _on_drop_files(event, callback: Callable[[List[str]], None]) -> None:
             callback(valid_files)
         else:
             logger.warning("Не найдено валидных элементов для обработки")
-    except Exception as e:
+    except (OSError, ValueError, TypeError, AttributeError) as e:
         logger.error(f"Ошибка при обработке drag and drop: {e}", exc_info=True)
+    except (RuntimeError, KeyError, IndexError) as e:
+        logger.error(f"Ошибка выполнения при обработке drag and drop: {e}", exc_info=True)
+    except (MemoryError, RecursionError) as e:
+        logger.error(f"Ошибка памяти/рекурсии при обработке drag and drop: {e}", exc_info=True)
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        logger.error(f"Критическая ошибка при обработке drag and drop: {e}", exc_info=True)
 
 
 # ============================================================================
@@ -226,8 +272,17 @@ class DragDropHandler:
                 self._setup_draganddroptk()
                 if self._drag_drop_setup:
                     return  # Успешно настроено
-            except Exception as e:
+            except (ImportError, AttributeError, RuntimeError, TypeError) as e:
                 logger.warning(f"Не удалось настроить DragAndDropTk: {e}", exc_info=True)
+            except (ValueError, KeyError) as e:
+                logger.warning(f"Ошибка данных при настройке DragAndDropTk: {e}", exc_info=True)
+            except (MemoryError, RecursionError) as e:
+                logger.warning(f"Ошибка памяти/рекурсии при настройке DragAndDropTk: {e}", exc_info=True)
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.warning(f"Критическая ошибка при настройке DragAndDropTk: {e}", exc_info=True)
         
         if not HAS_TKINTERDND2:
             if not self._drag_drop_logged:
@@ -323,11 +378,32 @@ class DragDropHandler:
                         # Проверяем, не зарегистрирован ли уже
                         # (tkinterdnd2 может выбросить ошибку при повторной регистрации)
                         self.app.root.drop_target_register(DND_FILES)
-                    except Exception as reg_error:
+                    except (AttributeError, RuntimeError, TypeError) as reg_error:
                         # Если уже зарегистрирован, это нормально
                         error_str = str(reg_error).lower()
                         if "already registered" not in error_str and "уже зарегистрирован" not in error_str:
                             logger.warning(f"Ошибка при регистрации DND_FILES: {reg_error}")
+                            raise
+                    except (ValueError, TypeError, AttributeError) as reg_error:
+                        # Ошибки данных/типов при регистрации
+                        error_str = str(reg_error).lower()
+                        if "already registered" not in error_str and "уже зарегистрирован" not in error_str:
+                            logger.warning(f"Ошибка данных при регистрации DND_FILES: {reg_error}", exc_info=True)
+                            raise
+                    except (MemoryError, RecursionError) as reg_error:
+                        # Ошибки памяти/рекурсии при регистрации
+                        error_str = str(reg_error).lower()
+                        if "already registered" not in error_str and "уже зарегистрирован" not in error_str:
+                            logger.warning(f"Ошибка памяти/рекурсии при регистрации DND_FILES: {reg_error}", exc_info=True)
+                            raise
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+                    except BaseException as reg_error:
+                        if isinstance(reg_error, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        # Неожиданные ошибки регистрации
+                        error_str = str(reg_error).lower()
+                        if "already registered" not in error_str and "уже зарегистрирован" not in error_str:
+                            logger.warning(f"Критическая ошибка при регистрации DND_FILES: {reg_error}", exc_info=True)
                             raise
                     
                     # Привязываем обработчик события Drop
@@ -338,28 +414,95 @@ class DragDropHandler:
                             # Вызываем метод класса для обработки события
                             self._on_drop_files(event)
                             return None
-                        except Exception as e:
+                        except (OSError, ValueError, TypeError, AttributeError) as e:
                             logger.error(f"Ошибка в обработчике drop: {e}", exc_info=True)
                             self.app.log(f"Ошибка в обработчике drop: {e}")
+                            return None
+                        except (RuntimeError, KeyError, IndexError) as e:
+                            logger.error(f"Ошибка выполнения в обработчике drop: {e}", exc_info=True)
+                            self.app.log(f"Ошибка выполнения в обработчике drop: {e}")
+                            return None
+                        except (MemoryError, RecursionError) as e:
+                            logger.error(f"Ошибка памяти/рекурсии в обработчике drop: {e}", exc_info=True)
+                            self.app.log(f"Ошибка памяти/рекурсии в обработчике drop: {e}")
+                            return None
+                        # Финальный catch для неожиданных исключений (критично для стабильности)
+                        except BaseException as e:
+                            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                                raise
+                            logger.error(f"Критическая ошибка в обработчике drop: {e}", exc_info=True)
+                            self.app.log(f"Критическая ошибка в обработчике drop: {e}")
                             return None
                     
                     # Привязываем обработчик ПРОСТЫМ способом
                     # ВАЖНО: Используем add='+' чтобы не перезаписывать другие обработчики
                     try:
                         self.app.root.dnd_bind('<<Drop>>', on_drop, add='+')
-                    except Exception as bind_error:
+                    except (TypeError, AttributeError, RuntimeError) as bind_error:
                         # Если add='+' не поддерживается, пробуем без него
-                        self.app.root.dnd_bind('<<Drop>>', on_drop)
+                        try:
+                            self.app.root.dnd_bind('<<Drop>>', on_drop)
+                        except (AttributeError, RuntimeError) as e:
+                            logger.warning(f"Не удалось привязать обработчик drop: {e}")
+                    except (ValueError, TypeError) as bind_error:
+                        # Ошибки данных/типов при привязке
+                        logger.warning(f"Ошибка данных при привязке обработчика drop: {bind_error}", exc_info=True)
+                        try:
+                            self.app.root.dnd_bind('<<Drop>>', on_drop)
+                        except (AttributeError, RuntimeError) as e:
+                            logger.error(f"Ошибка выполнения при привязке обработчика drop: {e}", exc_info=True)
+                        except (MemoryError, RecursionError) as e:
+                            logger.error(f"Ошибка памяти/рекурсии при привязке обработчика drop: {e}", exc_info=True)
+                        # Финальный catch для неожиданных исключений (критично для стабильности)
+                        except BaseException as e:
+                            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                                raise
+                            logger.error(f"Критическая ошибка при привязке обработчика drop: {e}", exc_info=True)
+                    except (MemoryError, RecursionError) as bind_error:
+                        # Ошибки памяти/рекурсии при привязке
+                        logger.warning(f"Ошибка памяти/рекурсии при привязке обработчика drop: {bind_error}", exc_info=True)
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+                    except BaseException as bind_error:
+                        if isinstance(bind_error, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        # Критические ошибки привязки
+                        logger.warning(f"Критическая ошибка при привязке обработчика drop: {bind_error}", exc_info=True)
+                        try:
+                            self.app.root.dnd_bind('<<Drop>>', on_drop)
+                        except (AttributeError, RuntimeError) as e:
+                            logger.error(f"Ошибка выполнения при привязке обработчика drop: {e}", exc_info=True)
+                        except (MemoryError, RecursionError) as e:
+                            logger.error(f"Ошибка памяти/рекурсии при привязке обработчика drop: {e}", exc_info=True)
+                        # Финальный catch для неожиданных исключений (критично для стабильности)
+                        except BaseException as e:
+                            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                                raise
+                            logger.error(f"Критическая ошибка при привязке обработчика drop: {e}", exc_info=True)
                     
                     # Проверяем, что регистрация прошла успешно
                     if hasattr(self.app.root, 'dnd_bind'):
                         logger.info("Drag and drop успешно зарегистрирован на root окне")
                     else:
                         logger.warning("Метод dnd_bind недоступен после регистрации")
-                except Exception as e:
+                except (AttributeError, RuntimeError, TypeError) as e:
                     logger.error(f"Ошибка регистрации drag and drop на root: {e}", exc_info=True)
                     if not self._drag_drop_logged:
                         self.app.log(f"Ошибка регистрации drag and drop: {e}")
+                        self.app.log("Попробуйте перезапустить приложение")
+                    self._drag_drop_logged = True
+                    return
+                except (MemoryError, RecursionError) as e:
+                    logger.error(f"Ошибка памяти/рекурсии при регистрации drag and drop на root: {e}", exc_info=True)
+                    if not self._drag_drop_logged:
+                        self.app.log(f"Ошибка памяти/рекурсии при регистрации drag and drop: {e}")
+                        self.app.log("Попробуйте перезапустить приложение")
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException as e:
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    logger.error(f"Критическая ошибка регистрации drag and drop на root: {e}", exc_info=True)
+                    if not self._drag_drop_logged:
+                        self.app.log(f"Критическая ошибка регистрации drag and drop: {e}")
                         self.app.log("Попробуйте перезапустить приложение")
                     self._drag_drop_logged = True
                     return
@@ -382,8 +525,17 @@ class DragDropHandler:
                     try:
                         frame_count = self._register_drag_drop_on_frames(self.app.root)
                         logger.info(f"Drag and drop также зарегистрирован на {frame_count} Frame виджетах")
-                    except Exception as e:
-                        logger.warning(f"Не удалось зарегистрировать drag and drop на Frame виджетах: {e}")
+                    except (AttributeError, RuntimeError, TypeError) as e:
+                        logger.warning(f"Ошибка регистрации drag and drop на Frame виджетах: {e}")
+                    except (ValueError, KeyError) as e:
+                        logger.warning(f"Ошибка данных при регистрации drag and drop на Frame виджетах: {e}")
+                    except (MemoryError, RecursionError) as e:
+                        logger.warning(f"Ошибка памяти/рекурсии при регистрации drag and drop на Frame виджетах: {e}", exc_info=True)
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+                    except BaseException as e:
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        logger.warning(f"Критическая ошибка регистрации drag and drop на Frame виджетах: {e}", exc_info=True)
                 
                 # Регистрируем на Frame виджетах с задержкой
                 self.app.root.after(500, register_on_frames)
@@ -392,10 +544,25 @@ class DragDropHandler:
                 self._drag_drop_setup = True
                 
                 logger.info("Drag and drop настроен на root окне и основных Frame виджетах")
-            except Exception as e:
-                logger.error(f"Не удалось зарегистрировать drag and drop для root: {e}", exc_info=True)
+            except (OSError, PermissionError, RuntimeError) as e:
+                logger.error(f"Ошибка выполнения при регистрации drag and drop для root: {e}", exc_info=True)
                 if not self._drag_drop_logged:
-                    self.app.log(f"Ошибка регистрации drag and drop: {e}")
+                    self.app.log(f"Ошибка выполнения при регистрации drag and drop: {e}")
+                    # Пробуем еще раз через некоторое время
+                    self.app.root.after(1000, self.setup_drag_drop)
+            except (MemoryError, RecursionError) as e:
+                logger.error(f"Ошибка памяти/рекурсии при регистрации drag and drop для root: {e}", exc_info=True)
+                if not self._drag_drop_logged:
+                    self.app.log(f"Ошибка памяти/рекурсии при регистрации drag and drop: {e}")
+                    # Пробуем еще раз через некоторое время
+                    self.app.root.after(1000, self.setup_drag_drop)
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.error(f"Критическая ошибка при регистрации drag and drop для root: {e}", exc_info=True)
+                if not self._drag_drop_logged:
+                    self.app.log(f"Критическая ошибка регистрации drag and drop: {e}")
                     # Пробуем еще раз через некоторое время
                     self.app.root.after(1000, self.setup_drag_drop)
                     self._drag_drop_logged = True
@@ -404,9 +571,30 @@ class DragDropHandler:
             # Root окно должно перехватывать все события drag and drop
             # Регистрация на ttk виджетах может создавать конфликты и блокировать события
             logger.info("Регистрация только на root окне - этого достаточно для работы drag and drop")
-        except Exception as e:
+        except (AttributeError, RuntimeError, TypeError) as e:
             logger.error(f"Ошибка настройки drag and drop (tkinterdnd2): {e}", exc_info=True)
             error_msg = f"Ошибка настройки drag and drop (tkinterdnd2): {e}"
+            if not self._drag_drop_logged:
+                self.app.log(error_msg)
+                self._drag_drop_logged = True
+        except (RuntimeError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка выполнения при настройке drag and drop (tkinterdnd2): {e}", exc_info=True)
+            error_msg = f"Ошибка выполнения при настройке drag and drop (tkinterdnd2): {e}"
+            if not self._drag_drop_logged:
+                self.app.log(error_msg)
+                self._drag_drop_logged = True
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при настройке drag and drop (tkinterdnd2): {e}", exc_info=True)
+            error_msg = f"Ошибка памяти/рекурсии при настройке drag and drop (tkinterdnd2): {e}"
+            if not self._drag_drop_logged:
+                self.app.log(error_msg)
+                self._drag_drop_logged = True
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.error(f"Критическая ошибка настройки drag and drop (tkinterdnd2): {e}", exc_info=True)
+            error_msg = f"Критическая ошибка настройки drag and drop (tkinterdnd2): {e}"
             if not self._drag_drop_logged:
                 self.app.log(error_msg)
                 self.app.log("Установите библиотеку: pip install tkinterdnd2")
@@ -428,10 +616,25 @@ class DragDropHandler:
         """Обработка события перетаскивания файлов"""
         try:
             _on_drop_files(event, self._process_dropped_files)
-        except Exception as e:
+        except (OSError, ValueError, TypeError, AttributeError) as e:
             error_msg = str(e)
-            logger.error(f"Ошибка drag and drop: {error_msg}", exc_info=True)
-            self.app.log(f"Ошибка при обработке перетащенных файлов: {error_msg}")
+            logger.error(f"Ошибка данных при drag and drop: {error_msg}", exc_info=True)
+            self.app.log(f"Ошибка данных при обработке перетащенных файлов: {error_msg}")
+        except (RuntimeError, KeyError, IndexError) as e:
+            error_msg = str(e)
+            logger.error(f"Ошибка выполнения при drag and drop: {error_msg}", exc_info=True)
+            self.app.log(f"Ошибка выполнения при обработке перетащенных файлов: {error_msg}")
+        except (MemoryError, RecursionError) as e:
+            error_msg = str(e)
+            logger.error(f"Ошибка памяти/рекурсии при drag and drop: {error_msg}", exc_info=True)
+            self.app.log(f"Ошибка памяти/рекурсии при обработке перетащенных файлов: {error_msg}")
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(e)
+            logger.error(f"Критическая ошибка drag and drop: {error_msg}", exc_info=True)
+            self.app.log(f"Критическая ошибка при обработке перетащенных файлов: {error_msg}")
     
     def _process_dropped_files(self, files):
         """Обработка перетащенных файлов"""
@@ -481,8 +684,23 @@ class DragDropHandler:
                 else:
                     skipped += 1
                     logger.debug(f"Пропущен (не файл и не папка): {file_path}")
-            except Exception as e:
-                logger.error(f"Ошибка при добавлении пути {file_path}: {e}", exc_info=True)
+            except (OSError, PermissionError, ValueError) as e:
+                logger.error(f"Ошибка файловой системы при добавлении пути {file_path}: {e}", exc_info=True)
+                skipped += 1
+            except (AttributeError, TypeError, KeyError) as e:
+                logger.error(f"Ошибка доступа к данным при добавлении пути {file_path}: {e}", exc_info=True)
+                skipped += 1
+            except (RuntimeError, IndexError) as e:
+                logger.error(f"Ошибка выполнения при добавлении пути {file_path}: {e}", exc_info=True)
+                skipped += 1
+            except (MemoryError, RecursionError) as e:
+                logger.error(f"Ошибка памяти/рекурсии при добавлении пути {file_path}: {e}", exc_info=True)
+                skipped += 1
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.error(f"Критическая ошибка при добавлении пути {file_path}: {e}", exc_info=True)
                 skipped += 1
         
         logger.info(f"Добавлено элементов (файлы и папки): {added}, пропущено: {skipped}")
@@ -669,8 +887,24 @@ class DragDropHandler:
                         
                         old_name = file_data.get('old_name', 'unknown')
                         self.app.log(f"Файл '{old_name}' перемещен с позиции {start_idx + 1} на {target_idx + 1}")
-                except Exception as e:
-                    self.app.log(f"Ошибка при перемещении файла: {e}")
+                except (IndexError, KeyError, AttributeError) as e:
+                    logger.error(f"Ошибка доступа к данным при перемещении файла: {e}", exc_info=True)
+                    self.app.log(f"Ошибка данных при перемещении файла: {e}")
+                except (RuntimeError, TypeError) as e:
+                    logger.error(f"Ошибка выполнения при перемещении файла: {e}", exc_info=True)
+                    self.app.log(f"Ошибка выполнения при перемещении файла: {e}")
+                except (KeyError, IndexError) as e:
+                    logger.error(f"Ошибка доступа к данным при перемещении файла: {e}", exc_info=True)
+                    self.app.log(f"Ошибка доступа к данным при перемещении файла: {e}")
+                except (MemoryError, RecursionError) as e:
+                    logger.error(f"Ошибка памяти/рекурсии при перемещении файла: {e}", exc_info=True)
+                    self.app.log(f"Ошибка памяти/рекурсии при перемещении файла: {e}")
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException as e:
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    logger.error(f"Критическая ошибка при перемещении файла: {e}", exc_info=True)
+                    self.app.log(f"Критическая ошибка при перемещении файла: {e}")
         
         # Сброс состояния
         self.app.drag_item = None
@@ -706,8 +940,20 @@ class DragDropHandler:
                             # Перенаправляем событие в основной обработчик
                             self._on_drop_files(event)
                             return None
-                        except Exception as e:
+                        except (OSError, ValueError, TypeError, AttributeError) as e:
                             logger.error(f"Ошибка в обработчике drop для Frame: {e}", exc_info=True)
+                            return None
+                        except (RuntimeError, KeyError, IndexError) as e:
+                            logger.error(f"Ошибка выполнения в обработчике drop для Frame: {e}", exc_info=True)
+                            return None
+                        except (MemoryError, RecursionError) as e:
+                            logger.error(f"Ошибка памяти/рекурсии в обработчике drop для Frame: {e}", exc_info=True)
+                            return None
+                        # Финальный catch для неожиданных исключений (критично для стабильности)
+                        except BaseException as e:
+                            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                                raise
+                            logger.error(f"Критическая ошибка в обработчике drop для Frame: {e}", exc_info=True)
                             return None
                     
                     def on_drag_enter_frame(event):
@@ -718,9 +964,21 @@ class DragDropHandler:
                     widget.dnd_bind('<<DragEnter>>', on_drag_enter_frame)
                     count += 1
                     logger.debug(f"Drag and drop зарегистрирован на Frame: {widget}")
-                except Exception as e:
+                except (AttributeError, RuntimeError, TypeError) as e:
                     # Игнорируем ошибки регистрации (виджет может не поддерживать DnD)
-                    logger.debug(f"Не удалось зарегистрировать DnD на {widget}: {e}")
+                    logger.debug(f"Ошибка регистрации DnD на {widget}: {e}")
+                except (ValueError, KeyError) as e:
+                    # Ошибки данных при регистрации
+                    logger.debug(f"Ошибка данных при регистрации DnD на {widget}: {e}")
+                except (MemoryError, RecursionError) as e:
+                    # Ошибки памяти/рекурсии при регистрации
+                    logger.debug(f"Ошибка памяти/рекурсии при регистрации DnD на {widget}: {e}")
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException as e:
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    # Критические ошибки регистрации
+                    logger.debug(f"Критическая ошибка регистрации DnD на {widget}: {e}")
             
             # Рекурсивно обрабатываем дочерние виджеты
             try:
@@ -746,7 +1004,22 @@ class DragDropHandler:
             logger.warning("DragAndDropTk отключен - может блокировать интерфейс при размещении поверх всех виджетов")
             return False
             
-        except Exception as e:
+        except (ImportError, AttributeError, RuntimeError, TypeError) as e:
             logger.error(f"Ошибка настройки DragAndDropTk: {e}", exc_info=True)
             self.app.log(f"Ошибка настройки DragAndDropTk: {e}")
+            return False
+        except (ValueError, KeyError) as e:
+            logger.error(f"Ошибка данных при настройке DragAndDropTk: {e}", exc_info=True)
+            self.app.log(f"Ошибка данных при настройке DragAndDropTk: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при настройке DragAndDropTk: {e}", exc_info=True)
+            self.app.log(f"Ошибка памяти/рекурсии при настройке DragAndDropTk: {e}")
+            return False
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.error(f"Критическая ошибка настройки DragAndDropTk: {e}", exc_info=True)
+            self.app.log(f"Критическая ошибка настройки DragAndDropTk: {e}")
             return False

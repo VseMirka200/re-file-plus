@@ -65,8 +65,24 @@ class ReFileCompleter:
                 method_name='re_file_complete',
                 details={'re_filed_files_count': len(re_filed_files) if re_filed_files else 0}
             )
-        except Exception as e:
-            logger.error(f"Ошибка при логировании завершения операции: {e}", exc_info=True)
+        except (AttributeError, TypeError, RuntimeError) as e:
+            logger.error(f"Ошибка выполнения при логировании завершения операции: {e}", exc_info=True)
+        except (ValueError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при логировании завершения операции: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при логировании завершения операции: {e}", exc_info=True)
         
         # Добавляем операцию в историю
         if hasattr(self.app, 'history_manager') and self.app.history_manager:
@@ -78,8 +94,24 @@ class ReFileCompleter:
                     success,
                     error
                 )
-            except Exception as e:
-                logger.debug(f"Не удалось добавить операцию в историю: {e}")
+            except (AttributeError, TypeError, RuntimeError, ValueError) as e:
+                logger.debug(f"Ошибка выполнения при добавлении операции в историю: {e}")
+            except (KeyError, IndexError) as e:
+                logger.debug(f"Ошибка доступа к данным при добавлении операции в историю: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.debug(f"Неожиданная ошибка при добавлении операции в историю: {e}")
         
         # Записываем в статистику
         if hasattr(self.app, 'statistics_manager') and self.app.statistics_manager:
@@ -92,8 +124,24 @@ class ReFileCompleter:
                     methods_used,
                     re_filed_files if re_filed_files else []
                 )
-            except Exception as e:
-                logger.debug(f"Не удалось записать статистику: {e}")
+            except (AttributeError, TypeError, RuntimeError, ValueError) as e:
+                logger.debug(f"Ошибка выполнения при записи статистики: {e}")
+            except (KeyError, IndexError) as e:
+                logger.debug(f"Ошибка доступа к данным при записи статистики: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.debug(f"Неожиданная ошибка при записи статистики: {e}")
         
         # Показываем уведомление
         if hasattr(self.app, 'notification_manager') and self.app.notification_manager:
@@ -106,8 +154,24 @@ class ReFileCompleter:
                     self.app.notification_manager.notify_error(
                         f"Ошибок при переименовании: {error}"
                     )
-            except Exception as e:
-                logger.debug(f"Не удалось показать уведомление: {e}")
+            except (AttributeError, TypeError, RuntimeError) as e:
+                logger.debug(f"Ошибка выполнения при показе уведомления: {e}")
+            except (ValueError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при показе уведомления: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.debug(f"Неожиданная ошибка при показе уведомления: {e}")
         
         # Защита от дублирования сообщения
         if not hasattr(self.app, '_re_file_complete_shown'):
@@ -253,6 +317,20 @@ class ReFileCompleter:
             # Очищаем время начала
             if hasattr(self.app, '_re_file_start_time'):
                 delattr(self.app, '_re_file_start_time')
-        except Exception as e:
+        except (AttributeError, RuntimeError) as e:
+            logger.debug(f"Ошибка выполнения при сбросе флага: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             logger.error(f"Ошибка при сбросе флага операции: {e}", exc_info=True)
 

@@ -57,10 +57,28 @@ class StyleManager:
         """Настройка темы."""
         try:
             self.style.theme_use('vista')
-        except Exception:
+        except (tk.TclError, AttributeError, RuntimeError):
             try:
                 self.style.theme_use('clam')
-            except Exception:
+            except (tk.TclError, AttributeError, RuntimeError):
+                pass
+            except (MemoryError, RecursionError):
+                pass
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException:
+                pass
+        except (MemoryError, RecursionError):
+            pass
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException:
+            try:
+                self.style.theme_use('clam')
+            except (tk.TclError, AttributeError, RuntimeError):
+                pass
+            except (MemoryError, RecursionError):
+                pass
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException:
                 pass
     
     def _setup_styles(self):

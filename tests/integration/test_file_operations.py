@@ -3,7 +3,7 @@
 import os
 import pytest
 from core.re_file_methods import validate_filename, ReFileMethod
-from core.methods_manager import MethodsManager
+from core.managers.methods_manager import MethodsManager
 
 
 class TestFileOperations:

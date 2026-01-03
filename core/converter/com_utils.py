@@ -34,10 +34,19 @@ def cleanup_word_application(word_app: Optional[Any]) -> None:
     if word_app:
         try:
             word_app.Quit(SaveChanges=False)
-        except (AttributeError, OSError, RuntimeError) as e:
+        except (AttributeError, OSError, RuntimeError, TypeError) as e:
             logger.warning(f"Ошибка при закрытии Word: {e}")
-        except Exception as e:
-            logger.warning(f"Неожиданная ошибка при закрытии Word: {e}")
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except (ValueError, KeyError, IndexError) as e:
+            logger.warning(f"Ошибка данных при закрытии Word: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+            logger.warning(f"Ошибка памяти/рекурсии при закрытии Word: {e}", exc_info=True)
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.warning(f"Критическая ошибка при закрытии Word: {e}", exc_info=True)
 
 
 def cleanup_word_document(doc: Optional[Any]) -> None:
@@ -54,9 +63,20 @@ def cleanup_word_document(doc: Optional[Any]) -> None:
         except (AttributeError, OSError, RuntimeError, TypeError):
             # Документ уже закрыт или объект невалиден - это нормально
             pass
-        except Exception:
-            # Игнорируем все остальные ошибки при закрытии
-            pass
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except (ValueError, KeyError, IndexError) as e:
+            # Ошибки данных при закрытии документа
+            logger.debug(f"Ошибка данных при закрытии документа: {e}")
+        except (MemoryError, RecursionError) as e:
+            # Ошибки памяти/рекурсии при закрытии документа
+            logger.debug(f"Ошибка памяти/рекурсии при закрытии документа: {e}")
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            # Логируем критические ошибки, но не прерываем выполнение
+            logger.debug(f"Критическая ошибка при закрытии документа: {e}")
 
 
 @contextmanager
@@ -192,9 +212,20 @@ def create_word_application(com_client: Any) -> Tuple[Optional[Any], Optional[st
         error_str = str(init_error).lower()
         if "already initialized" not in error_str and "rpc_e_changed_mode" not in error_str:
             logger.warning(f"Ошибка инициализации COM: {init_error}")
-    except Exception as init_error:
-        # Неожиданная ошибка
-        logger.warning(f"Неожиданная ошибка инициализации COM: {init_error}")
+    except (ValueError, TypeError, AttributeError) as init_error:
+        # Ошибки данных/типов при инициализации COM
+        error_str = str(init_error).lower()
+        if "already initialized" not in error_str and "rpc_e_changed_mode" not in error_str:
+            logger.warning(f"Ошибка данных при инициализации COM: {init_error}")
+    except (MemoryError, RecursionError) as init_error:
+        # Ошибки памяти/рекурсии при инициализации COM
+        logger.warning(f"Ошибка памяти/рекурсии при инициализации COM: {init_error}")
+    # Финальный catch для неожиданных исключений (критично для стабильности COM)
+    except BaseException as init_error:
+        if isinstance(init_error, (KeyboardInterrupt, SystemExit)):
+            raise
+        # Критическая ошибка
+        logger.warning(f"Критическая ошибка инициализации COM: {init_error}")
     com_initialized = True
     
     # Пробуем разные способы создания Word объекта
@@ -229,8 +260,15 @@ def create_word_application(com_client: Any) -> Tuple[Optional[Any], Optional[st
                         pythoncom_module.CoUninitialize()
                     except (OSError, RuntimeError, AttributeError):
                         pass
-                    except Exception as uninit_error:
-                        logger.debug(f"Неожиданная ошибка при освобождении COM: {uninit_error}")
+                    except (ValueError, TypeError, KeyError) as uninit_error:
+                        logger.debug(f"Ошибка данных при освобождении COM: {uninit_error}")
+                    except (MemoryError, RecursionError) as uninit_error:
+                        logger.debug(f"Ошибка памяти/рекурсии при освобождении COM: {uninit_error}")
+                    # Финальный catch для неожиданных исключений (критично для стабильности COM)
+                    except BaseException as uninit_error:
+                        if isinstance(uninit_error, (KeyboardInterrupt, SystemExit)):
+                            raise
+                        logger.debug(f"Критическая ошибка при освобождении COM: {uninit_error}")
                 
                 # Формируем понятное сообщение об ошибке
                 if any(keyword in error_msg1.lower() for keyword in ['invalid class string', 'clsid', 'class not registered', 'progid']):
@@ -298,10 +336,23 @@ def convert_docx_with_word(
             if "не найден" in error_msg.lower() or "not found" in error_msg.lower():
                 return False, f"Не удалось открыть документ: {file_path}"
             return False, f"Ошибка при открытии документа: {error_msg}"
-        except Exception as open_error:
-            # Неожиданная ошибка
+        except (ValueError, TypeError, AttributeError) as open_error:
+            # Ошибки данных/типов при открытии документа
             error_msg = str(open_error)
-            logger.error(f"Неожиданная ошибка при открытии документа: {error_msg}")
+            logger.error(f"Ошибка данных при открытии документа: {error_msg}")
+            return False, f"Ошибка данных при открытии документа: {error_msg}"
+        except (MemoryError, RecursionError) as open_error:
+            # Ошибки памяти/рекурсии при открытии документа
+            error_msg = str(open_error)
+            logger.error(f"Ошибка памяти/рекурсии при открытии документа: {error_msg}")
+            return False, f"Ошибка памяти/рекурсии при открытии документа: {error_msg}"
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as open_error:
+            if isinstance(open_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            # Критическая ошибка
+            error_msg = str(open_error)
+            logger.error(f"Критическая ошибка при открытии документа: {error_msg}")
             return False, f"Ошибка при открытии документа: {error_msg}"
         
         # Сохраняем как PDF
@@ -325,19 +376,49 @@ def convert_docx_with_word(
                     if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
                         return False, f"Не удалось сохранить PDF: {retry_msg}"
                     return False, "Не удалось сохранить PDF"
-                except Exception as retry_error:
+                except (ValueError, TypeError, AttributeError) as retry_error:
                     retry_msg = str(retry_error)
                     if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
-                        return False, f"Неожиданная ошибка при повторной попытке сохранения: {retry_msg}"
+                        return False, f"Ошибка данных при повторной попытке сохранения: {retry_msg}"
+                    return False, "Ошибка данных при сохранении PDF"
+                except (MemoryError, RecursionError) as retry_error:
+                    retry_msg = str(retry_error)
+                    if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
+                        return False, f"Ошибка памяти/рекурсии при повторной попытке сохранения: {retry_msg}"
+                    return False, "Ошибка памяти/рекурсии при сохранении PDF"
+                # Финальный catch для неожиданных исключений (критично для стабильности COM)
+                except BaseException as retry_error:
+                    if isinstance(retry_error, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    retry_msg = str(retry_error)
+                    if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
+                        return False, f"Критическая ошибка при повторной попытке сохранения: {retry_msg}"
                     return False, "Ошибка при сохранении PDF"
             else:
                 return False, f"Ошибка при сохранении PDF: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}"
-        except Exception as save_error:
-            # Неожиданная ошибка
+        except (ValueError, TypeError, AttributeError) as save_error:
+            # Ошибки данных/типов при сохранении PDF
             error_msg = str(save_error)
             # Логируем только реальные ошибки
             if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
-                logger.error(f"Неожиданная ошибка при сохранении PDF: {error_msg}")
+                logger.error(f"Ошибка данных при сохранении PDF: {error_msg}")
+            return False, f"Ошибка данных при сохранении PDF: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}"
+        except (MemoryError, RecursionError) as save_error:
+            # Ошибки памяти/рекурсии при сохранении PDF
+            error_msg = str(save_error)
+            # Логируем только реальные ошибки
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Ошибка памяти/рекурсии при сохранении PDF: {error_msg}")
+            return False, f"Ошибка памяти/рекурсии при сохранении PDF: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}"
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as save_error:
+            if isinstance(save_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            # Критическая ошибка
+            error_msg = str(save_error)
+            # Логируем только реальные ошибки
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Критическая ошибка при сохранении PDF: {error_msg}")
             return False, f"Ошибка при сохранении PDF: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}"
         
         return True, None
@@ -346,10 +427,23 @@ def convert_docx_with_word(
         error_msg = str(e)
         logger.error(f"Ошибка при конвертации через {com_client_type}: {error_msg}")
         return False, error_msg
-    except Exception as e:
-        # Неожиданная ошибка
+    except (ValueError, TypeError, AttributeError, KeyError) as e:
+        # Ошибки данных/типов при конвертации
         error_msg = str(e)
-        logger.error(f"Неожиданная ошибка при конвертации через {com_client_type}: {error_msg}", exc_info=True)
+        logger.error(f"Ошибка данных при конвертации через {com_client_type}: {error_msg}", exc_info=True)
+        return False, error_msg
+    except (MemoryError, RecursionError) as e:
+        # Ошибки памяти/рекурсии при конвертации
+        error_msg = str(e)
+        logger.error(f"Ошибка памяти/рекурсии при конвертации через {com_client_type}: {error_msg}", exc_info=True)
+        return False, error_msg
+    # Финальный catch для неожиданных исключений (критично для стабильности COM)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        # Критическая ошибка
+        error_msg = str(e)
+        logger.error(f"Критическая ошибка при конвертации через {com_client_type}: {error_msg}", exc_info=True)
         return False, error_msg
     finally:
         cleanup_word_document(doc)
@@ -437,9 +531,20 @@ def convert_docx_with_word_com(
             error_msg = str(open_error)
             logger.error(f"Ошибка при открытии документа: {error_msg}")
             return False, f"Не удалось открыть документ: {error_msg}", None
-        except Exception as open_error:
+        except (ValueError, TypeError, AttributeError) as open_error:
             error_msg = str(open_error)
-            logger.error(f"Неожиданная ошибка при открытии документа: {error_msg}")
+            logger.error(f"Ошибка данных при открытии документа: {error_msg}")
+            return False, f"Ошибка данных при открытии документа: {error_msg}", None
+        except (MemoryError, RecursionError) as open_error:
+            error_msg = str(open_error)
+            logger.error(f"Ошибка памяти/рекурсии при открытии документа: {error_msg}")
+            return False, f"Ошибка памяти/рекурсии при открытии документа: {error_msg}", None
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as open_error:
+            if isinstance(open_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(open_error)
+            logger.error(f"Критическая ошибка при открытии документа: {error_msg}")
             return False, f"Ошибка при открытии документа: {error_msg}", None
         
         # Сохраняем в нужном формате
@@ -472,17 +577,45 @@ def convert_docx_with_word_com(
                     doc.SaveAs(FileName=output_file_path, FileFormat=file_format)
                     if os.path.exists(output_file_path):
                         return True, f"Документ успешно конвертирован в формат {file_format}", output_file_path
-                except Exception as retry_error:
+                except (ValueError, TypeError, AttributeError) as retry_error:
                     retry_msg = str(retry_error)
                     if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
-                        return False, f"Не удалось сохранить документ: {retry_msg}", None
+                        return False, f"Ошибка данных при сохранении документа: {retry_msg}", None
+                    return False, "Ошибка данных при сохранении документа", None
+                except (MemoryError, RecursionError) as retry_error:
+                    retry_msg = str(retry_error)
+                    if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
+                        return False, f"Ошибка памяти/рекурсии при сохранении документа: {retry_msg}", None
+                    return False, "Ошибка памяти/рекурсии при сохранении документа", None
+                # Финальный catch для неожиданных исключений (критично для стабильности COM)
+                except BaseException as retry_error:
+                    if isinstance(retry_error, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    retry_msg = str(retry_error)
+                    if retry_msg and len(retry_msg) > 10 and not retry_msg.startswith('Open.'):
+                        return False, f"Критическая ошибка при сохранении документа: {retry_msg}", None
                     return False, "Не удалось сохранить документ", None
             return False, f"Ошибка при сохранении документа: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
-        except Exception as save_error:
+        except (ValueError, TypeError, AttributeError) as save_error:
             error_msg = str(save_error)
             # Логируем только реальные ошибки
             if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
-                logger.error(f"Неожиданная ошибка при сохранении документа: {error_msg}")
+                logger.error(f"Ошибка данных при сохранении документа: {error_msg}")
+            return False, f"Ошибка данных при сохранении документа: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
+        except (MemoryError, RecursionError) as save_error:
+            error_msg = str(save_error)
+            # Логируем только реальные ошибки
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Ошибка памяти/рекурсии при сохранении документа: {error_msg}")
+            return False, f"Ошибка памяти/рекурсии при сохранении документа: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as save_error:
+            if isinstance(save_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(save_error)
+            # Логируем только реальные ошибки
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Критическая ошибка при сохранении документа: {error_msg}")
             return False, f"Ошибка при сохранении документа: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
         finally:
             # Закрываем документ
@@ -490,9 +623,24 @@ def convert_docx_with_word_com(
                 cleanup_word_document(doc)
                 doc = None
     
-    except Exception as e:
+    except (OSError, RuntimeError, AttributeError, TypeError) as e:
         error_msg = str(e)
-        logger.error(f"Ошибка при конвертации через Word COM: {error_msg}", exc_info=True)
+        logger.error(f"Ошибка выполнения при конвертации через Word COM: {error_msg}", exc_info=True)
+        return False, f"Ошибка выполнения при конвертации: {error_msg}", None
+    except (ValueError, KeyError, IndexError) as e:
+        error_msg = str(e)
+        logger.error(f"Ошибка данных при конвертации через Word COM: {error_msg}", exc_info=True)
+        return False, f"Ошибка данных при конвертации: {error_msg}", None
+    except (MemoryError, RecursionError) as e:
+        error_msg = str(e)
+        logger.error(f"Ошибка памяти/рекурсии при конвертации через Word COM: {error_msg}", exc_info=True)
+        return False, f"Ошибка памяти/рекурсии при конвертации: {error_msg}", None
+    # Финальный catch для неожиданных исключений (критично для стабильности COM)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        error_msg = str(e)
+        logger.error(f"Критическая ошибка при конвертации через Word COM: {error_msg}", exc_info=True)
         return False, f"Ошибка конвертации: {error_msg}", None
     finally:
         # Закрываем Word приложение

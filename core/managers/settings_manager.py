@@ -26,7 +26,8 @@ except ImportError:
     if not os.path.exists(data_dir):
         try:
             os.makedirs(data_dir, exist_ok=True)
-        except Exception:
+        except (OSError, PermissionError) as e:
+            logger.debug(f"Не удалось создать директорию data: {e}")
             pass
     SETTINGS_FILE_PATH = os.path.join(data_dir, "re-file-plus_settings.json")
     TEMPLATES_FILE_PATH = os.path.join(data_dir, "re-file-plus_templates.json")
@@ -140,6 +141,26 @@ class SettingsManager:
                     method_name='load_settings',
                     file_path=self.settings_file
                 )
+                
+                # Валидация размера файла перед загрузкой
+                try:
+                    from utils.security_utils import validate_json_size
+                    is_valid, error_msg = validate_json_size(self.settings_file, max_size_mb=10)
+                    if not is_valid:
+                        log_action(
+                            logger=logger,
+                            level=logging.ERROR,
+                            action='SETTINGS_LOAD_ERROR',
+                            message=f"Файл настроек слишком большой: {error_msg}",
+                            method_name='load_settings',
+                            file_path=self.settings_file
+                        )
+                        logger.error(f"Файл настроек слишком большой: {error_msg}")
+                        return settings
+                except ImportError:
+                    # Если утилита недоступна, пропускаем проверку
+                    pass
+                
                 with open(self.settings_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
                     if isinstance(loaded, dict):
@@ -193,18 +214,55 @@ class SettingsManager:
                 details={'error_type': 'JSONDecodeError'}
             )
             logger.error(f"Ошибка парсинга JSON в настройках: {e}", exc_info=True)
-        except (OSError, PermissionError, ValueError) as e:
+        except (OSError, PermissionError) as e:
             log_action(
                 logger=logger,
                 level=logging.ERROR,
                 action='SETTINGS_LOAD_ERROR',
-                message=f"Ошибка загрузки настроек: {e}",
+                message=f"Ошибка доступа к файлу настроек: {e}",
                 method_name='load_settings',
                 file_path=self.settings_file,
                 details={'error_type': type(e).__name__}
             )
-            logger.error(f"Ошибка загрузки настроек: {e}", exc_info=True)
-        except Exception as e:
+            logger.error(f"Ошибка доступа к файлу настроек: {e}", exc_info=True)
+        except (ValueError, TypeError) as e:
+            log_action(
+                logger=logger,
+                level=logging.ERROR,
+                action='SETTINGS_LOAD_ERROR',
+                message=f"Ошибка валидации данных настроек: {e}",
+                method_name='load_settings',
+                file_path=self.settings_file,
+                details={'error_type': type(e).__name__}
+            )
+            logger.error(f"Ошибка валидации данных настроек: {e}", exc_info=True)
+        except (KeyboardInterrupt, SystemExit):
+            # Не перехватываем системные исключения
+            raise
+        except (UnicodeDecodeError, IOError, MemoryError) as e:
+            log_action(
+                logger=logger,
+                level=logging.ERROR,
+                action='SETTINGS_LOAD_ERROR',
+                message=f"Ошибка чтения/памяти при загрузке настроек: {e}",
+                method_name='load_settings',
+                file_path=self.settings_file,
+                details={'error_type': type(e).__name__}
+            )
+            logger.error(f"Ошибка чтения/памяти при загрузке настроек: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             log_action(
                 logger=logger,
                 level=logging.ERROR,
@@ -250,17 +308,65 @@ class SettingsManager:
                 file_path=self.settings_file
             )
             return True
-        except Exception as e:
+        except (OSError, PermissionError) as e:
             log_action(
                 logger=logger,
                 level=logging.ERROR,
                 action='SETTINGS_SAVE_ERROR',
-                message=f"Ошибка сохранения настроек: {e}",
+                message=f"Ошибка доступа при сохранении настроек: {e}",
                 method_name='save_settings',
                 file_path=self.settings_file,
                 details={'error_type': type(e).__name__}
             )
-            logger.error(f"Ошибка сохранения настроек: {e}", exc_info=True)
+            logger.error(f"Ошибка доступа при сохранении настроек: {e}", exc_info=True)
+            return False
+        except (ValueError, TypeError) as e:
+            log_action(
+                logger=logger,
+                level=logging.ERROR,
+                action='SETTINGS_SAVE_ERROR',
+                message=f"Ошибка сериализации настроек: {e}",
+                method_name='save_settings',
+                file_path=self.settings_file,
+                details={'error_type': type(e).__name__}
+            )
+            logger.error(f"Ошибка сериализации настроек: {e}", exc_info=True)
+            return False
+        except (UnicodeEncodeError, IOError, MemoryError) as e:
+            log_action(
+                logger=logger,
+                level=logging.ERROR,
+                action='SETTINGS_SAVE_ERROR',
+                message=f"Ошибка записи/памяти при сохранении настроек: {e}",
+                method_name='save_settings',
+                file_path=self.settings_file,
+                details={'error_type': type(e).__name__}
+            )
+            logger.error(f"Ошибка записи/памяти при сохранении настроек: {e}", exc_info=True)
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            log_action(
+                logger=logger,
+                level=logging.ERROR,
+                action='SETTINGS_SAVE_ERROR',
+                message=f"Неожиданная ошибка сохранения настроек: {e}",
+                method_name='save_settings',
+                file_path=self.settings_file,
+                details={'error_type': type(e).__name__}
+            )
+            logger.error(f"Неожиданная ошибка сохранения настроек: {e}", exc_info=True)
             return False
     
     def get(self, key: str, default: Any = None) -> Any:
@@ -424,9 +530,25 @@ class TemplatesManager:
                         logger.warning(f"Файл шаблонов содержит неверный формат: {self.templates_file}")
         except json.JSONDecodeError as e:
             logger.error(f"Ошибка парсинга JSON в шаблонах: {e}", exc_info=True)
-        except (OSError, PermissionError, ValueError) as e:
-            logger.error(f"Ошибка загрузки шаблонов: {e}", exc_info=True)
-        except Exception as e:
+        except (OSError, PermissionError) as e:
+            logger.error(f"Ошибка доступа к файлу шаблонов: {e}", exc_info=True)
+        except (ValueError, TypeError) as e:
+            logger.error(f"Ошибка валидации данных шаблонов: {e}", exc_info=True)
+        except (UnicodeDecodeError, IOError, MemoryError) as e:
+            logger.error(f"Ошибка чтения/памяти при загрузке шаблонов: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             logger.error(f"Неожиданная ошибка загрузки шаблонов: {e}", exc_info=True)
         return templates
     
@@ -446,8 +568,29 @@ class TemplatesManager:
                 json.dump(templates, f, ensure_ascii=False, indent=2)
             self.templates = templates
             return True
-        except Exception as e:
-            logger.error(f"Ошибка сохранения шаблонов: {e}", exc_info=True)
+        except (OSError, PermissionError) as e:
+            logger.error(f"Ошибка доступа при сохранении шаблонов: {e}", exc_info=True)
+            return False
+        except (ValueError, TypeError) as e:
+            logger.error(f"Ошибка сериализации шаблонов: {e}", exc_info=True)
+            return False
+        except (UnicodeEncodeError, IOError, MemoryError) as e:
+            logger.error(f"Ошибка записи/памяти при сохранении шаблонов: {e}", exc_info=True)
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка сохранения шаблонов: {e}", exc_info=True)
             return False
     
     def get(self, key: str, default: Any = None) -> Any:

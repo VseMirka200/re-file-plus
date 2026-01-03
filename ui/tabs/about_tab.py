@@ -174,8 +174,28 @@ class AboutTab:
                 logger.warning("PIL (Pillow) не установлен, изображение приложения не может быть загружено")
             else:
                 logger.warning(f"Изображение приложения не найдено. Проверенные пути: {possible_paths}")
-        except Exception as e:
-            logger.error(f"Ошибка загрузки изображения приложения: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке изображения приложения: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке изображения приложения: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при загрузке изображения приложения: {e}", exc_info=True)
+        except (KeyError, IndexError) as e:
+            logger.error(f"Ошибка доступа к данным при загрузке изображения приложения: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки изображения приложения: {e}", exc_info=True)
         
         # Название программы под изображением
         app_name_label = tk.Label(left_inner,
@@ -212,8 +232,26 @@ class AboutTab:
                 github_icon_label = tk.Label(github_frame, image=github_photo, bg=self.colors['bg_main'], cursor='hand2')
                 github_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 github_icon_label.bind("<Button-1>", open_github)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки иконки GitHub: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке иконки GitHub: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке иконки GitHub: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при загрузке иконки GitHub: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки иконки GitHub: {e}", exc_info=True)
         
         github_label = tk.Label(github_frame, 
                               text="Открыть исходный код",
@@ -366,8 +404,28 @@ class AboutTab:
                 vk_icon_label = tk.Label(vk_frame, image=vk_photo, bg=self.colors['bg_main'], cursor='hand2')
                 vk_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 vk_icon_label.bind("<Button-1>", open_vk_social)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки иконки VK: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке иконки VK: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке иконки VK: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при загрузке иконки VK: {e}", exc_info=True)
+        except (KeyError, IndexError) as e:
+            logger.error(f"Ошибка доступа к данным при загрузке иконки VK: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки иконки VK: {e}", exc_info=True)
         
         vk_label = tk.Label(vk_frame, 
                            text="Группа ВКонтакте",
@@ -397,8 +455,28 @@ class AboutTab:
                 tg_icon_label = tk.Label(tg_frame, image=tg_photo, bg=self.colors['bg_main'], cursor='hand2')
                 tg_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 tg_icon_label.bind("<Button-1>", open_tg_channel)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки иконки Telegram: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке иконки Telegram: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке иконки Telegram: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при загрузке иконки Telegram: {e}", exc_info=True)
+        except (KeyError, IndexError) as e:
+            logger.error(f"Ошибка доступа к данным при загрузке иконки Telegram: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки иконки Telegram: {e}", exc_info=True)
         
         tg_label = tk.Label(tg_frame, 
                            text="Телеграм-канал",
@@ -438,8 +516,26 @@ class AboutTab:
                 github_icon_label = tk.Label(github_frame, image=github_photo, bg=self.colors['bg_main'], cursor='hand2')
                 github_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 github_icon_label.bind("<Button-1>", open_github)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки иконки GitHub: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке иконки GitHub: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке иконки GitHub: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+            logger.error(f"Ошибка памяти/рекурсии при загрузке иконки GitHub: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки иконки GitHub: {e}", exc_info=True)
         
         github_label = tk.Label(github_frame, 
                                text="GitHub",
@@ -498,8 +594,24 @@ class AboutTab:
                 vk_contact_icon_label = tk.Label(vk_contact_frame, image=vk_contact_photo, bg=self.colors['bg_main'], cursor='hand2')
                 vk_contact_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 vk_contact_icon_label.bind("<Button-1>", open_vk_contact)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки иконки VK для контактов: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке иконки VK для контактов: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке иконки VK для контактов: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки иконки VK для контактов: {e}", exc_info=True)
         
         vk_contact_label = tk.Label(vk_contact_frame, 
                                    text="ВКонтакте",
@@ -530,8 +642,24 @@ class AboutTab:
                 tg_contact_icon_label = tk.Label(tg_contact_frame, image=tg_contact_photo, bg=self.colors['bg_main'], cursor='hand2')
                 tg_contact_icon_label.pack(side=tk.LEFT, padx=(0, 8))
                 tg_contact_icon_label.bind("<Button-1>", open_tg_contact)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки иконки Telegram для контактов: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при загрузке иконки Telegram для контактов: {e}", exc_info=True)
+        except (ValueError, TypeError, AttributeError) as e:
+            logger.error(f"Ошибка данных при загрузке иконки Telegram для контактов: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки иконки Telegram для контактов: {e}", exc_info=True)
         
         tg_contact_label = tk.Label(tg_contact_frame, 
                                    text="Telegram",

@@ -75,12 +75,36 @@ class ImportExportManager:
                 f"Список файлов экспортирован в:\n{filename}"
             )
             self.app.log(f"Список файлов экспортирован: {filename}")
-        except Exception as e:
+        except (OSError, PermissionError, IOError) as e:
             messagebox.showerror(
                 "Ошибка",
-                f"Не удалось экспортировать список файлов:\n{str(e)}"
+                f"Ошибка доступа при экспорте списка файлов:\n{str(e)}"
             )
-            logger.error(f"Ошибка экспорта списка файлов: {e}", exc_info=True)
+            logger.error(f"Ошибка доступа при экспорте списка файлов: {e}", exc_info=True)
+        except (ValueError, TypeError, json.JSONEncodeError) as e:
+            messagebox.showerror(
+                "Ошибка",
+                f"Ошибка данных при экспорте списка файлов:\n{str(e)}"
+            )
+            logger.error(f"Ошибка данных при экспорте списка файлов: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror(
+                "Ошибка",
+                f"Неожиданная ошибка при экспорте списка файлов:\n{str(e)}"
+            )
+            logger.error(f"Неожиданная ошибка экспорта списка файлов: {e}", exc_info=True)
     
     def import_files_list(self) -> None:
         """Импорт списка файлов из файла."""
@@ -177,10 +201,34 @@ class ImportExportManager:
                     "Предупреждение",
                     "Не найдено валидных файлов для импорта"
                 )
-        except Exception as e:
+        except (OSError, PermissionError, IOError, FileNotFoundError) as e:
             messagebox.showerror(
                 "Ошибка",
-                f"Не удалось импортировать список файлов:\n{str(e)}"
+                f"Ошибка доступа при импорте списка файлов:\n{str(e)}"
             )
-            logger.error(f"Ошибка импорта списка файлов: {e}", exc_info=True)
+            logger.error(f"Ошибка доступа при импорте списка файлов: {e}", exc_info=True)
+        except (ValueError, TypeError, json.JSONDecodeError, KeyError) as e:
+            messagebox.showerror(
+                "Ошибка",
+                f"Ошибка данных при импорте списка файлов:\n{str(e)}"
+            )
+            logger.error(f"Ошибка данных при импорте списка файлов: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror(
+                "Ошибка",
+                f"Неожиданная ошибка при импорте списка файлов:\n{str(e)}"
+            )
+            logger.error(f"Неожиданная ошибка импорта списка файлов: {e}", exc_info=True)
 

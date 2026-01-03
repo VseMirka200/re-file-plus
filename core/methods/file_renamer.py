@@ -28,8 +28,28 @@ def re_file_files_thread(
         if callback:
             try:
                 callback(0, 0, [])
-            except Exception as e:
+            except (TypeError, AttributeError, RuntimeError) as e:
                 logger.error(f"Ошибка при вызове callback для пустого списка: {e}", exc_info=True)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except (RuntimeError, AttributeError) as e:
+                logger.error(f"Ошибка выполнения при вызове callback: {e}", exc_info=True)
+            except (ValueError, TypeError, KeyError, IndexError) as e:
+                logger.error(f"Ошибка данных при вызове callback: {e}", exc_info=True)
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка при вызове callback: {e}", exc_info=True)
         return
     
     def re_file_worker():
@@ -91,7 +111,19 @@ def re_file_files_thread(
                     old_path = os.path.normpath(old_path)
                     
                     try:
-                        if not os.path.exists(old_path):
+                        # Используем кеш для оптимизации проверок существования
+                        try:
+                            from utils.file_cache import is_file_cached, is_dir_cached
+                            file_exists = is_file_cached(old_path)
+                            dir_exists = is_dir_cached(old_path) if not file_exists else False
+                            path_exists = file_exists or dir_exists
+                        except ImportError:
+                            # Fallback если кеш недоступен
+                            path_exists = os.path.exists(old_path)
+                            file_exists = os.path.isfile(old_path) if path_exists else False
+                            dir_exists = os.path.isdir(old_path) if path_exists else False
+                        
+                        if not path_exists:
                             error_msg = f"Исходный {item_type} не найден: {os.path.basename(old_path)}"
                             if log_callback:
                                 log_callback(f"Ошибка: {error_msg}")
@@ -102,7 +134,7 @@ def re_file_files_thread(
                             error_count += 1
                             continue
                         
-                        if not (os.path.isfile(old_path) or os.path.isdir(old_path)):
+                        if not (file_exists or dir_exists):
                             error_msg = f"Путь не является {item_type}: {os.path.basename(old_path)}"
                             if log_callback:
                                 log_callback(f"Ошибка: {error_msg}")
@@ -181,6 +213,16 @@ def re_file_files_thread(
                     # Переименовываем файл/папку
                     try:
                         os.rename(old_path, new_path)
+                        # Логируем успешное переименование
+                        if logger.isEnabledFor(logging.INFO):
+                            item_type = "папка" if is_folder else "файл"
+                            logger.info(
+                                f"{item_type.capitalize()} успешно переименован: {os.path.basename(old_path)} -> {os.path.basename(new_path)}",
+                                extra={'action': 'FILE_RENAMED', 'old_path': old_path, 'new_path': new_path}
+                            )
+                        if log_callback:
+                            item_type = "папка" if is_folder else "файл"
+                            log_callback(f"{item_type.capitalize()} переименован: {os.path.basename(old_path)} -> {os.path.basename(new_path)}")
                     except FileExistsError:
                         item_type = "папка" if is_folder else "файл"
                         item_name = new_name if is_folder else new_name + extension
@@ -255,9 +297,10 @@ def re_file_files_thread(
                     if progress_callback:
                         try:
                             progress_callback(i + 1, total, file_data.get('old_name', 'unknown'))
-                        except Exception:
+                        except (TypeError, AttributeError, RuntimeError):
+                            # Игнорируем ошибки в callback (не критично)
                             pass
-                except Exception as e:
+                except (OSError, PermissionError, FileExistsError, ValueError, TypeError) as e:
                     error_msg = str(e)
                     logger.error(f"Ошибка при переименовании '{file_data.get('old_name', 'unknown')}': {error_msg}", exc_info=True)
                     old_name = file_data.get('old_name', 'unknown') if isinstance(file_data, dict) else (file_data.old_name if hasattr(file_data, 'old_name') else 'unknown')
@@ -271,9 +314,10 @@ def re_file_files_thread(
                     if progress_callback:
                         try:
                             progress_callback(i + 1, total, file_data.get('old_name', 'unknown'))
-                        except Exception:
+                        except (TypeError, AttributeError, RuntimeError):
+                            # Игнорируем ошибки в callback (не критично)
                             pass
-        except Exception as e:
+        except (OSError, PermissionError, FileExistsError, ValueError, TypeError, AttributeError) as e:
             logger.error(f"Критическая ошибка в re_file_worker: {e}", exc_info=True)
             if log_callback:
                 log_callback(f"Критическая ошибка: {e}")
@@ -281,8 +325,24 @@ def re_file_files_thread(
             if callback:
                 try:
                     callback(success_count, error_count, renamed_files)
-                except Exception as callback_error:
-                    logger.error(f"Ошибка при вызове callback: {callback_error}", exc_info=True)
+                except (TypeError, AttributeError, RuntimeError) as callback_error:
+                    logger.error(f"Ошибка типа/выполнения при вызове callback: {callback_error}", exc_info=True)
+                except (ValueError, KeyError, IndexError) as callback_error:
+                    logger.error(f"Ошибка данных при вызове callback: {callback_error}", exc_info=True)
+                except (MemoryError, RecursionError) as callback_error:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as callback_error:
+
+                    if isinstance(callback_error, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    logger.error(f"Неожиданная ошибка при вызове callback: {callback_error}", exc_info=True)
             else:
                 logger.error("Критическая ошибка: Callback не предоставлен")
     
@@ -300,16 +360,44 @@ def re_file_files_thread(
                 if callback:
                     try:
                         callback(0, len(files_to_rename), [])
-                    except Exception as e:
-                        logger.error(f"Ошибка при принудительном вызове callback: {e}", exc_info=True)
+                    except (TypeError, AttributeError, RuntimeError) as e:
+                        logger.error(f"Ошибка типа/выполнения при принудительном вызове callback: {e}", exc_info=True)
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка при принудительном вызове callback: {e}", exc_info=True)
         
         timeout_thread = threading.Thread(target=check_completion, daemon=True)
         timeout_thread.start()
-    except Exception as e:
+    except (OSError, RuntimeError, AttributeError) as e:
         logger.error(f"Ошибка при запуске потока переименования: {e}", exc_info=True)
         if callback:
             try:
                 callback(0, len(files_to_rename), [])
-            except Exception as callback_error:
-                logger.error(f"Ошибка при вызове callback после ошибки запуска: {callback_error}", exc_info=True)
+            except (TypeError, AttributeError, RuntimeError) as callback_error:
+                logger.error(f"Ошибка типа/выполнения при вызове callback после ошибки запуска: {callback_error}", exc_info=True)
+            except (MemoryError, RecursionError) as callback_error:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as callback_error:
+
+                if isinstance(callback_error, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка при вызове callback после ошибки запуска: {callback_error}", exc_info=True)
 

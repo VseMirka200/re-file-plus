@@ -39,6 +39,12 @@ WINDOWS_MAX_PATH_LENGTH = 260  # Максимальная длина пути в
 FILE_OPERATION_DELAY = 0.5  # Задержка для операций с файлами (секунды)
 MIN_PYTHON_VERSION = (3, 7)  # Минимальная версия Python
 
+# Лимиты размера файлов
+MAX_FILE_SIZE_MB = 2048  # Максимальный размер файла для обработки (2GB)
+MAX_JSON_FILE_SIZE_MB = 10  # Максимальный размер JSON файлов (настройки, шаблоны)
+MAX_FILES_IN_LIST = 10000  # Максимальное количество файлов в списке
+MAX_SCRIPT_SIZE_KB = 100  # Максимальный размер скрипта (100KB)
+
 # Интервалы обновления UI
 PROGRESS_UPDATE_INTERVAL = 10  # Обновлять прогресс каждые N файлов
 
@@ -60,6 +66,7 @@ STATS_FILE = ".re_file_plus_stats.json"  # Файл статистики (хра
 
 # Для обратной совместимости - импортируем функции из infrastructure/system/paths.py
 # Эти функции перенесены в infrastructure/system/paths.py
+# Используем централизованный импорт для упрощения fallback логики
 try:
     from infrastructure.system.paths import (
         get_app_data_dir,
@@ -72,10 +79,11 @@ try:
         is_safe_path,
         check_windows_path_length
     )
+    _PATHS_IMPORTED = True
 except ImportError:
-    # Fallback для обратной совместимости (если infrastructure еще не создан)
-    # В этом случае функции должны быть определены в infrastructure/system/paths.py
-    # Если они недоступны, это критическая ошибка инициализации
+    _PATHS_IMPORTED = False
+    # Критическая ошибка: функции из infrastructure/system/paths.py должны быть доступны
+    # Если они недоступны, это ошибка инициализации
     import logging
     logger = logging.getLogger(__name__)
     logger.error("Критическая ошибка: не удалось импортировать функции из infrastructure.system.paths")
@@ -85,13 +93,13 @@ except ImportError:
     import tempfile
     from typing import Optional, List
     
-    def get_app_data_dir():
+    def get_app_data_dir() -> str:
         current_file = os.path.abspath(__file__)
         config_dir = os.path.dirname(current_file)
         app_dir = os.path.dirname(config_dir)
         return os.path.normpath(app_dir)
     
-    def get_logs_dir():
+    def get_logs_dir() -> str:
         app_dir = get_app_data_dir()
         logs_dir = os.path.join(app_dir, "logs")
         logs_dir = os.path.normpath(logs_dir)
@@ -104,7 +112,7 @@ except ImportError:
                 return temp_logs_dir
         return logs_dir
     
-    def get_data_dir():
+    def get_data_dir() -> str:
         data_dir = os.path.join(get_app_data_dir(), "data")
         if not os.path.exists(data_dir):
             try:
@@ -113,13 +121,13 @@ except ImportError:
                 pass
         return data_dir
     
-    def get_log_file_path():
+    def get_log_file_path() -> str:
         return os.path.join(get_logs_dir(), LOG_FILE)
     
-    def get_settings_file_path():
+    def get_settings_file_path() -> str:
         return os.path.join(get_data_dir(), SETTINGS_FILE)
     
-    def get_templates_file_path():
+    def get_templates_file_path() -> str:
         return os.path.join(get_data_dir(), TEMPLATES_FILE)
     
     def ensure_directory_exists(path: str) -> bool:

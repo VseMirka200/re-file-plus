@@ -66,8 +66,20 @@ def convert_docx_to_pdf(
                     return result
                 else:
                     tried_methods.append(f"Word COM (ошибка: {result[1][:100]})")
-            except Exception as e:
-                logger.warning(f"Ошибка конвертации через Word COM: {e}")
+            except (OSError, RuntimeError, AttributeError, TypeError) as e:
+                logger.warning(f"Ошибка выполнения при конвертации через Word COM: {e}")
+                tried_methods.append(f"Word COM (ошибка: {str(e)[:100]})")
+            except (ValueError, KeyError, IndexError) as e:
+                logger.warning(f"Ошибка данных при конвертации через Word COM: {e}")
+                tried_methods.append(f"Word COM (ошибка: {str(e)[:100]})")
+            except (MemoryError, RecursionError) as e:
+                logger.warning(f"Ошибка памяти/рекурсии при конвертации через Word COM: {e}")
+                tried_methods.append(f"Word COM (ошибка: {str(e)[:100]})")
+            # Финальный catch для неожиданных исключений (критично для стабильности COM)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.warning(f"Критическая ошибка конвертации через Word COM: {e}", exc_info=True)
                 tried_methods.append(f"Word COM (ошибка: {str(e)[:100]})")
         
         # Метод 2: Пробуем использовать docx2pdf (только если COM методы недоступны)
@@ -110,8 +122,20 @@ def convert_docx_to_pdf(
                     return True, "DOCX успешно конвертирован в PDF через docx2pdf", output_path
                 else:
                     tried_methods.append("docx2pdf")
-            except Exception as e:
-                logger.warning(f"Ошибка конвертации через docx2pdf: {e}")
+            except (OSError, PermissionError, ValueError, AttributeError) as e:
+                logger.warning(f"Ошибка выполнения при конвертации через docx2pdf: {e}")
+                tried_methods.append(f"docx2pdf (ошибка: {str(e)[:100]})")
+            except (TypeError, KeyError, IndexError) as e:
+                logger.warning(f"Ошибка данных при конвертации через docx2pdf: {e}")
+                tried_methods.append(f"docx2pdf (ошибка: {str(e)[:100]})")
+            except (MemoryError, RecursionError) as e:
+                logger.warning(f"Ошибка памяти/рекурсии при конвертации через docx2pdf: {e}")
+                tried_methods.append(f"docx2pdf (ошибка: {str(e)[:100]})")
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.warning(f"Критическая ошибка конвертации через docx2pdf: {e}", exc_info=True)
                 tried_methods.append(f"docx2pdf (ошибка: {str(e)[:100]})")
         
         # Если все методы не сработали
@@ -124,9 +148,21 @@ def convert_docx_to_pdf(
         methods_str = ", ".join(tried_methods)
         return False, f"Не удалось конвертировать файл. Попробованы методы: {methods_str}", None
         
-    except Exception as e:
+    except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
         logger.error(f"Ошибка при конвертации DOCX в PDF {file_path}: {e}", exc_info=True)
         return False, f"Ошибка конвертации: {str(e)}", None
+    except (KeyError, IndexError) as e:
+        logger.error(f"Ошибка доступа к данным при конвертации DOCX в PDF {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка доступа к данным: {str(e)}", None
+    except (MemoryError, RecursionError) as e:
+        logger.error(f"Ошибка памяти/рекурсии при конвертации DOCX в PDF {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка памяти/рекурсии: {str(e)}", None
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        logger.error(f"Критическая ошибка при конвертации DOCX в PDF {file_path}: {e}", exc_info=True)
+        return False, f"Неожиданная ошибка конвертации: {str(e)}", None
 
 
 def convert_pdf_to_docx(
@@ -170,16 +206,40 @@ def convert_pdf_to_docx(
                 pythoncom.CoInitialize()
                 com_initialized = True
                 word = win32com.client.Dispatch("Word.Application")
-            except Exception as e:
-                logger.debug(f"Не удалось использовать win32com: {e}")
+            except (OSError, RuntimeError, AttributeError, TypeError) as e:
+                logger.debug(f"Ошибка выполнения при использовании win32com: {e}")
+                word = None
+            except (ValueError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при использовании win32com: {e}")
+                word = None
+            except (MemoryError, RecursionError) as e:
+                logger.debug(f"Ошибка памяти/рекурсии при использовании win32com: {e}")
+                word = None
+            # Финальный catch для неожиданных исключений (критично для стабильности COM)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.debug(f"Критическая ошибка при использовании win32com: {e}")
                 word = None
         
         if not word and comtypes:
             try:
                 from comtypes.client import CreateObject
                 word = CreateObject("Word.Application")
-            except Exception as e:
-                logger.debug(f"Не удалось использовать comtypes: {e}")
+            except (OSError, RuntimeError, AttributeError, TypeError) as e:
+                logger.debug(f"Ошибка выполнения при использовании comtypes: {e}")
+                word = None
+            except (ValueError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при использовании comtypes: {e}")
+                word = None
+            except (MemoryError, RecursionError) as e:
+                logger.debug(f"Ошибка памяти/рекурсии при использовании comtypes: {e}")
+                word = None
+            # Финальный catch для неожиданных исключений (критично для стабильности COM)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.debug(f"Критическая ошибка при использовании comtypes: {e}")
                 word = None
         
         if not word:
@@ -213,9 +273,24 @@ def convert_pdf_to_docx(
                 ConfirmConversions=True,
                 AddToRecentFiles=False
             )
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError, PermissionError) as e:
             error_msg = str(e)
-            logger.error(f"Не удалось открыть PDF в Word: {error_msg}")
+            logger.error(f"Ошибка выполнения при открытии PDF в Word: {error_msg}")
+            return False, f"Word не может открыть PDF файл: {error_msg}", None
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            error_msg = str(e)
+            logger.error(f"Ошибка данных при открытии PDF в Word: {error_msg}")
+            return False, f"Word не может открыть PDF файл: {error_msg}", None
+        except (MemoryError, RecursionError) as e:
+            error_msg = str(e)
+            logger.error(f"Ошибка памяти/рекурсии при открытии PDF в Word: {error_msg}")
+            return False, f"Word не может открыть PDF файл: {error_msg}", None
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(e)
+            logger.error(f"Критическая ошибка при открытии PDF в Word: {error_msg}", exc_info=True)
             return False, f"Word не может открыть PDF файл: {error_msg}", None
         
         try:
@@ -227,12 +302,33 @@ def convert_pdf_to_docx(
                 return True, "PDF успешно конвертирован в DOCX через Word", docx_path
             else:
                 return False, "Файл DOCX не был создан", None
-        except Exception as e:
+        except (OSError, RuntimeError, AttributeError, PermissionError) as e:
             error_msg = str(e)
             # Логируем только реальные ошибки (не общие COM-исключения)
             if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
-                logger.error(f"Ошибка при сохранении DOCX: {error_msg}")
+                logger.error(f"Ошибка выполнения при сохранении DOCX: {error_msg}")
             return False, f"Ошибка при сохранении DOCX: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            error_msg = str(e)
+            # Логируем только реальные ошибки (не общие COM-исключения)
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Ошибка данных при сохранении DOCX: {error_msg}")
+            return False, f"Ошибка данных при сохранении DOCX: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
+        except (MemoryError, RecursionError) as e:
+            error_msg = str(e)
+            # Логируем только реальные ошибки (не общие COM-исключения)
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Ошибка памяти/рекурсии при сохранении DOCX: {error_msg}", exc_info=True)
+            return False, f"Ошибка памяти/рекурсии при сохранении DOCX: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
+        # Финальный catch для неожиданных исключений (критично для стабильности COM)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            error_msg = str(e)
+            # Логируем только реальные ошибки (не общие COM-исключения)
+            if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.'):
+                logger.error(f"Критическая ошибка при сохранении DOCX: {error_msg}", exc_info=True)
+            return False, f"Критическая ошибка при сохранении DOCX: {error_msg if error_msg and len(error_msg) > 10 and not error_msg.startswith('Open.') else 'Ошибка сохранения'}", None
         finally:
             # Закрываем документ
             if doc:
@@ -254,12 +350,33 @@ def convert_pdf_to_docx(
                 pythoncom_module.CoUninitialize()
                 com_initialized = False
                 
-    except Exception as e:
-        logger.error(f"Ошибка при конвертации PDF в DOCX через Word {file_path}: {e}", exc_info=True)
+    except (OSError, RuntimeError, AttributeError, PermissionError) as e:
+        logger.error(f"Ошибка выполнения при конвертации PDF в DOCX через Word {file_path}: {e}", exc_info=True)
         error_msg = str(e)
         if "Word.Application" in error_msg or "COM" in error_msg:
             return False, "Не удалось использовать Microsoft Word. Убедитесь, что Word установлен и доступен.", None
         return False, f"Ошибка: {error_msg}", None
+    except (ValueError, TypeError, KeyError, IndexError) as e:
+        logger.error(f"Ошибка данных при конвертации PDF в DOCX через Word {file_path}: {e}", exc_info=True)
+        error_msg = str(e)
+        if "Word.Application" in error_msg or "COM" in error_msg:
+            return False, "Не удалось использовать Microsoft Word. Убедитесь, что Word установлен и доступен.", None
+        return False, f"Ошибка данных: {error_msg}", None
+    except (MemoryError, RecursionError) as e:
+        logger.error(f"Ошибка памяти/рекурсии при конвертации PDF в DOCX через Word {file_path}: {e}", exc_info=True)
+        error_msg = str(e)
+        if "Word.Application" in error_msg or "COM" in error_msg:
+            return False, "Не удалось использовать Microsoft Word. Убедитесь, что Word установлен и доступен.", None
+        return False, f"Ошибка памяти/рекурсии: {error_msg}", None
+    # Финальный catch для неожиданных исключений (критично для стабильности COM)
+    except BaseException as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        logger.error(f"Критическая ошибка при конвертации PDF в DOCX через Word {file_path}: {e}", exc_info=True)
+        error_msg = str(e)
+        if "Word.Application" in error_msg or "COM" in error_msg:
+            return False, "Не удалось использовать Microsoft Word. Убедитесь, что Word установлен и доступен.", None
+        return False, f"Неожиданная ошибка: {error_msg}", None
     finally:
         # Убеждаемся, что все закрыто
         if doc:

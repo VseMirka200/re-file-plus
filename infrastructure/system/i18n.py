@@ -45,8 +45,26 @@ class I18nManager:
                 if os.path.exists(default_file):
                     with open(default_file, 'r', encoding='utf-8') as f:
                         self.translations = json.load(f)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки переводов: {e}")
+        except (OSError, PermissionError, IOError, FileNotFoundError) as e:
+            logger.error(f"Ошибка доступа при загрузке переводов: {e}")
+            self.translations = {}
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.error(f"Ошибка данных при загрузке переводов: {e}")
+            self.translations = {}
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки переводов: {e}")
             self.translations = {}
     
     def translate(self, key: str, default: Optional[str] = None) -> str:

@@ -108,11 +108,11 @@ class AppInitializer:
     
     def _initialize_managers(self):
         """Инициализация основных менеджеров."""
-        from core.settings_manager import SettingsManager, TemplatesManager
+        from core.managers.settings_manager import SettingsManager, TemplatesManager
         from ui.ui_components import StyleManager, UIComponents
         from core.metadata import MetadataExtractor
         from core.file_converter import FileConverter
-        from core.methods_manager import MethodsManager
+        from core.managers.methods_manager import MethodsManager
         from utils.helpers import Logger
         
         # Менеджеры настроек и шаблонов (нужно создать раньше для использования в теме)
@@ -196,7 +196,7 @@ class AppInitializer:
         # Менеджер истории операций
         self.app.history_manager = None
         try:
-            from core.history_manager import HistoryManager
+            from core.managers.history_manager import HistoryManager
             self.app.history_manager = HistoryManager()
         except (ImportError, Exception) as e:
             logger.debug(f"Не удалось инициализировать менеджер истории: {e}")
@@ -242,7 +242,7 @@ class AppInitializer:
         # Менеджер плагинов
         self.app.plugin_manager = None
         try:
-            from core.plugins import PluginManager
+            from core.managers.plugins import PluginManager
             self.app.plugin_manager = PluginManager()
             logger.debug(f"Загружено плагинов: {len(self.app.plugin_manager.list_plugins())}")
         except (ImportError, Exception) as e:
@@ -278,18 +278,18 @@ class AppInitializer:
     def _initialize_handlers(self):
         """Инициализация обработчиков UI."""
         from ui.main_window import HotkeysHandler, SearchHandler
-        from ui.dialogs import Dialogs
-        from ui.drag_drop_handler import DragDropHandler
-        from ui.templates_manager import TemplatesManager as UITemplatesManager
-        from ui.file_list_manager import FileListManager
-        from ui.methods_panel import MethodsPanel
-        from ui.converter_tab import ConverterTab
-        from ui.sorter_tab import SorterTab
-        from ui.settings_tab import SettingsTab
-        from ui.methods_window import MethodsWindow
+        from ui.dialogs.dialogs import Dialogs
+        from ui.handlers.drag_drop_handler import DragDropHandler
+        from ui.managers.templates_manager import TemplatesManager as UITemplatesManager
+        from ui.managers.file_list_manager import FileListManager
+        from ui.panels.methods_panel import MethodsPanel
+        from ui.tabs.converter_tab import ConverterTab
+        from ui.tabs.sorter_tab import SorterTab
+        from ui.tabs.settings_tab import SettingsTab
+        from ui.panels.methods_window import MethodsWindow
         from ui.main_window import MainWindow
-        from ui.re_file_operations import ReFileOperations
-        from ui.dialogs import WindowManagement
+        from ui.handlers.re_file_operations import ReFileOperations
+        from ui.dialogs.dialogs import WindowManagement
         # FileImportExport объединен с FileListManager
         
         # Инициализация обработчиков (перед созданием интерфейса)
@@ -328,8 +328,24 @@ class AppInitializer:
                 else:
                     # Если окно еще не готово, пробуем еще раз
                     self.app.root.after(500, setup_drag_drop_delayed)
-            except Exception as e:
-                logger.error(f"Ошибка при отложенной настройке drag and drop: {e}", exc_info=True)
+            except (AttributeError, RuntimeError, TypeError) as e:
+                logger.error(f"Ошибка выполнения при отложенной настройке drag and drop: {e}", exc_info=True)
+                # Пробуем еще раз через секунду
+                self.app.root.after(1000, setup_drag_drop_delayed)
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка при отложенной настройке drag and drop: {e}", exc_info=True)
                 # Пробуем еще раз через секунду
                 self.app.root.after(1000, setup_drag_drop_delayed)
         

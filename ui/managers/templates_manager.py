@@ -152,9 +152,30 @@ class TemplatesManager:
             messagebox.showerror("Ошибка", "Неверный формат JSON файла")
         except FileNotFoundError:
             messagebox.showerror("Ошибка", "Файл не найден")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось загрузить шаблоны:\n{e}")
-            self.app.log(f"Ошибка загрузки шаблонов: {e}")
+        except (OSError, PermissionError, IOError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка доступа к файлу:\n{e}")
+            self.app.log(f"Ошибка доступа при загрузке шаблонов: {e}")
+        except (ValueError, TypeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка данных при загрузке шаблонов:\n{e}")
+            self.app.log(f"Ошибка данных при загрузке шаблонов: {e}")
+        except (KeyError, IndexError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка доступа к данным при загрузке шаблонов:\n{e}")
+            self.app.log(f"Ошибка доступа к данным при загрузке шаблонов: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка при загрузке шаблонов:\n{e}")
+            self.app.log(f"Неожиданная ошибка загрузки шаблонов: {e}")
     
     def show_saved_templates(self):
         """Показать окно с сохраненными шаблонами"""
@@ -174,7 +195,23 @@ class TemplatesManager:
                 set_window_icon(template_window, self.app._icon_photos)
             except (AttributeError, tk.TclError, OSError) as e:
                 logger.debug(f"Не удалось установить иконку окна: {e}")
-            except Exception as e:
+            except (RuntimeError, TypeError) as e:
+                logger.debug(f"Ошибка выполнения при установке иконки: {e}")
+            except (ValueError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при установке иконки: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
                 logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
             
             # Настройка фона окна
@@ -313,9 +350,30 @@ class TemplatesManager:
                             json.dump(self.app.saved_templates, f, ensure_ascii=False, indent=2)
                         messagebox.showinfo("Успех", f"Шаблоны успешно сохранены в:\n{file_path}")
                         self.app.log(f"Шаблоны выгружены в: {file_path}")
-                    except Exception as e:
-                        messagebox.showerror("Ошибка", f"Не удалось сохранить шаблоны:\n{e}")
-                        self.app.log(f"Ошибка выгрузки шаблонов: {e}")
+                    except (OSError, PermissionError, IOError) as e:
+                        messagebox.showerror("Ошибка", f"Ошибка доступа при сохранении шаблонов:\n{e}")
+                        self.app.log(f"Ошибка доступа при выгрузке шаблонов: {e}")
+                    except (ValueError, TypeError, json.JSONEncodeError) as e:
+                        messagebox.showerror("Ошибка", f"Ошибка данных при сохранении шаблонов:\n{e}")
+                        self.app.log(f"Ошибка данных при выгрузке шаблонов: {e}")
+                    except (KeyError, IndexError) as e:
+                        messagebox.showerror("Ошибка", f"Ошибка доступа к данным при сохранении шаблонов:\n{e}")
+                        self.app.log(f"Ошибка доступа к данным при выгрузке шаблонов: {e}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        messagebox.showerror("Ошибка", f"Неожиданная ошибка при сохранении шаблонов:\n{e}")
+                        self.app.log(f"Неожиданная ошибка выгрузки шаблонов: {e}")
             
             btn_delete = self.app.create_rounded_button(
                 btn_frame, "🗑️ Удалить", delete_template,
@@ -362,9 +420,27 @@ class TemplatesManager:
             # Двойной клик для применения
             listbox.bind('<Double-Button-1>', lambda e: apply_template())
             
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось открыть окно сохраненных шаблонов:\n{e}")
-            self.app.log(f"Ошибка открытия сохраненных шаблонов: {e}")
+        except (AttributeError, TypeError, RuntimeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка выполнения при открытии окна сохраненных шаблонов:\n{e}")
+            self.app.log(f"Ошибка выполнения при открытии сохраненных шаблонов: {e}")
+        except (ValueError, KeyError, IndexError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка данных при открытии окна сохраненных шаблонов:\n{e}")
+            self.app.log(f"Ошибка данных при открытии сохраненных шаблонов: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка при открытии окна сохраненных шаблонов:\n{e}")
+            self.app.log(f"Неожиданная ошибка открытия сохраненных шаблонов: {e}")
     
     def _apply_template_immediate(self, force=False):
         """Немедленное применение шаблона (при потере фокуса)
@@ -401,12 +477,38 @@ class TemplatesManager:
                     # Убеждаемся, что таблица обновлена
                     if hasattr(self.app, 'refresh_treeview'):
                         self.app.refresh_treeview()
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError) as e:
+                    # Ошибки данных/типов при применении шаблона
+                    try:
+                        if hasattr(self.app, 'log'):
+                            self.app.log(f"Ошибка данных при применении шаблона: {e}")
+                    except (AttributeError, RuntimeError) as log_error:
+                        logger.debug(f"Ошибка при логировании ошибки применения шаблона: {log_error}")
+                except (RuntimeError, KeyError, IndexError) as e:
+                    # Ошибки выполнения при применении шаблона
+                    try:
+                        if hasattr(self.app, 'log'):
+                            self.app.log(f"Ошибка выполнения при применении шаблона: {e}")
+                    except (AttributeError, RuntimeError) as log_error:
+                        logger.debug(f"Ошибка при логировании ошибки применения шаблона: {log_error}")
+                except (MemoryError, RecursionError) as e:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as e:
+
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                        raise
                     # Логируем ошибки, но не показываем пользователю при автоматическом применении
                     try:
                         if hasattr(self.app, 'log'):
-                            self.app.log(f"Ошибка при применении шаблона: {e}")
-                    except Exception as log_error:
+                            self.app.log(f"Неожиданная ошибка при применении шаблона: {e}")
+                    except (AttributeError, RuntimeError) as log_error:
                         logger.debug(f"Не удалось залогировать ошибку применения шаблона: {log_error}")
                 finally:
                     self._is_applying_template = False
@@ -442,12 +544,31 @@ class TemplatesManager:
                     # Убеждаемся, что таблица обновлена
                     if hasattr(self.app, 'refresh_treeview'):
                         self.app.refresh_treeview()
-                except Exception as e:
+                except (ValueError, TypeError, AttributeError) as e:
+                    # Ошибки данных/типов при автоматическом применении шаблона
+                    try:
+                        if hasattr(self.app, 'log'):
+                            self.app.log(f"Ошибка данных при автоматическом применении шаблона: {e}")
+                    except (AttributeError, RuntimeError) as log_error:
+                        logger.debug(f"Ошибка при логировании ошибки применения шаблона: {log_error}")
+                except (MemoryError, RecursionError) as e:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as e:
+
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                        raise
                     # Логируем ошибки, но не показываем пользователю при автоматическом применении
                     try:
                         if hasattr(self.app, 'log'):
-                            self.app.log(f"Ошибка при автоматическом применении шаблона: {e}")
-                    except Exception as log_error:
+                            self.app.log(f"Неожиданная ошибка при автоматическом применении шаблона: {e}")
+                    except (AttributeError, RuntimeError) as log_error:
                         logger.debug(f"Не удалось залогировать ошибку применения шаблона: {log_error}")
     
     def apply_template_quick(self, auto=False):
@@ -515,12 +636,40 @@ class TemplatesManager:
                     f"Проверьте предпросмотр в таблице."
                 )
             
-        except Exception as e:
+        except (ValueError, TypeError, AttributeError) as e:
             if not auto:
-                messagebox.showerror("Ошибка", f"Не удалось применить шаблон: {e}")
+                messagebox.showerror("Ошибка", f"Ошибка данных при применении шаблона: {e}")
+            else:
+                try:
+                    self.app.log(f"Ошибка данных при применении шаблона: {e}")
+                except (AttributeError, RuntimeError) as log_error:
+                    logger.debug(f"Ошибка при логировании ошибки применения шаблона: {log_error}")
+        except (RuntimeError, KeyError, IndexError) as e:
+            if not auto:
+                messagebox.showerror("Ошибка", f"Ошибка выполнения при применении шаблона: {e}")
+            else:
+                try:
+                    self.app.log(f"Ошибка выполнения при применении шаблона: {e}")
+                except (AttributeError, RuntimeError) as log_error:
+                    logger.debug(f"Ошибка при логировании ошибки применения шаблона: {log_error}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            if not auto:
+                messagebox.showerror("Ошибка", f"Неожиданная ошибка при применении шаблона: {e}")
             else:
                 # Используем try-except для логирования, так как log может быть не инициализирован
                 try:
-                    self.app.log(f"Ошибка при применении шаблона: {e}")
-                except Exception as log_error:
+                    self.app.log(f"Неожиданная ошибка при применении шаблона: {e}")
+                except (AttributeError, RuntimeError) as log_error:
                     logger.debug(f"Не удалось залогировать ошибку применения шаблона: {log_error}")

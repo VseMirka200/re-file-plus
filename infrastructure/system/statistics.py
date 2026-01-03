@@ -52,8 +52,24 @@ class StatisticsManager:
                     loaded = json.load(f)
                     if isinstance(loaded, dict):
                         default_stats.update(loaded)
-        except Exception as e:
-            logger.error(f"Ошибка загрузки статистики: {e}")
+        except (OSError, PermissionError, IOError, FileNotFoundError) as e:
+            logger.error(f"Ошибка доступа при загрузке статистики: {e}")
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.error(f"Ошибка данных при загрузке статистики: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки статистики: {e}")
         
         return default_stats
     
@@ -67,8 +83,26 @@ class StatisticsManager:
             with open(self.stats_file, 'w', encoding='utf-8') as f:
                 json.dump(self.stats, f, ensure_ascii=False, indent=2)
             return True
-        except Exception as e:
-            logger.error(f"Ошибка сохранения статистики: {e}")
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при сохранении статистики: {e}")
+            return False
+        except (ValueError, TypeError, json.JSONEncodeError) as e:
+            logger.error(f"Ошибка данных при сохранении статистики: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка сохранения статистики: {e}")
             return False
     
     def record_operation(self, operation_type: str, success_count: int, 

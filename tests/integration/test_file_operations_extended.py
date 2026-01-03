@@ -12,7 +12,7 @@ from core.re_file_methods import (
     CaseMethod,
     NumberingMethod
 )
-from core.methods_manager import MethodsManager
+from core.managers.methods_manager import MethodsManager
 
 
 class TestFileOperationsExtended:

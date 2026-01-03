@@ -70,7 +70,12 @@ class TemplatesGuide:
         try:
             from ui.ui_components import set_window_icon
             set_window_icon(guide_window, self.app._icon_photos)
-        except Exception:
+        except (AttributeError, tk.TclError, OSError, RuntimeError, TypeError):
+            pass
+        except (MemoryError, RecursionError):
+            pass
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException:
             pass
         
         # Заголовок

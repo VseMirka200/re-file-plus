@@ -191,8 +191,32 @@ class ReFileStarter:
         # Создаем событие для отмены
         try:
             cancel_event = threading.Event()
-        except Exception as e:
-            logger.error(f"Ошибка при создании события отмены: {e}", exc_info=True)
+        except (RuntimeError, AttributeError) as e:
+            logger.error(f"Ошибка выполнения при создании события отмены: {e}", exc_info=True)
+            self.app._re_file_in_progress = False
+            if hasattr(self.app, '_re_file_start_time'):
+                delattr(self.app, '_re_file_start_time')
+            return
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при создании события отмены: {e}", exc_info=True)
+            self.app._re_file_in_progress = False
+            if hasattr(self.app, '_re_file_start_time'):
+                delattr(self.app, '_re_file_start_time')
+            return
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при создании события отмены: {e}", exc_info=True)
             self.app._re_file_in_progress = False
             if hasattr(self.app, '_re_file_start_time'):
                 delattr(self.app, '_re_file_start_time')
@@ -244,13 +268,59 @@ class ReFileStarter:
                     # Это предотвращает двойной запуск операции, если пользователь нажмет кнопку
                     # между вызовом callback и выполнением re_file_complete в главном потоке
                     self.app.root.after(0, lambda: self.re_file_operations.re_file_complete(success, error, re_filed_files))
-                except Exception as e:
-                    logger.error(f"Ошибка при планировании callback: {e}", exc_info=True)
+                except (RuntimeError, AttributeError, TypeError) as e:
+                    logger.error(f"Ошибка выполнения при планировании callback: {e}", exc_info=True)
                     # Если не удалось запланировать, вызываем напрямую
                     try:
                         self.re_file_operations.re_file_complete(success, error, re_filed_files)
-                    except Exception as e2:
-                        logger.error(f"Ошибка при прямом вызове callback: {e2}", exc_info=True)
+                    except (RuntimeError, AttributeError, TypeError) as e2:
+                        logger.error(f"Ошибка выполнения при прямом вызове callback: {e2}", exc_info=True)
+                        # В крайнем случае сбрасываем флаг вручную
+                        if hasattr(self.app, '_re_file_in_progress'):
+                            self.app._re_file_in_progress = False
+                    except (ValueError, TypeError, KeyError, IndexError) as e2:
+                        logger.error(f"Ошибка данных при прямом вызове callback: {e2}", exc_info=True)
+                        # В крайнем случае сбрасываем флаг вручную
+                        if hasattr(self.app, '_re_file_in_progress'):
+                            self.app._re_file_in_progress = False
+                    except (MemoryError, RecursionError) as e2:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e2:
+
+                        if isinstance(e2, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка при прямом вызове callback: {e2}", exc_info=True)
+                        # В крайнем случае сбрасываем флаг вручную
+                        if hasattr(self.app, '_re_file_in_progress'):
+                            self.app._re_file_in_progress = False
+                except (ValueError, TypeError, KeyError, IndexError) as e:
+                    logger.error(f"Ошибка данных при планировании callback: {e}", exc_info=True)
+                    # Если не удалось запланировать, вызываем напрямую
+                    try:
+                        self.re_file_operations.re_file_complete(success, error, re_filed_files)
+                    except (AttributeError, RuntimeError) as e2:
+                        logger.error(f"Ошибка выполнения при прямом вызове callback: {e2}", exc_info=True)
+                    except (MemoryError, RecursionError) as e2:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e2:
+
+                        if isinstance(e2, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка при прямом вызове callback: {e2}", exc_info=True)
                         # В крайнем случае сбрасываем флаг вручную
                         if hasattr(self.app, '_re_file_in_progress'):
                             self.app._re_file_in_progress = False
@@ -263,10 +333,68 @@ class ReFileStarter:
                     update_progress,
                     cancel_event
                 )
-            except Exception as call_error:
+            except (OSError, RuntimeError, AttributeError, TypeError) as call_error:
+                logger.error(f"Ошибка выполнения при запуске переименования: {call_error}", exc_info=True)
+                # Используем ErrorHandler если доступен
+                if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                    try:
+                        from core.error_handling.errors import ErrorType
+                        self.app.error_handler.handle_error(
+                            call_error,
+                            error_type=ErrorType.UNKNOWN_ERROR,
+                            context={'operation': 're_file_start'}
+                        )
+                    except (AttributeError, TypeError, RuntimeError, ValueError):
+                        pass
+                self.app._re_file_in_progress = False
+                if hasattr(self.app, '_re_file_start_time'):
+                    delattr(self.app, '_re_file_start_time')
+            except (MemoryError, RecursionError) as call_error:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as call_error:
+
+                if isinstance(call_error, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка при запуске переименования: {call_error}", exc_info=True)
+                # Используем ErrorHandler если доступен
+                if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                    try:
+                        from core.error_handling.errors import ErrorType
+                        self.app.error_handler.handle_error(
+                            call_error,
+                            error_type=ErrorType.UNKNOWN_ERROR,
+                            context={'operation': 're_file_files_thread', 'files_count': len(ready_files)}
+                        )
+                    except (ImportError, AttributeError, TypeError, ValueError) as handler_error:
+                        logger.debug(f"Ошибка в ErrorHandler при вызове re_file_files_thread: {handler_error}")
+                        pass
                 logger.error(f"Ошибка при вызове re_file_files_thread: {call_error}", exc_info=True)
                 raise
-        except Exception as e:
+        except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
+            # Используем ErrorHandler если доступен
+            if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                try:
+                    from core.error_handling.errors import ErrorType
+                    error_type = ErrorType.UNKNOWN_ERROR
+                    if isinstance(e, (OSError, PermissionError)):
+                        error_type = ErrorType.PERMISSION_DENIED
+                    elif isinstance(e, ValueError):
+                        error_type = ErrorType.VALIDATION_ERROR
+                    self.app.error_handler.handle_error(
+                        e,
+                        error_type=error_type,
+                        context={'operation': 'start_re_file', 'files_count': len(ready_files)}
+                    )
+                except (ImportError, AttributeError, TypeError, ValueError) as handler_error:
+                    logger.debug(f"Ошибка в ErrorHandler при запуске переименования: {handler_error}")
+                    pass
             logger.error(f"Ошибка при запуске переименования: {e}", exc_info=True)
             # Сбрасываем флаг и вызываем callback вручную при ошибке запуска
             self.re_file_operations.re_file_complete(0, len(ready_files), [])

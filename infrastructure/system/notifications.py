@@ -72,7 +72,12 @@ class NotificationManager:
                     '''
                     subprocess.run(['osascript', '-e', script], check=False)
                     return True
-                except Exception:
+                except (OSError, subprocess.SubprocessError, FileNotFoundError):
+                    pass
+                except (MemoryError, RecursionError):
+                    pass
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
                     pass
             elif self.platform == 'Linux':
                 # Linux уведомления через notify-send
@@ -82,10 +87,29 @@ class NotificationManager:
                         check=False
                     )
                     return True
-                except Exception:
+                except (OSError, subprocess.SubprocessError, FileNotFoundError):
                     pass
-        except Exception as e:
-            logger.debug(f"Ошибка показа уведомления: {e}")
+                except (MemoryError, RecursionError):
+                    pass
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+                except BaseException:
+                    pass
+        except (OSError, subprocess.SubprocessError, AttributeError) as e:
+            logger.debug(f"Ошибка выполнения при показе уведомления: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка показа уведомления: {e}")
         
         return False
     

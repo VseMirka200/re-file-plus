@@ -58,7 +58,23 @@ class SorterSorting:
             set_window_icon(preview_window, self.app._icon_photos)
         except (AttributeError, tk.TclError, OSError) as e:
             logger.debug(f"Не удалось установить иконку окна: {e}")
-        except Exception as e:
+        except (RuntimeError, TypeError) as e:
+            logger.debug(f"Ошибка выполнения при установке иконки: {e}")
+        except (ValueError, KeyError, IndexError) as e:
+            logger.debug(f"Ошибка данных при установке иконки: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         main_frame = tk.Frame(preview_window, bg=self.app.colors['bg_main'])
@@ -163,9 +179,33 @@ class SorterSorting:
                     preview_tree.insert("", tk.END, values=(file_name, "-", "Не отсортирован"),
                                       tags=('unsorted',))
             
-            except Exception as e:
+            except (OSError, PermissionError, FileNotFoundError) as e:
                 error_count += 1
-                preview_tree.insert("", tk.END, values=(os.path.basename(file_path), "-", f"Ошибка: {e}"),
+                preview_tree.insert("", tk.END, values=(os.path.basename(file_path), "-", f"Ошибка доступа: {e}"),
+                                  tags=('error',))
+            except (ValueError, TypeError, AttributeError) as e:
+                error_count += 1
+                preview_tree.insert("", tk.END, values=(os.path.basename(file_path), "-", f"Ошибка данных: {e}"),
+                                  tags=('error',))
+            except (KeyError, IndexError) as e:
+                error_count += 1
+                preview_tree.insert("", tk.END, values=(os.path.basename(file_path), "-", f"Ошибка доступа к данным: {e}"),
+                                  tags=('error',))
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                error_count += 1
+                preview_tree.insert("", tk.END, values=(os.path.basename(file_path), "-", f"Неожиданная ошибка: {e}"),
                                   tags=('error',))
         
         # Обновляем статистику
@@ -258,8 +298,29 @@ class SorterSorting:
                             matched = True
                             break
                     
-                except Exception as e:
-                    error_msg = f"Ошибка при обработке {os.path.basename(file_path)}: {e}\n"
+                except (OSError, PermissionError, FileExistsError) as e:
+                    error_msg = f"Ошибка файловой системы при обработке {os.path.basename(file_path)}: {e}\n"
+                    errors.append(error_msg)
+                except (ValueError, TypeError, AttributeError) as e:
+                    error_msg = f"Ошибка данных при обработке {os.path.basename(file_path)}: {e}\n"
+                    errors.append(error_msg)
+                except (KeyError, IndexError) as e:
+                    error_msg = f"Ошибка доступа к данным при обработке {os.path.basename(file_path)}: {e}\n"
+                    errors.append(error_msg)
+                except (MemoryError, RecursionError) as e:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as e:
+
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    error_msg = f"Неожиданная ошибка при обработке {os.path.basename(file_path)}: {e}\n"
                     errors.append(error_msg)
             
             if moved_files > 0:
@@ -269,10 +330,30 @@ class SorterSorting:
                     f"Перемещено: {moved_files}\n"
                     f"Ошибок: {len(errors)}"))
         
-        except Exception as e:
+        except (OSError, PermissionError, RuntimeError) as e:
+            error_msg = f"Ошибка выполнения при сортировке: {e}"
+            self.app.root.after(0, lambda: messagebox.showerror("Ошибка", error_msg))
+            logger.error(f"Ошибка выполнения при сортировке файлов: {e}", exc_info=True)
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            error_msg = f"Ошибка данных при сортировке: {e}"
+            self.app.root.after(0, lambda: messagebox.showerror("Ошибка", error_msg))
+            logger.error(f"Ошибка данных при сортировке файлов: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             error_msg = f"Критическая ошибка: {e}"
             self.app.root.after(0, lambda: messagebox.showerror("Ошибка", error_msg))
-            logger.error(f"Ошибка сортировки файлов: {e}", exc_info=True)
+            logger.error(f"Неожиданная ошибка сортировки файлов: {e}", exc_info=True)
     
     def file_matches_filter(self, file_path, filter_data):
         """Проверка, соответствует ли файл фильтру"""
@@ -325,7 +406,25 @@ class SorterSorting:
             except (ValueError, TypeError, AttributeError) as e:
                 logger.debug(f"Ошибка при парсинге размера файла: {e}")
                 return False
-            except Exception as e:
+            except (OSError, PermissionError) as e:
+                logger.debug(f"Ошибка доступа при проверке размера файла: {e}")
+                return False
+            except (ValueError, TypeError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при проверке размера файла: {e}")
+                return False
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
                 logger.warning(f"Неожиданная ошибка при проверке размера файла: {e}")
                 return False
         
@@ -339,7 +438,25 @@ class SorterSorting:
             except (OSError, ValueError, TypeError) as e:
                 logger.debug(f"Ошибка при получении даты файла: {e}")
                 return False
-            except Exception as e:
+            except (PermissionError, AttributeError) as e:
+                logger.debug(f"Ошибка доступа/атрибутов при проверке даты файла: {e}")
+                return False
+            except (ValueError, TypeError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при проверке даты файла: {e}")
+                return False
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
                 logger.warning(f"Неожиданная ошибка при проверке даты файла: {e}")
                 return False
         

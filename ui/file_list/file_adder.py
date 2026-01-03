@@ -42,16 +42,61 @@ class FileAdder:
             ]
         )
         if files:
+            # Проверка на максимальное количество файлов
+            try:
+                from config.constants import MAX_FILES_IN_LIST
+                current_count = len(self.app.files)
+                if current_count >= MAX_FILES_IN_LIST:
+                    messagebox.showwarning(
+                        "Превышен лимит",
+                        f"Достигнут максимальный лимит файлов в списке ({MAX_FILES_IN_LIST}).\n"
+                        f"Удалите некоторые файлы перед добавлением новых."
+                    )
+                    return
+                remaining_slots = MAX_FILES_IN_LIST - current_count
+                if len(files) > remaining_slots:
+                    if not messagebox.askyesno(
+                        "Превышение лимита",
+                        f"Вы пытаетесь добавить {len(files)} файлов, но доступно только {remaining_slots} слотов.\n"
+                        f"Добавить только первые {remaining_slots} файлов?"
+                    ):
+                        return
+                    files = files[:remaining_slots]
+            except ImportError:
+                # Если константа недоступна, продолжаем без ограничения
+                pass
+            
             files_before = len(self.app.files)
             added_files = []
             skipped_files = []
-            for file_path in files:
+            
+            # Оптимизация: обрабатываем файлы батчами для больших списков
+            BATCH_SIZE = 50  # Обрабатываем по 50 файлов за раз
+            total_files = len(files)
+            
+            if total_files > BATCH_SIZE and logger.isEnabledFor(logging.INFO):
+                logger.info(f"Добавление {total_files} файлов батчами по {BATCH_SIZE}")
+            
+            for idx, file_path in enumerate(files, 1):
+                # Проверяем лимит перед каждым добавлением
+                try:
+                    from config.constants import MAX_FILES_IN_LIST
+                    if len(self.app.files) >= MAX_FILES_IN_LIST:
+                        logger.warning(f"Достигнут лимит файлов ({MAX_FILES_IN_LIST}), остановка добавления")
+                        break
+                except ImportError:
+                    pass
                 result = self.add_file(file_path)
                 if result:
                     added_files.append(file_path)
                 else:
                     skipped_files.append(file_path)
                     logger.debug(f"Файл не добавлен: {file_path}")
+                
+                # Логируем прогресс для больших батчей
+                if total_files > BATCH_SIZE and idx % BATCH_SIZE == 0:
+                    if logger.isEnabledFor(logging.INFO):
+                        logger.info(f"Обработано {idx}/{total_files} файлов при добавлении")
             # Применяем методы (включая шаблон), если они есть
             if self.app.methods_manager.get_methods():
                 self.app.apply_methods()
@@ -66,6 +111,11 @@ class FileAdder:
             self.app.file_list_manager.refresh_treeview()
             self.app.file_list_manager.update_status()
             actual_count = len(self.app.files) - files_before
+            if actual_count > 0:
+                logger.info(
+                    f"Добавлено файлов в список: {actual_count} (успешно: {len(added_files)}, пропущено: {len(skipped_files)})",
+                    extra={'action': 'FILES_ADDED', 'count': actual_count, 'added': len(added_files), 'skipped': len(skipped_files)}
+                )
             if skipped_files:
                 self.app.log(f"Добавлено файлов: {actual_count}, пропущено: {len(skipped_files)}")
             else:
@@ -244,9 +294,32 @@ class FileAdder:
                 }
                 files_list.append(file_data)
             
+            logger.debug(f"Файл успешно добавлен в список: {file_path}", extra={'action': 'FILE_ADDED'})
             return True
-        except Exception as e:
+        except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
             logger.error(f"Ошибка при добавлении файла {file_path}: {e}", exc_info=True)
             self.app.log(f"Ошибка при добавлении файла {os.path.basename(file_path)}: {e}")
+            return False
+        except (KeyError, IndexError) as e:
+            # Ошибки доступа к данным
+            logger.error(f"Ошибка доступа к данным при добавлении файла {file_path}: {e}", exc_info=True)
+            self.app.log(f"Ошибка данных при добавлении файла {os.path.basename(file_path)}: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            # Неожиданные ошибки
+            logger.error(f"Неожиданная ошибка при добавлении файла {file_path}: {e}", exc_info=True)
+            self.app.log(f"Неожиданная ошибка при добавлении файла {os.path.basename(file_path)}: {e}")
             return False
 

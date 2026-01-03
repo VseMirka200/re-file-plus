@@ -13,7 +13,18 @@ logger = logging.getLogger(__name__)
 
 
 class TreeViewManager:
-    """Класс для управления отображением файлов в Treeview."""
+    """Класс для управления отображением файлов в Treeview.
+    
+    Обеспечивает:
+    - Создание и настройку Treeview виджета
+    - Обновление отображения списка файлов с кешированием
+    - Группировку файлов по папкам
+    - Фильтрацию по поисковому запросу (обычный текст и regex)
+    - Оптимизацию производительности через кеширование проверок путей
+    
+    Attributes:
+        app: Экземпляр главного приложения
+    """
     
     def __init__(self, app):
         """Инициализация.
@@ -36,26 +47,28 @@ class TreeViewManager:
         # Создаем Treeview
         tree = ttk.Treeview(
             tree_frame,
-            columns=("files", "new_name", "path"),
+            columns=("files", "new_name", "path", "status"),
             show="headings",
             style='Custom.Treeview'
         )
         tree.heading("files", text="Имя файла")
         tree.heading("new_name", text="Новое имя")
         tree.heading("path", text="Путь")
-        tree.column("files", width=300, minwidth=150, stretch=True)
-        tree.column("new_name", width=300, minwidth=150, stretch=True)
-        tree.column("path", width=300, minwidth=200, stretch=True)
+        tree.heading("status", text="Статус")
+        tree.column("files", width=250, minwidth=150, stretch=True)
+        tree.column("new_name", width=250, minwidth=150, stretch=True)
+        tree.column("path", width=250, minwidth=200, stretch=True)
+        tree.column("status", width=150, minwidth=100, stretch=True)
         
-        # Создаем скроллбар
-        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
-        tree.configure(yscrollcommand=scrollbar.set)
-        
-        # Настройка тегов для цветового выделения (для конвертера и других функций)
+        # Настройка тегов для цветового выделения (для конвертера)
         tree.tag_configure('ready', background='#D1FAE5', foreground='#065F46')  # Зеленый - готов
         tree.tag_configure('in_progress', background='#FEF3C7', foreground='#92400E')  # Желтый - в работе
         tree.tag_configure('success', background='#D1FAE5', foreground='#065F46')
         tree.tag_configure('error', background='#FEE2E2', foreground='#991B1B')
+        
+        # Создаем скроллбар
+        scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=scrollbar.set)
         
         # Размещаем виджеты
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -79,27 +92,54 @@ class TreeViewManager:
             if hasattr(self.app, 'search_regex_var'):
                 use_regex = self.app.search_regex_var.get()
         
-        # Компилируем regex паттерн
+        # Компилируем regex паттерн (с кешированием для оптимизации)
         search_pattern = None
         if search_text and use_regex:
             try:
-                search_pattern = re.compile(search_text, re.IGNORECASE)
+                # Кешируем скомпилированный паттерн для повторного использования
+                # (если текст поиска не изменился, используем тот же паттерн)
+                if not hasattr(self, '_cached_search_pattern') or self._cached_search_pattern[0] != search_text:
+                    search_pattern = re.compile(search_text, re.IGNORECASE)
+                    self._cached_search_pattern = (search_text, search_pattern)
+                else:
+                    search_pattern = self._cached_search_pattern[1]
             except re.error:
                 use_regex = False
+                # Очищаем кеш при ошибке
+                if hasattr(self, '_cached_search_pattern'):
+                    delattr(self, '_cached_search_pattern')
         
         # Группируем файлы по папкам
         files_by_path = {}
+        # Используем глобальный кеш для проверок путей (оптимизация производительности)
         path_cache = {}
         
         def get_path_info(path: str) -> Tuple[bool, bool, bool]:
-            """Получает информацию о пути с кешированием."""
+            """Получает информацию о пути с кешированием.
+            
+            Использует локальный кеш для текущего обновления и глобальный кеш
+            для проверок существования файлов между обновлениями.
+            
+            Args:
+                path: Путь к файлу или директории
+                
+            Returns:
+                Tuple[существует, является_файлом, является_директорией]
+            """
             if path not in path_cache:
-                exists = os.path.exists(path)
-                path_cache[path] = (
-                    exists,
-                    os.path.isfile(path) if exists else False,
-                    os.path.isdir(path) if exists else False
-                )
+                # Пробуем использовать глобальный кеш для проверки существования
+                try:
+                    from utils.file_cache import is_file_cached, is_dir_cached
+                    exists = is_file_cached(path) or is_dir_cached(path)
+                    isfile = is_file_cached(path) if exists else False
+                    isdir = is_dir_cached(path) if exists else False
+                except ImportError:
+                    # Fallback если кеш недоступен
+                    exists = os.path.exists(path)
+                    isfile = os.path.isfile(path) if exists else False
+                    isdir = os.path.isdir(path) if exists else False
+                
+                path_cache[path] = (exists, isfile, isdir)
             return path_cache[path]
         
         # Используем файлы конвертера, если используется converter_tree
@@ -229,31 +269,28 @@ class TreeViewManager:
                     display_text = old_display_name
                 
                 file_path_display = folder_path
+                
+                # Определяем статус для отображения
+                status_text = ""
                 tags = ()
                 
-                # Определяем теги на основе статуса (для конвертера)
-                # По умолчанию файлы добавляются без цвета (tags = ())
-                # Желтый - только когда файл конвертируется (статус 'В работе...')
-                # Зеленый - только после успешной конвертации (статус содержит 'конвертирован')
+                # Для конвертера проверяем статус и применяем цветовую индикацию
                 if hasattr(file_data, 'status') or (isinstance(file_data, dict) and 'status' in file_data):
                     status = file_data.status if hasattr(file_data, 'status') else file_data.get('status', '')
-                    status_lower = status.lower() if status else ''
-                    file_name_for_log = display_text.split(' → ')[0] if ' → ' in display_text else display_text
-                    
-                    # Сначала проверяем успешную конвертацию (приоритет)
-                    if 'конвертирован' in status_lower or (status == 'Готов' and isinstance(file_data, dict) and file_data.get('output_path')):
-                        tags = ('ready',)  # Зеленый - успешно сконвертирован
-                    elif status == 'В работе...' or 'В работе' in status:
-                        tags = ('in_progress',)  # Желтый - конвертируется
-                    elif status.startswith('Ошибка') or status.startswith('Не поддерживается'):
-                        tags = ('error',)
-                    else:
-                        # Для статуса 'Готов' при добавлении (без конвертации) - без тега (без цвета)
-                        tags = ()
+                    if status:
+                        status_text = status
+                        # Применяем теги для конвертера на основе статуса
+                        status_lower = status.lower() if status else ''
+                        if 'конвертирован' in status_lower or (status == 'Готов' and isinstance(file_data, dict) and file_data.get('output_path')):
+                            tags = ('ready',)  # Зеленый - успешно сконвертирован
+                        elif status == 'В работе...' or 'В работе' in status:
+                            tags = ('in_progress',)  # Желтый - конвертируется
+                        elif status.startswith('Ошибка') or status.startswith('Не поддерживается'):
+                            tags = ('error',)
                 
-                # Вставляем имя файла, новое имя и путь
+                # Вставляем имя файла, новое имя, путь и статус
                 new_display_name_full = new_full_name if new_full_name != old_full_name else ""
-                self.app.tree.insert("", tk.END, values=(old_display_name, new_display_name_full, file_path_display), tags=tags)
+                self.app.tree.insert("", tk.END, values=(old_display_name, new_display_name_full, file_path_display, status_text), tags=tags)
         
         # Обновляем видимость скроллбаров
         if (hasattr(self.app, 'tree_scrollbar_y') and
@@ -274,7 +311,10 @@ class TreeViewManager:
             )
     
     def update_status(self) -> None:
-        """Обновление статусной строки."""
+        """Обновление статусной строки.
+        
+        Отображает количество файлов в списке и другую статистику.
+        """
         count = len(self.app.files)
         if hasattr(self.app, 'left_panel'):
             self.app.left_panel.config(text=f"Список файлов (Файлов: {count})")

@@ -98,7 +98,19 @@ class ConverterFileHandler:
                     try:
                         available_formats = self.app.file_converter.get_target_formats_for_file(file_path)
                         file_category = self.app.file_converter.get_file_type_category(file_path)
-                    except Exception as e:
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
                         logger.error(f"Ошибка при получении информации о файле {os.path.basename(file_path)}: {e}")
                 
                 if available_formats:
@@ -139,7 +151,8 @@ class ConverterFileHandler:
                                     try:
                                         if hasattr(self.app, 'converter_filter_combo') and self.app.converter_filter_combo:
                                             self.app.converter_filter_combo.set(filter_name)
-                                    except Exception:
+                                    except (AttributeError, TypeError, RuntimeError):
+                                        # Игнорируем ошибки UI операций (не критично)
                                         pass
                                 if hasattr(self.app, 'root'):
                                     self.app.root.after(10, update_filter_ui)

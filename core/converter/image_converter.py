@@ -43,6 +43,7 @@ def convert_pdf_to_image(
     if not Image_module:
         return False, "Pillow не установлен", None
     
+    pdf_document = None
     try:
         # Открываем PDF
         pdf_document = fitz_module.open(file_path)
@@ -50,7 +51,8 @@ def convert_pdf_to_image(
         # Проверяем наличие страниц
         num_pages = len(pdf_document)
         if num_pages == 0:
-            pdf_document.close()
+            if pdf_document:
+                pdf_document.close()
             return False, "PDF файл не содержит страниц", None
         
         # Определяем формат для сохранения
@@ -103,8 +105,12 @@ def convert_pdf_to_image(
                 os.makedirs(output_folder, exist_ok=True)
                 # Проверяем, что папка действительно создана
                 if not os.path.exists(output_folder):
+                    if pdf_document:
+                        pdf_document.close()
                     return False, f"Не удалось создать папку: {output_folder}", None
             except (OSError, PermissionError) as e:
+                if pdf_document:
+                    pdf_document.close()
                 return False, f"Ошибка при создании папки: {str(e)}", None
         
         for page_num in range(num_pages):
@@ -147,9 +153,6 @@ def convert_pdf_to_image(
                     img.close()
                     img = None
         
-        # Закрываем PDF
-        pdf_document.close()
-        
         # Формируем сообщение
         if num_pages == 1:
             message = "PDF успешно конвертирован в изображение"
@@ -161,9 +164,34 @@ def convert_pdf_to_image(
         
         return True, message, return_path
         
-    except Exception as e:
+    except (OSError, PermissionError, ValueError, TypeError) as e:
         logger.error(f"Ошибка при конвертации PDF в изображение {file_path}: {e}", exc_info=True)
         return False, f"Ошибка конвертации PDF: {str(e)}", None
+    except (KeyError, IndexError, AttributeError) as e:
+        logger.error(f"Ошибка доступа к данным при конвертации PDF в изображение {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка доступа к данным: {str(e)}", None
+    except (MemoryError, RecursionError) as e:
+
+        # Ошибки памяти/рекурсии
+
+        pass
+
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+    except BaseException as e:
+
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+            raise
+        logger.error(f"Неожиданная ошибка при конвертации PDF в изображение {file_path}: {e}", exc_info=True)
+        return False, f"Неожиданная ошибка конвертации PDF: {str(e)}", None
+    finally:
+        # Гарантируем закрытие PDF документа
+        if pdf_document:
+            try:
+                pdf_document.close()
+            except (OSError, AttributeError, RuntimeError):
+                pass
 
 
 def convert_image_to_pdf(
@@ -237,13 +265,47 @@ def convert_image_to_pdf(
             
             # Сохраняем PDF
             pdf_document.save(output_path)
-            pdf_document.close()
             
             return True, "Изображение успешно конвертировано в PDF", output_path
             
-    except Exception as e:
+    except (OSError, PermissionError, ValueError, TypeError, IOError) as e:
         logger.error(f"Ошибка при конвертации изображения в PDF {file_path}: {e}", exc_info=True)
         return False, f"Ошибка конвертации: {str(e)}", None
+    except (KeyError, IndexError, AttributeError) as e:
+        logger.error(f"Ошибка доступа к данным при конвертации изображения в PDF {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка доступа к данным: {str(e)}", None
+    except (MemoryError, RecursionError) as e:
+
+        # Ошибки памяти/рекурсии
+
+        pass
+
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+    except BaseException as e:
+
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+            raise
+        logger.error(f"Неожиданная ошибка при конвертации изображения в PDF {file_path}: {e}", exc_info=True)
+        return False, f"Неожиданная ошибка конвертации: {str(e)}", None
+    finally:
+        # Гарантируем закрытие PDF документа и освобождение ресурсов
+        try:
+            if 'pdf_document' in locals() and pdf_document:
+                pdf_document.close()
+        except (OSError, AttributeError, RuntimeError):
+            pass
+        try:
+            if 'img_buffer' in locals() and img_buffer:
+                img_buffer.close()
+        except (OSError, AttributeError, RuntimeError):
+            pass
+        try:
+            if 'img' in locals() and img:
+                img.close()
+        except (OSError, AttributeError, RuntimeError):
+            pass
 
 
 def convert_image_to_image(
@@ -353,7 +415,7 @@ def convert_image_to_image(
             # Сохраняем в новом формате
             try:
                 img.save(output_path, format=format_name, **save_kwargs)
-            except Exception as e:
+            except (ValueError, OSError, IOError) as e:
                 # Если формат не поддерживается, пробуем PNG
                 if format_name not in ('PNG', 'JPEG'):
                     format_name = 'PNG'
@@ -362,9 +424,46 @@ def convert_image_to_image(
                     logger.warning(f"Формат {target_ext} не поддерживается, сохранено как PNG")
                 else:
                     raise
+            except (KeyError, IndexError, AttributeError) as e:
+                # Ошибки доступа к данным при сохранении
+                logger.error(f"Ошибка доступа к данным при сохранении изображения: {e}", exc_info=True)
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                # Неожиданные ошибки при сохранении
+                logger.error(f"Неожиданная ошибка при сохранении изображения: {e}", exc_info=True)
+                raise
         
         return True, "Файл успешно конвертирован", output_path
         
-    except Exception as e:
+    except (OSError, PermissionError, ValueError, TypeError, IOError) as e:
         logger.error(f"Ошибка при конвертации изображения {file_path}: {e}", exc_info=True)
         return False, f"Ошибка конвертации: {str(e)}", None
+    except (KeyError, IndexError, AttributeError) as e:
+        logger.error(f"Ошибка доступа к данным при конвертации изображения {file_path}: {e}", exc_info=True)
+        return False, f"Ошибка доступа к данным: {str(e)}", None
+    except (MemoryError, RecursionError) as e:
+
+        # Ошибки памяти/рекурсии
+
+        pass
+
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+    except BaseException as e:
+
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+            raise
+        logger.error(f"Неожиданная ошибка при конвертации изображения {file_path}: {e}", exc_info=True)
+        return False, f"Неожиданная ошибка конвертации: {str(e)}", None

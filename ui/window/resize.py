@@ -38,20 +38,22 @@ class MainWindowResize:
         try:
             current_columns = list(self.app.tree['columns'])
             
-            # Используем три колонки: "Имя файла", "Новое имя" и "Путь"
-            required_columns = ("files", "new_name", "path")
+            # Используем четыре колонки: "Имя файла", "Новое имя", "Путь" и "Статус"
+            required_columns = ("files", "new_name", "path", "status")
             if current_columns != list(required_columns):
                 self.app.tree['columns'] = required_columns
                 # Настраиваем заголовки
                 self.app.tree.heading("files", text="Имя файла", command=lambda: self.app.file_list_manager.sort_column("files"))
                 self.app.tree.heading("new_name", text="Новое имя", command=lambda: self.app.file_list_manager.sort_column("new_name"))
                 self.app.tree.heading("path", text="Путь", command=lambda: self.app.file_list_manager.sort_column("path"))
+                self.app.tree.heading("status", text="Статус", command=lambda: self.app.file_list_manager.sort_column("status"))
                 # Настраиваем колонки (равной ширины)
                 list_frame_width = self.app.list_frame.winfo_width() if hasattr(self.app, 'list_frame') else 900
-                column_width = max(int(list_frame_width / 3), 200)
+                column_width = max(int(list_frame_width / 4), 150)
                 self.app.tree.column("files", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
                 self.app.tree.column("new_name", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
                 self.app.tree.column("path", width=column_width, anchor='w', minwidth=200, stretch=tk.YES)
+                self.app.tree.column("status", width=column_width, anchor='w', minwidth=100, stretch=tk.YES)
             
             # Вызываем обновление размеров
             self.app.root.after(100, self.update_tree_columns)
@@ -113,8 +115,22 @@ class MainWindowResize:
                     if hasattr(self.app, 'tree_scrollbar_x'):
                         self.app.root.after_idle(lambda: self.update_scrollbar_visibility(
                             self.app.tree, self.app.tree_scrollbar_x, 'horizontal'))
-            except Exception as e:
-                logger.debug(f"Ошибка обновления колонок таблицы: {e}")
+            except (tk.TclError, AttributeError, RuntimeError) as e:
+                logger.debug(f"Ошибка выполнения при обновлении колонок таблицы: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.debug(f"Неожиданная ошибка обновления колонок таблицы: {e}")
     
     def update_scrollbar_visibility(
         self, widget, scrollbar, orientation: str = 'vertical'

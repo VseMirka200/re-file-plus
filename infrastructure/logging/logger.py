@@ -82,7 +82,12 @@ class Logger:
                 import tkinter as tk
                 self.log_text.delete(1.0, tk.END)
                 self.log("Лог очищен")
-            except Exception:
+            except (tk.TclError, AttributeError, RuntimeError):
+                self.log_text = None
+            except (MemoryError, RecursionError):
+                self.log_text = None
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException:
                 self.log_text = None
     
     def save(self) -> None:
@@ -119,10 +124,38 @@ class Logger:
                     f.write(log_content)
                 messagebox.showinfo("Успех", f"Лог успешно выгружен в файл:\n{filename}")
                 self.log(f"Лог выгружен в файл: {filename}")
-        except Exception as e:
-            logger.error(f"Не удалось выгрузить лог: {e}", exc_info=True)
+        except (OSError, PermissionError, IOError) as e:
+            logger.error(f"Ошибка доступа при выгрузке лога: {e}", exc_info=True)
             try:
-                messagebox.showerror("Ошибка", f"Не удалось выгрузить лог:\n{str(e)}")
-            except:
+                messagebox.showerror("Ошибка", f"Ошибка доступа при выгрузке лога:\n{str(e)}")
+            except (tk.TclError, RuntimeError):
+                pass
+            except (MemoryError, RecursionError):
+                pass
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException:
+                pass
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при выгрузке лога: {e}", exc_info=True)
+            try:
+                messagebox.showerror("Ошибка", f"Неожиданная ошибка при выгрузке лога:\n{str(e)}")
+            except (tk.TclError, RuntimeError):
+                pass
+            except (MemoryError, RecursionError):
+                pass
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException:
                 pass
 

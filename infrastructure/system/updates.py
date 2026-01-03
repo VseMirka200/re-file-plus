@@ -52,8 +52,22 @@ class UpdateChecker:
                     }
         except urllib.error.URLError:
             logger.debug("Не удалось проверить обновления (нет интернета или недоступен сервер)")
-        except Exception as e:
-            logger.debug(f"Ошибка проверки обновлений: {e}")
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            logger.debug(f"Ошибка данных при проверке обновлений: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка проверки обновлений: {e}")
         
         return None
     
@@ -78,6 +92,11 @@ class UpdateChecker:
             elif t1 > t2:
                 return 1
             return 0
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
+            return 0
+        except (MemoryError, RecursionError):
+            return 0
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException:
             return 0
 

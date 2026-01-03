@@ -137,7 +137,7 @@ def validate_filename(name: str, extension: str, path: str, index: int) -> str:
                 result = f"Ошибка: {path_error}" if path_error else "Ошибка: путь слишком длинный"
                 _set_cached_validation(name, extension, path, result)
                 return result
-        except Exception:
+        except (OSError, ValueError, AttributeError):
             pass  # Если не удалось проверить путь, продолжаем
         
         # Если все проверки пройдены, возвращаем успех

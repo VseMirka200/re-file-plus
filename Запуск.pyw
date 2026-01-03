@@ -172,8 +172,23 @@ if log_file_path:
             )
             print(error_msg)
             logger.warning("Логирование в файл недоступно. Логи выводятся только в консоль.")
-    except Exception as log_e:
-        print(f"Ошибка при проверке файла лога: {log_e}")
+    except (OSError, PermissionError, IOError) as log_e:
+        print(f"Ошибка доступа при проверке файла лога: {log_e}")
+        import traceback
+        print(traceback.format_exc())
+    except (ValueError, TypeError, AttributeError) as log_e:
+        print(f"Ошибка данных при проверке файла лога: {log_e}")
+        import traceback
+        print(traceback.format_exc())
+    except (MemoryError, RecursionError) as log_e:
+        # Ошибки памяти/рекурсии
+        print(f"Ошибка памяти/рекурсии при проверке файла лога: {log_e}")
+        import traceback
+        print(traceback.format_exc())
+    except BaseException as log_e:
+        if isinstance(log_e, (KeyboardInterrupt, SystemExit)):
+            raise
+        print(f"Неожиданная ошибка при проверке файла лога: {log_e}")
         import traceback
         print(traceback.format_exc())
 else:
@@ -189,16 +204,27 @@ else:
 if sys.platform == 'win32':
     try:
         # Настройка кодировки для stdout/stderr в Windows
-        if sys.stdout.encoding != 'utf-8':
+        # Проверяем, что stdout/stderr имеют атрибут encoding
+        if hasattr(sys.stdout, 'encoding') and sys.stdout.encoding != 'utf-8':
             import io
-            sys.stdout = io.TextIOWrapper(
-                sys.stdout.buffer, encoding='utf-8'
-            )
-            sys.stderr = io.TextIOWrapper(
-                sys.stderr.buffer, encoding='utf-8'
-            )
-    except (OSError, AttributeError, ValueError) as e:
-        logger.debug(f"Не удалось установить кодировку: {e}")
+            try:
+                # Пробуем установить кодировку только если это возможно
+                if hasattr(sys.stdout, 'buffer'):
+                    sys.stdout = io.TextIOWrapper(
+                        sys.stdout.buffer, encoding='utf-8', errors='replace'
+                    )
+                if hasattr(sys.stderr, 'buffer'):
+                    sys.stderr = io.TextIOWrapper(
+                        sys.stderr.buffer, encoding='utf-8', errors='replace'
+                    )
+                logger.debug("Кодировка UTF-8 успешно установлена для stdout/stderr")
+            except (OSError, AttributeError, ValueError, RuntimeError) as e:
+                logger.debug(f"Не удалось установить кодировку UTF-8: {e}")
+                # Продолжаем работу без изменения кодировки
+        else:
+            logger.debug(f"Кодировка stdout уже установлена: {sys.stdout.encoding if hasattr(sys.stdout, 'encoding') else 'N/A'}")
+    except (AttributeError, RuntimeError) as e:
+        logger.debug(f"Ошибка при проверке кодировки: {e}")
 
 # Переход в директорию скрипта
 # script_dir уже определен выше, используем его
@@ -254,8 +280,17 @@ try:
                         filtered_args.append(normalized_path)
                         logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
                         continue
-                except Exception as e:
-                    logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
+                except (ValueError, AttributeError, TypeError) as e:
+                    logger.debug(f"Ошибка типа/значения при обработке URL-пути {arg}: {e}")
+                except (KeyError, IndexError) as e:
+                    logger.debug(f"Ошибка доступа к данным при обработке URL-пути {arg}: {e}")
+                except (MemoryError, RecursionError) as e:
+                    # Ошибки памяти/рекурсии
+                    logger.debug(f"Ошибка памяти/рекурсии при обработке URL-пути {arg}: {e}")
+                except BaseException as e:
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                        raise
+                    logger.debug(f"Неожиданная ошибка обработки URL-пути {arg}: {e}")
             
             # Обработка путей в кавычках (для путей с пробелами)
             cleaned_arg = arg.strip('"').strip("'")
@@ -312,17 +347,96 @@ try:
     # Импортируем главную функцию из единой точки входа
     try:
         from app.entry_point import main
-    except Exception as import_error:
-        logger.error(f"Ошибка при импорте app.entry_point: {import_error}", exc_info=True)
+    except (ImportError, ModuleNotFoundError) as import_error:
+        logger.error(f"Ошибка импорта app.entry_point: {import_error}", exc_info=True)
+        raise
+    except (SyntaxError, AttributeError) as import_error:
+        logger.error(f"Ошибка синтаксиса/атрибутов при импорте app.entry_point: {import_error}", exc_info=True)
+        raise
+    except (ValueError, TypeError, KeyError, IndexError) as import_error:
+        logger.error(f"Ошибка данных при импорте app.entry_point: {import_error}", exc_info=True)
+        raise
+    except (MemoryError, RecursionError) as import_error:
+        # Ошибки памяти/рекурсии
+        logger.error(f"Ошибка памяти/рекурсии при импорте app.entry_point: {import_error}", exc_info=True)
+        raise
+    except BaseException as import_error:
+        if isinstance(import_error, (KeyboardInterrupt, SystemExit)):
+            raise
+        logger.error(f"Неожиданная ошибка при импорте app.entry_point: {import_error}", exc_info=True)
         raise
     
     if __name__ == "__main__":
         try:
             main()
-        except Exception as main_error:
-            logger.error(f"Ошибка при выполнении main(): {main_error}", exc_info=True)
+        except (KeyboardInterrupt, SystemExit):
+            # Не перехватываем системные исключения
             raise
-except Exception as e:
+        except (RuntimeError, AttributeError, TypeError) as main_error:
+            logger.error(f"Ошибка выполнения при выполнении main(): {main_error}", exc_info=True)
+            raise
+        except (ValueError, KeyError, IndexError) as main_error:
+            logger.error(f"Ошибка данных при выполнении main(): {main_error}", exc_info=True)
+            raise
+        except (MemoryError, RecursionError) as main_error:
+            # Ошибки памяти/рекурсии
+            logger.error(f"Ошибка памяти/рекурсии при выполнении main(): {main_error}", exc_info=True)
+            raise
+        except BaseException as main_error:
+            if isinstance(main_error, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.error(f"Неожиданная ошибка при выполнении main(): {main_error}", exc_info=True)
+            raise
+except (KeyboardInterrupt, SystemExit):
+    # Не перехватываем системные исключения
+    raise
+except (ImportError, ModuleNotFoundError, SyntaxError) as e:
+    logger.error(f"Критическая ошибка импорта/синтаксиса при запуске программы: {e}", exc_info=True)
+    # Если произошла ошибка, показываем сообщение
+    try:
+        import tkinter.messagebox as messagebox
+        messagebox.showerror("Критическая ошибка", f"Не удалось запустить программу:\n{e}")
+    except (tk.TclError, RuntimeError, AttributeError):
+        print(f"Критическая ошибка: {e}")
+    except (MemoryError, RecursionError):
+        # Ошибки памяти/рекурсии
+        print(f"Критическая ошибка памяти/рекурсии: {e}")
+    except BaseException:
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        print(f"Критическая ошибка: {e}")
+except (ValueError, TypeError, KeyError, IndexError) as e:
+    logger.error(f"Критическая ошибка данных при запуске программы: {e}", exc_info=True)
+    try:
+        import tkinter.messagebox as messagebox
+        messagebox.showerror("Критическая ошибка", f"Ошибка данных при запуске программы:\n{e}")
+    except (tk.TclError, RuntimeError, AttributeError):
+        print(f"Критическая ошибка данных: {e}")
+    except (MemoryError, RecursionError):
+        # Ошибки памяти/рекурсии
+        print(f"Критическая ошибка памяти/рекурсии: {e}")
+    except BaseException:
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
+        print(f"Критическая ошибка данных: {e}")
+except (MemoryError, RecursionError) as e:
+    # Ошибки памяти/рекурсии
+    logger.error(f"Критическая ошибка памяти/рекурсии при запуске программы: {e}", exc_info=True)
+    try:
+        import tkinter as tk
+        import tkinter.messagebox as messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Ошибка памяти", "Критическая ошибка памяти при запуске программы.")
+        root.destroy()
+    except (tk.TclError, AttributeError, RuntimeError):
+        print(f"Критическая ошибка памяти/рекурсии: {e}")
+except BaseException as e:
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+        raise
     logger.error(f"Критическая ошибка при запуске программы: {e}", exc_info=True)
     # Если произошла ошибка, показываем сообщение
     try:

@@ -52,8 +52,18 @@ class MethodApplier:
                 index = self.app.files.index(file_data)
                 status = validate_filename(new_name, extension, file_path, index)
                 file_data['status'] = status
-            except Exception as e:
-                self.app.log(f"Ошибка при применении методов: {e}")
+            except (ValueError, TypeError, AttributeError, KeyError, IndexError) as e:
+                logger.error(f"Ошибка данных при применении методов: {e}", exc_info=True)
+                self.app.log(f"Ошибка данных при применении методов: {e}")
+            except (RuntimeError, MemoryError, RecursionError) as e:
+                logger.error(f"Ошибка выполнения/памяти при применении методов: {e}", exc_info=True)
+                self.app.log(f"Ошибка выполнения/памяти при применении методов: {e}")
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+            except BaseException as e:
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                    raise
+                logger.error(f"Неожиданная ошибка при применении методов: {e}", exc_info=True)
+                self.app.log(f"Неожиданная ошибка при применении методов: {e}")
         
         # Обновление таблицы
         self.app.refresh_treeview()
@@ -101,17 +111,26 @@ class MethodApplier:
                 continue
             
             # ВАЖНО: Обновляем old_name и путь из реального имени файла в файловой системе
-            if os.path.exists(file_path):
-                real_basename = os.path.basename(file_path)
-                real_dir = os.path.dirname(file_path)
-                if os.path.isfile(file_path):
-                    real_name, real_ext = os.path.splitext(real_basename)
-                else:
-                    real_name = real_basename
-                    real_ext = ''
+            # Используем кеш для оптимизации проверок существования
+            try:
+                from utils.file_cache import is_file_cached
+                file_exists = is_file_cached(file_path)
+            except ImportError:
+                # Fallback если кеш недоступен
+                file_exists = os.path.exists(file_path) and os.path.isfile(file_path)
+            
+            if file_exists:
+                # Файл существует - получаем актуальные данные из файловой системы
+                # Это важно, так как файл мог быть переименован вручную или другой программой
+                real_basename = os.path.basename(file_path)  # Имя файла с расширением
+                real_dir = os.path.dirname(file_path)        # Директория файла
+                # Разделяем имя на имя и расширение
+                real_name, real_ext = os.path.splitext(real_basename)
                 
                 # Обновляем old_name, extension и путь из реального файла
+                # Это гарантирует, что мы работаем с актуальными данными
                 if hasattr(file_data, 'old_name'):
+                    # FileInfo объект: обновляем атрибуты напрямую
                     file_data.old_name = real_name
                     file_data.extension = real_ext
                     from pathlib import Path
@@ -121,6 +140,7 @@ class MethodApplier:
                     new_name = real_name
                     extension = real_ext
                 elif isinstance(file_data, dict):
+                    # Словарь: обновляем ключи
                     file_data['old_name'] = real_name
                     file_data['extension'] = real_ext
                     file_data['path'] = real_dir
@@ -130,30 +150,40 @@ class MethodApplier:
                     extension = real_ext
             else:
                 # Файл не существует - используем сохраненные значения
+                # Это может произойти, если файл был удален после добавления в список
+                # или если путь был указан неверно
                 if hasattr(file_data, 'old_name'):
+                    # FileInfo объект: используем сохраненные значения
                     old_name_before = file_data.old_name or ''
                     new_name = file_data.old_name or ''
                     extension = file_data.extension or ''
                 elif isinstance(file_data, dict):
+                    # Словарь: используем сохраненные значения
                     new_name = file_data.get('old_name', '') or ''
                     extension = file_data.get('extension', '') or ''
                     old_name_before = new_name
                 else:
+                    # Неизвестный формат - пропускаем файл
                     continue
             
-            # Формируем имя файла для отображения
+            # Формируем имя файла для отображения в UI прогресса
+            # Показываем полное имя с расширением для удобства пользователя
             display_name = f"{old_name_before}{extension}" if extension else old_name_before
             
             # Обновляем прогресс с именем текущего файла
+            # Используем root.after(0, ...) для безопасного обновления UI из другого потока
+            # (Tkinter требует, чтобы все операции с UI выполнялись в главном потоке)
             current_file_index = i + 1
             self.app.root.after(0, lambda c=current_file_index, t=total_files, 
                                fn=display_name, a=applied_count, e=error_count:
                                self.app.re_file_operations_handler.ui_updater.update_progress_ui(c, t, a, e, fn))
             
-            # Устанавливаем желтый тег "в работе" перед обработкой файла
-            self.app.root.after(0, lambda fp=file_path: self.app.re_file_operations_handler.ui_updater.set_file_in_progress(fp))
+            # Цветовая индикация убрана - тег "в работе" не устанавливается
+            # (по запросу пользователя убрана цветовая индикация во время переименования)
             
             # Применяем все методы последовательно
+            # Каждый метод получает результат предыдущего и возвращает новое имя
+            # Это позволяет комбинировать методы (например, сначала замена, потом нумерация)
             try:
                 for method in methods:
                     new_name, extension = method.apply(new_name, extension, file_path)
@@ -172,9 +202,7 @@ class MethodApplier:
                     file_data['status'] = 'Готов'
                 applied_count += 1
                 
-                # Устанавливаем зеленый тег "готово" после успешной обработки
-                if file_path:
-                    self.app.root.after(0, lambda fp=file_path: self.app.re_file_operations_handler.ui_updater.set_file_ready(fp))
+                # Цветовая индикация убрана - тег "готово" не устанавливается
                 
                 # Логируем изменение имени, если оно произошло
                 if old_name_before != new_name:
@@ -188,11 +216,30 @@ class MethodApplier:
                         method_name='apply_methods',
                         details={'methods': method_names}
                     )
-            except Exception as e:
+            except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
                 error_count += 1
-                # Устанавливаем красный тег "ошибка" при ошибке
-                if file_path:
-                    self.app.root.after(0, lambda fp=file_path: self.app.re_file_operations_handler.ui_updater.set_file_error(fp))
+                logger.error(f"Ошибка при применении методов к файлу {file_path}: {e}", exc_info=True)
+                # Цветовая индикация убрана - тег "ошибка" не устанавливается
+            except (KeyError, IndexError) as e:
+                error_count += 1
+                logger.error(f"Ошибка доступа к данным при применении методов к файлу {file_path}: {e}", exc_info=True)
+                # Цветовая индикация убрана - тег "ошибка" не устанавливается
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                error_count += 1
+                logger.error(f"Неожиданная ошибка при применении методов к файлу {file_path}: {e}", exc_info=True)
+                # Цветовая индикация убрана - тег "ошибка" не устанавливается
                 
                 # Получаем old_name в зависимости от типа данных
                 if hasattr(file_data, 'old_name'):
@@ -209,6 +256,30 @@ class MethodApplier:
                 elif isinstance(file_data, dict):
                     if 'new_name' not in file_data or not file_data.get('new_name'):
                         file_data['new_name'] = old_name_before or ''
+                
+                # Используем ErrorHandler если доступен
+                if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                    try:
+                        from core.error_handling.errors import ErrorType
+                        error_type = ErrorType.UNKNOWN_ERROR
+                        if isinstance(e, (OSError, PermissionError)):
+                            error_type = ErrorType.PERMISSION_DENIED
+                        elif isinstance(e, ValueError):
+                            error_type = ErrorType.INVALID_FILENAME
+                        self.app.error_handler.handle_error(
+                            e,
+                            error_type=error_type,
+                            context={
+                                'operation': 'apply_methods_worker',
+                                'file_path': file_path,
+                                'old_name': old_name,
+                                'methods': method_names
+                            }
+                        )
+                    except (ImportError, AttributeError, TypeError, ValueError) as handler_error:
+                        # Если ErrorHandler недоступен или произошла ошибка, логируем и продолжаем
+                        logger.debug(f"Ошибка в ErrorHandler: {handler_error}")
+                        pass
                 
                 log_file_action(
                     logger=logger,

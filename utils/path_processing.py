@@ -67,8 +67,24 @@ def process_file_argument(arg: str) -> Optional[str]:
             if os.path.exists(normalized_path) and os.path.isfile(normalized_path):
                 logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
                 return normalized_path
-        except Exception as e:
+        except (ValueError, urllib.parse.UnquoteError, OSError) as e:
             logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
+        except (AttributeError, TypeError) as e:
+            logger.debug(f"Ошибка типа/атрибутов при обработке URL-пути {arg}: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка обработки URL-пути {arg}: {e}")
         return None
     
     # Обработка путей в кавычках (для путей с пробелами)

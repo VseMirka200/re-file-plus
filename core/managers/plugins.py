@@ -37,8 +37,26 @@ class PluginManager:
         if not os.path.exists(self.plugins_dir):
             try:
                 os.makedirs(self.plugins_dir, exist_ok=True)
-            except Exception as e:
+            except (OSError, PermissionError) as e:
                 logger.error(f"Не удалось создать директорию плагинов: {e}")
+                return
+            except (ValueError, TypeError) as e:
+                logger.error(f"Ошибка типа/значения при создании директории плагинов: {e}", exc_info=True)
+                return
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка при создании директории плагинов: {e}", exc_info=True)
                 return
         
         # Создаем __init__.py если его нет
@@ -47,7 +65,9 @@ class PluginManager:
             try:
                 with open(init_file, 'w', encoding='utf-8') as f:
                     f.write('# Plugins directory\n')
-            except Exception:
+            except (OSError, PermissionError, IOError) as e:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"Не удалось создать __init__.py для плагинов: {e}")
                 pass
         
         # Загружаем плагины
@@ -56,8 +76,24 @@ class PluginManager:
                 plugin_name = file[:-3]
                 try:
                     self._load_plugin(plugin_name)
-                except Exception as e:
+                except (ImportError, SyntaxError, AttributeError) as e:
                     logger.error(f"Ошибка загрузки плагина {plugin_name}: {e}")
+                except (FileNotFoundError, PermissionError, OSError) as e:
+                    logger.error(f"Ошибка доступа при загрузке плагина {plugin_name}: {e}", exc_info=True)
+                except (MemoryError, RecursionError) as e:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as e:
+
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    logger.error(f"Неожиданная ошибка загрузки плагина {plugin_name}: {e}", exc_info=True)
     
     def _load_plugin(self, plugin_name: str) -> None:
         """Загрузка одного плагина.
@@ -74,9 +110,26 @@ class PluginManager:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 self.plugins[plugin_name] = module
-                logger.debug(f"Плагин {plugin_name} загружен")
-        except Exception as e:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"Плагин {plugin_name} загружен")
+        except (ImportError, SyntaxError, AttributeError, FileNotFoundError) as e:
             logger.error(f"Ошибка загрузки плагина {plugin_name}: {e}")
+        except (PermissionError, OSError, ValueError, TypeError) as e:
+            logger.error(f"Ошибка доступа/типа при загрузке плагина {plugin_name}: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка загрузки плагина {plugin_name}: {e}", exc_info=True)
     
     def get_plugin(self, plugin_name: str):
         """Получение плагина по имени.

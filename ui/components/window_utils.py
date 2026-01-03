@@ -92,7 +92,16 @@ def load_image_icon(
             icons_list.append(photo)
         
         return photo
-    except Exception:
+    except (OSError, PermissionError, IOError, FileNotFoundError):
+        return None
+    except (ValueError, TypeError, AttributeError):
+        return None
+    except (MemoryError, RecursionError):
+        return None
+    except (MemoryError, RecursionError):
+        return None
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+    except BaseException:
         return None
 
 
@@ -148,7 +157,7 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                         window.iconbitmap(ico_path)
                         _icon_set_flags[window_id]['icon_set'] = True
                         logger.info(f"Иконка установлена через iconbitmap: {ico_path}")
-                    except Exception as iconbitmap_error:
+                    except (tk.TclError, OSError, PermissionError) as iconbitmap_error:
                         logger.debug(f"iconbitmap не сработал: {iconbitmap_error}, пробуем через PIL")
                         # Если iconbitmap не работает, пробуем через PIL
                         if HAS_PIL:
@@ -160,7 +169,49 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                     icon_photos_list.append(photo)
                                 _icon_set_flags[window_id]['icon_set'] = True
                                 logger.info(f"Иконка установлена через PIL из ICO: {ico_path}")
-                            except Exception:
+                            except (OSError, IOError, ValueError, TypeError, AttributeError):
+                                pass
+                            except (MemoryError, RecursionError):
+                                pass
+                            except (MemoryError, RecursionError):
+                                pass
+                            # Финальный catch для неожиданных исключений (критично для стабильности)
+                            except BaseException:
+                                pass
+                    except (ValueError, KeyError, IndexError) as iconbitmap_error:
+                        logger.debug(f"Ошибка данных при iconbitmap: {iconbitmap_error}, пробуем через PIL")
+                    except (MemoryError, RecursionError) as iconbitmap_error:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as iconbitmap_error:
+
+                        if isinstance(iconbitmap_error, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.debug(f"Неожиданная ошибка iconbitmap: {iconbitmap_error}, пробуем через PIL")
+                        # Если iconbitmap не работает, пробуем через PIL
+                        if HAS_PIL:
+                            try:
+                                img = Image.open(ico_path)
+                                photo = ImageTk.PhotoImage(img)
+                                window.iconphoto(True, photo)
+                                if icon_photos_list is not None:
+                                    icon_photos_list.append(photo)
+                                _icon_set_flags[window_id]['icon_set'] = True
+                                logger.info(f"Иконка установлена через PIL из ICO: {ico_path}")
+                            except (OSError, IOError, ValueError, TypeError, AttributeError):
+                                pass
+                            except (MemoryError, RecursionError):
+                                pass
+                            except (MemoryError, RecursionError):
+                                pass
+                            # Финальный catch для неожиданных исключений (критично для стабильности)
+                            except BaseException:
                                 pass
                 
                 # Используем Windows API для установки иконки в панели задач и процесса
@@ -228,8 +279,26 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                     # Ищем окно по классу TkTopLevel (класс окон Tkinter)
                                     hwnd = ctypes.windll.user32.FindWindowW("TkTopLevel", None)
                                     
-                            except Exception as hwnd_error:
+                            except (OSError, AttributeError, ctypes.ArgumentError) as hwnd_error:
                                 logger.debug(f"Ошибка получения HWND: {hwnd_error}")
+                                hwnd = None
+                            except (ValueError, TypeError, KeyError) as hwnd_error:
+                                logger.debug(f"Ошибка данных при получении HWND: {hwnd_error}")
+                                hwnd = None
+                            except (MemoryError, RecursionError) as hwnd_error:
+
+                                # Ошибки памяти/рекурсии
+
+                                pass
+
+                            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                            except BaseException as hwnd_error:
+
+                                if isinstance(hwnd_error, (KeyboardInterrupt, SystemExit)):
+
+                                    raise
+                                logger.debug(f"Неожиданная ошибка получения HWND: {hwnd_error}")
                                 hwnd = None
                             
                             if hwnd and hwnd != 0:
@@ -342,8 +411,24 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                         _icon_set_flags[window_id]['api_set'] = True
                                         if icon_set_success:
                                             logger.info(f"Иконка установлена для окна, процесса и меню Пуск: {ico_path}")
-                                    except Exception as class_error:
-                                        logger.debug(f"Ошибка установки иконки класса: {class_error}")
+                                    except (OSError, AttributeError, ctypes.ArgumentError) as class_error:
+                                        logger.debug(f"Ошибка доступа при установке иконки класса: {class_error}")
+                                    except (ValueError, TypeError, KeyError) as class_error:
+                                        logger.debug(f"Ошибка данных при установке иконки класса: {class_error}")
+                                    except (MemoryError, RecursionError) as class_error:
+
+                                        # Ошибки памяти/рекурсии
+
+                                        pass
+
+                                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                                    except BaseException as class_error:
+
+                                        if isinstance(class_error, (KeyboardInterrupt, SystemExit)):
+
+                                            raise
+                                        logger.debug(f"Неожиданная ошибка установки иконки класса: {class_error}")
                                     
                                     # Принудительно обновляем окно
                                     ctypes.windll.user32.InvalidateRect(hwnd, None, True)
@@ -382,8 +467,24 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                                                 pass
                                     except (OSError, AttributeError, ctypes.ArgumentError):
                                         pass
-                        except Exception as api_error:
-                            logger.debug(f"Ошибка установки иконки через Windows API: {api_error}")
+                        except (OSError, AttributeError, ctypes.ArgumentError, RuntimeError) as api_error:
+                            logger.debug(f"Ошибка выполнения при установке иконки через Windows API: {api_error}")
+                        except (ValueError, TypeError, KeyError) as api_error:
+                            logger.debug(f"Ошибка данных при установке иконки через Windows API: {api_error}")
+                        except (MemoryError, RecursionError) as api_error:
+
+                            # Ошибки памяти/рекурсии
+
+                            pass
+
+                        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                        except BaseException as api_error:
+
+                            if isinstance(api_error, (KeyboardInterrupt, SystemExit)):
+
+                                raise
+                            logger.debug(f"Неожиданная ошибка установки иконки через Windows API: {api_error}")
                     
                     # Устанавливаем иконку сразу и с одной задержкой для надежности
                     set_taskbar_icon()
@@ -393,8 +494,24 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                 window.update_idletasks()
                 window.update()
                 return
-            except Exception as e:
-                logger.debug(f"Не удалось установить иконку через iconbitmap: {e}")
+            except (OSError, PermissionError, tk.TclError) as e:
+                logger.debug(f"Ошибка доступа при установке иконки через iconbitmap: {e}")
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.debug(f"Ошибка данных при установке иконки через iconbitmap: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.debug(f"Неожиданная ошибка при установке иконки через iconbitmap: {e}")
         
         # Если .ico не найден или не сработал, используем PNG иконку (если еще не использовали)
         png_path = os.path.join(base_dir, "materials", "icon", "Логотип.png")
@@ -414,8 +531,26 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                     window.update_idletasks()
                     window.update()
                     logger.info(f"Иконка установлена через PNG (fallback): {png_path}")
-                except Exception as e:
-                    logger.debug(f"Не удалось установить PNG иконку через PIL: {e}")
+                except (OSError, IOError, PermissionError) as e:
+                    logger.debug(f"Ошибка доступа при установке PNG иконки через PIL: {e}")
+                except (ValueError, TypeError, AttributeError) as e:
+                    logger.debug(f"Ошибка данных при установке PNG иконки через PIL: {e}")
+                except (MemoryError, RecursionError) as e:
+                    logger.debug(f"Ошибка памяти/рекурсии при установке PNG иконки через PIL: {e}")
+                except (MemoryError, RecursionError) as e:
+
+                    # Ошибки памяти/рекурсии
+
+                    pass
+
+                # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                except BaseException as e:
+
+                    if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                        raise
+                    logger.debug(f"Неожиданная ошибка при установке PNG иконки через PIL: {e}")
             else:
                     try:
                         png_path = os.path.abspath(png_path)
@@ -426,10 +561,46 @@ def set_window_icon(window: tk.Tk, icon_photos_list: Optional[list] = None) -> N
                         # Принудительно обновляем окно для применения иконки
                         window.update_idletasks()
                         window.update()
-                    except Exception as e:
-                        logger.debug(f"Не удалось установить PNG иконку: {e}")
-    except Exception as e:
-        logger.debug(f"Не удалось установить иконку: {e}")
+                    except (OSError, PermissionError, tk.TclError) as e:
+                        logger.debug(f"Ошибка доступа при установке PNG иконки: {e}")
+                    except (ValueError, TypeError, AttributeError) as e:
+                        logger.debug(f"Ошибка данных при установке PNG иконки: {e}")
+                    except (MemoryError, RecursionError) as e:
+                        logger.debug(f"Ошибка памяти/рекурсии при установке PNG иконки: {e}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.debug(f"Неожиданная ошибка при установке PNG иконки: {e}")
+    except (OSError, PermissionError, IOError) as e:
+        logger.debug(f"Ошибка доступа при установке иконки: {e}")
+    except (ValueError, TypeError, AttributeError) as e:
+        logger.debug(f"Ошибка данных при установке иконки: {e}")
+    except (MemoryError, RecursionError) as e:
+        logger.debug(f"Ошибка памяти/рекурсии при установке иконки: {e}")
+    except (MemoryError, RecursionError) as e:
+
+        # Ошибки памяти/рекурсии
+
+        pass
+
+    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+    except BaseException as e:
+
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+            raise
+        logger.debug(f"Неожиданная ошибка при установке иконки: {e}")
 
 
 def bind_mousewheel(widget: tk.Widget, canvas: Optional[tk.Canvas] = None) -> None:

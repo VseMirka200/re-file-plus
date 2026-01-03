@@ -66,6 +66,10 @@ class FileListManager:
                     self.app.tree.delete(item)
                 
                 self.update_status()
+                logger.info(
+                    f"Список файлов очищен: удалено {files_count} файлов",
+                    extra={'action': 'FILES_CLEARED', 'count': files_count}
+                )
                 self.app.log("Список файлов очищен")
     
     def delete_selected(self) -> None:
@@ -84,6 +88,10 @@ class FileListManager:
         
         self.refresh_treeview()
         self.update_status()
+        logger.info(
+            f"Удалено файлов из списка: {len(selected)}",
+            extra={'action': 'FILES_DELETED', 'count': len(selected)}
+        )
         self.app.log(f"Удалено файлов: {len(selected)}")
     
     def select_all(self) -> None:

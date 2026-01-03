@@ -46,7 +46,7 @@ except ImportError:
 try:
     from infrastructure.system.statistics import StatisticsManager
 except ImportError:
-    StatisticsManager = None
+    StatisticsManager = None  # type: ignore
 
 # Импорт функций валидации путей
 try:
@@ -59,7 +59,7 @@ except ImportError:
     import os
     import sys
     
-    def is_safe_file_path(path: str, allowed_dirs: Optional[List[str]] = None) -> bool:
+    def is_safe_file_path(path: str, allowed_dirs: Optional[List[str]] = None) -> bool:  # type: ignore[misc]
         """Проверка безопасности пути к файлу (fallback)."""
         try:
             if not path or not isinstance(path, str) or not path.strip():
@@ -75,10 +75,22 @@ except ImportError:
                         return True
                 return False
             return True
-        except Exception:
+        except (OSError, ValueError, TypeError, AttributeError):
+            return False
+        except (PermissionError, FileNotFoundError) as e:
+            logger.debug(f"Ошибка доступа при проверке пути: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+            # Ошибки памяти/рекурсии
+            pass
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise
+            logger.debug(f"Неожиданная ошибка при проверке пути: {e}")
             return False
     
-    def check_windows_path_length(full_path: str) -> bool:
+    def check_windows_path_length(full_path: str) -> bool:  # type: ignore[misc]
         """Проверка длины пути для Windows (fallback)."""
         if sys.platform == 'win32':
             return len(full_path) <= 260 or full_path.startswith('\\\\?\\')

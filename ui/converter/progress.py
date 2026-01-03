@@ -116,7 +116,8 @@ class ConverterProgress:
                         pass
                     tree.item(item, tags=('in_progress',))
                     break
-        except Exception:
+        except (tk.TclError, AttributeError, RuntimeError, TypeError):
+            # Игнорируем ошибки UI операций (не критично)
             pass
     
     def update_status(self, index: int, success: bool, message: str, output_path=None, file_path=None):
@@ -230,7 +231,8 @@ class ConverterProgress:
             # Вызываем refresh_treeview для применения тегов при перерисовке
             if hasattr(self.app, 'file_list_manager') and hasattr(self.app.file_list_manager, 'refresh_treeview'):
                 self.app.root.after_idle(lambda: self.app.file_list_manager.refresh_treeview())
-        except Exception:
+        except (tk.TclError, AttributeError, RuntimeError, TypeError):
+            # Игнорируем ошибки UI операций (не критично)
             pass
     
     def update_file_status_in_treeview(self, file_path: str, success: bool, message: str):
@@ -286,6 +288,7 @@ class ConverterProgress:
             # Используем after_idle для гарантированного обновления после всех изменений
             if hasattr(self.app, 'file_list_manager') and hasattr(self.app.file_list_manager, 'refresh_treeview'):
                 self.app.root.after_idle(lambda: self.app.file_list_manager.refresh_treeview())
-        except Exception:
+        except (tk.TclError, AttributeError, RuntimeError, TypeError):
+            # Игнорируем ошибки UI операций (не критично)
             pass
 

@@ -77,14 +77,43 @@ class ConverterContextMenu:
                 file_path = file_info.get('path', '')
                 if file_path and os.path.exists(file_path):
                     try:
+                        # Валидация пути перед использованием
+                        from utils.security_utils import validate_path_for_subprocess
+                        is_safe, error_msg = validate_path_for_subprocess(file_path, must_exist=True, must_be_file=True)
+                        if not is_safe:
+                            logger.warning(f"Небезопасный путь отклонен: {file_path} - {error_msg}")
+                            self.app.log(f"Не удалось открыть файл: небезопасный путь")
+                            return
+                        
                         if sys.platform == 'win32':
                             os.startfile(file_path)
                         elif sys.platform == 'darwin':
                             subprocess.Popen(['open', file_path])
                         else:
                             subprocess.Popen(['xdg-open', file_path])
-                    except Exception as e:
+                    except (OSError, PermissionError, ValueError) as e:
                         logger.error(f"Ошибка открытия файла {file_path}: {e}", exc_info=True)
+                        self.app.log(f"Не удалось открыть файл: {file_path}")
+                    except (subprocess.SubprocessError, FileNotFoundError) as e:
+                        logger.error(f"Ошибка subprocess при открытии файла {file_path}: {e}", exc_info=True)
+                        self.app.log(f"Не удалось открыть файл: {file_path}")
+                    except (ValueError, TypeError, KeyError, IndexError) as e:
+                        logger.error(f"Ошибка данных при открытии файла {file_path}: {e}", exc_info=True)
+                        self.app.log(f"Ошибка данных при открытии файла: {file_path}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка открытия файла {file_path}: {e}", exc_info=True)
                         self.app.log(f"Не удалось открыть файл: {file_path}")
     
     def open_file_folder(self):
@@ -112,6 +141,14 @@ class ConverterContextMenu:
                 file_path = file_info.get('path', '')
                 if file_path:
                     folder_path = os.path.dirname(file_path)
+                    # Валидация пути перед использованием
+                    from utils.security_utils import validate_path_for_subprocess
+                    is_safe, error_msg = validate_path_for_subprocess(folder_path, must_exist=True, must_be_file=False)
+                    if not is_safe:
+                        logger.warning(f"Небезопасный путь отклонен: {folder_path} - {error_msg}")
+                        self.app.log(f"Не удалось открыть папку: небезопасный путь")
+                        return
+                    
                     if platform.system() == 'Windows':
                         subprocess.Popen(f'explorer "{folder_path}"')
                     elif platform.system() == 'Darwin':
@@ -119,8 +156,29 @@ class ConverterContextMenu:
                     else:
                         subprocess.Popen(['xdg-open', folder_path])
                     self.app.log(f"Открыта папка: {folder_path}")
-        except Exception as e:
+        except (OSError, PermissionError, ValueError) as e:
             logger.error(f"Ошибка открытия папки: {e}", exc_info=True)
+            self.app.log(f"Не удалось открыть папку: {e}")
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.error(f"Ошибка subprocess при открытии папки: {e}", exc_info=True)
+            self.app.log(f"Не удалось открыть папку: {e}")
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при открытии папки: {e}", exc_info=True)
+            self.app.log(f"Ошибка данных при открытии папки: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка открытия папки: {e}", exc_info=True)
             self.app.log(f"Не удалось открыть папку: {e}")
     
     def copy_file_path(self):
@@ -154,6 +212,22 @@ class ConverterContextMenu:
                 path_word = 'и' if len(paths) > 1 else ''
                 copied_word = 'ы' if len(paths) > 1 else ''
                 self.app.log(f"Путь{path_word} скопирован{copied_word} в буфер обмена")
-            except Exception as e:
-                logger.error(f"Ошибка копирования пути: {e}", exc_info=True)
+            except (AttributeError, TypeError, RuntimeError) as e:
+                logger.error(f"Ошибка доступа к данным при копировании пути: {e}", exc_info=True)
+            except (ValueError, KeyError, IndexError) as e:
+                logger.error(f"Ошибка данных при копировании пути: {e}", exc_info=True)
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.error(f"Неожиданная ошибка копирования пути: {e}", exc_info=True)
 

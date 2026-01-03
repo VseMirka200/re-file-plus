@@ -32,8 +32,29 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%Y-%m-%d")
-        except Exception as e:
+        except (OSError, ValueError, AttributeError) as e:
             logger.debug(f"Не удалось извлечь дату создания {file_path}: {e}")
+            return None
+        except (OverflowError, TypeError) as e:
+            logger.debug(f"Ошибка типа/переполнения при извлечении даты создания {file_path}: {e}")
+            return None
+        except (KeyError, IndexError) as e:
+            logger.debug(f"Ошибка доступа к данным при извлечении даты создания {file_path}: {e}")
+            return None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при извлечении даты создания {file_path}: {e}")
             return None
     
     def extract_date_modified(self, file_path: str) -> Optional[str]:
@@ -47,8 +68,26 @@ class FileMetadataExtractor:
             timestamp = stat.st_mtime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%Y-%m-%d")
-        except Exception as e:
-            logger.debug(f"Не удалось извлечь дату изменения {file_path}: {e}")
+        except (OSError, ValueError, AttributeError, OverflowError, TypeError) as e:
+            logger.debug(f"Ошибка при извлечении даты изменения {file_path}: {e}")
+            return None
+        except (KeyError, IndexError) as e:
+            logger.debug(f"Ошибка доступа к данным при извлечении даты изменения {file_path}: {e}")
+            return None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при извлечении даты изменения {file_path}: {e}")
             return None
     
     def extract_date_created_time(self, file_path: str) -> Optional[str]:
@@ -65,8 +104,23 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%Y-%m-%d_%H-%M-%S")
-        except Exception as e:
-            logger.debug(f"Не удалось извлечь дату и время создания {file_path}: {e}")
+        except (OSError, ValueError, AttributeError, OverflowError, TypeError) as e:
+            logger.debug(f"Ошибка при извлечении даты и времени создания {file_path}: {e}")
+            return None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при извлечении даты и времени создания {file_path}: {e}")
             return None
     
     def extract_date_modified_time(self, file_path: str) -> Optional[str]:
@@ -80,8 +134,23 @@ class FileMetadataExtractor:
             timestamp = stat.st_mtime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%Y-%m-%d_%H-%M-%S")
-        except Exception as e:
-            logger.debug(f"Не удалось извлечь дату и время изменения {file_path}: {e}")
+        except (OSError, ValueError, AttributeError, OverflowError, TypeError) as e:
+            logger.debug(f"Ошибка при извлечении даты и времени изменения {file_path}: {e}")
+            return None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при извлечении даты и времени изменения {file_path}: {e}")
             return None
     
     def extract_file_size(self, file_path: str) -> Optional[str]:
@@ -101,8 +170,26 @@ class FileMetadataExtractor:
                 return f"{size / (1024 * 1024):.1f}MB"
             else:
                 return f"{size / (1024 * 1024 * 1024):.1f}GB"
-        except Exception as e:
-            logger.debug(f"Не удалось извлечь размер файла {file_path}: {e}")
+        except (OSError, ValueError, AttributeError, OverflowError) as e:
+            logger.debug(f"Ошибка при извлечении размера файла {file_path}: {e}")
+            return None
+        except (TypeError, KeyError, IndexError) as e:
+            logger.debug(f"Ошибка типа/доступа к данным при извлечении размера файла {file_path}: {e}")
+            return None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при извлечении размера файла {file_path}: {e}")
             return None
     
     def extract_format(self, file_path: str) -> Optional[str]:
@@ -110,7 +197,7 @@ class FileMetadataExtractor:
         try:
             _, ext = os.path.splitext(file_path)
             return ext.lstrip('.').upper() if ext else None
-        except Exception:
+        except (OSError, ValueError, AttributeError):
             return None
     
     def extract_filename(self, file_path: str) -> Optional[str]:
@@ -135,7 +222,7 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%Y")
-        except Exception:
+        except (OSError, ValueError, AttributeError, OverflowError):
             return None
     
     def extract_month(self, file_path: str) -> Optional[str]:
@@ -148,7 +235,7 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%m")
-        except Exception:
+        except (OSError, ValueError, AttributeError, OverflowError):
             return None
     
     def extract_day(self, file_path: str) -> Optional[str]:
@@ -161,7 +248,7 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%d")
-        except Exception:
+        except (OSError, ValueError, AttributeError, OverflowError):
             return None
     
     def extract_hour(self, file_path: str) -> Optional[str]:
@@ -174,7 +261,7 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%H")
-        except Exception:
+        except (OSError, ValueError, AttributeError, OverflowError):
             return None
     
     def extract_minute(self, file_path: str) -> Optional[str]:
@@ -187,7 +274,7 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%M")
-        except Exception:
+        except (OSError, ValueError, AttributeError, OverflowError):
             return None
     
     def extract_second(self, file_path: str) -> Optional[str]:
@@ -200,6 +287,6 @@ class FileMetadataExtractor:
                 timestamp = stat.st_ctime
             dt = datetime.fromtimestamp(timestamp)
             return dt.strftime("%S")
-        except Exception:
+        except (OSError, ValueError, AttributeError, OverflowError):
             return None
 

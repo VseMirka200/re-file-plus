@@ -37,7 +37,7 @@ class MainWindowAbout:
         Args:
             parent: Родительский контейнер (Frame или Toplevel)
         """
-        from ui.about_tab import AboutTab
+        from ui.tabs.about_tab import AboutTab
         
         # Создаем прокручиваемый фрейм используя переиспользуемый компонент
         scrollable_frame, scrollable = create_scrollable_frame(

@@ -71,8 +71,26 @@ def process_cli_args() -> List[str]:
                             files_from_args.append(normalized_path)
                             logger.info(f"Обработан URL-путь: {arg} -> {normalized_path}")
                             continue
-                    except Exception as e:
-                        logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
+                    except (ValueError, urllib.parse.UnquoteError, OSError) as e:
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug(f"Ошибка обработки URL-пути {arg}: {e}")
+                    except (AttributeError, TypeError) as e:
+                        if logger.isEnabledFor(logging.DEBUG):
+                            logger.debug(f"Ошибка типа/атрибутов при обработке URL-пути {arg}: {e}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.warning(f"Неожиданная ошибка обработки URL-пути {arg}: {e}", exc_info=True)
                 
                 # Обработка коротких опций (начинаются с одного дефиса)
                 if arg.startswith('-') and not arg.startswith('--'):

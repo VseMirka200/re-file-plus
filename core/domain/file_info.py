@@ -46,9 +46,15 @@ class FileInfo:
         # Убеждаемся, что path - это Path объект
         if isinstance(self.path, str):
             self.path = Path(self.path)
+        # Сохраняем старое расширение для проверки изменений
+        if not hasattr(self, '_old_extension') or self._old_extension is None:
+            self._old_extension = self.extension
+        # Сохраняем старое расширение для проверки изменений
+        if self._old_extension is None:
+            self._old_extension = self.extension
     
     @classmethod
-    def from_path(cls, file_path: str, metadata: Optional[Dict] = None) -> 'FileInfo':
+    def from_path(cls, file_path: str, metadata: Optional[Dict[str, Any]] = None) -> 'FileInfo':
         """Создание FileInfo из пути к файлу.
         
         Args:
@@ -73,7 +79,7 @@ class FileInfo:
         )
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'FileInfo':
+    def from_dict(cls, data: Dict[str, Any]) -> 'FileInfo':
         """Создание FileInfo из словаря (для обратной совместимости).
         
         Args:
@@ -113,7 +119,7 @@ class FileInfo:
             full_path=file_path
         )
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Преобразование в словарь (для обратной совместимости).
         
         Returns:
@@ -158,7 +164,10 @@ class FileInfo:
     
     def is_renamed(self) -> bool:
         """Проверка, изменилось ли имя."""
-        return self.old_name != self.new_name or self.extension != self.extension
+        # Проверяем изменение имени и расширения
+        name_changed = self.old_name != self.new_name
+        ext_changed = self._old_extension != self.extension if hasattr(self, '_old_extension') and self._old_extension is not None else False
+        return name_changed or ext_changed
     
     def is_ready(self) -> bool:
         """Проверка, готов ли файл к переименованию."""

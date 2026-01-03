@@ -47,8 +47,22 @@ class ConverterDragDrop:
             if hasattr(tab_frame, 'drop_target_register'):
                 tab_frame.drop_target_register(DND_FILES)
                 tab_frame.dnd_bind('<<Drop>>', lambda e: self.on_drop_files(e))
-        except Exception as e:
-            logger.debug(f"Не удалось настроить drag and drop для вкладки конвертации: {e}")
+        except (AttributeError, TypeError, RuntimeError) as e:
+            logger.debug(f"Ошибка настройки drag and drop для вкладки конвертации: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка настройки drag and drop для вкладки конвертации: {e}")
     
     def on_drop_files(self, event):
         """Обработка перетаскивания файлов на вкладку конвертации."""
@@ -79,7 +93,8 @@ class ConverterDragDrop:
                         file_path = os.path.abspath(file_path)
                     else:
                         file_path = os.path.normpath(file_path)
-                except Exception:
+                except (OSError, ValueError, TypeError):
+                    # Пропускаем файлы с некорректными путями
                     continue
                 
                 if not os.path.exists(file_path) or not os.path.isfile(file_path):
@@ -143,8 +158,22 @@ class ConverterDragDrop:
                                         if hasattr(self.app, 'converter_filter_combo') and self.app.converter_filter_combo:
                                             self.app.converter_filter_combo.set(filter_name)
                                             logger.debug(f"Combobox обновлен (drag-drop): {filter_name}")
-                                    except Exception as e:
+                                    except (AttributeError, TypeError, RuntimeError) as e:
                                         logger.debug(f"Ошибка при обновлении combobox: {e}")
+                                    except (MemoryError, RecursionError) as e:
+
+                                        # Ошибки памяти/рекурсии
+
+                                        pass
+
+                                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                                    except BaseException as e:
+
+                                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                                            raise
+                                        logger.debug(f"Неожиданная ошибка при обновлении combobox: {e}")
                                 if hasattr(self.app, 'root'):
                                     self.app.root.after(10, update_filter_ui)
             
@@ -157,6 +186,23 @@ class ConverterDragDrop:
                 if hasattr(self.app, 'file_list_manager') and hasattr(self.app.file_list_manager, 'refresh_treeview'):
                     self.app.file_list_manager.refresh_treeview()
                 self.app.log(f"Добавлено файлов для конвертации перетаскиванием: {added_count}")
-        except Exception as e:
+        except (OSError, PermissionError, ValueError, TypeError, AttributeError, FileNotFoundError) as e:
+            # Используем ErrorHandler если доступен
+            if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                try:
+                    from core.error_handling.errors import ErrorType
+                    error_type = ErrorType.UNKNOWN_ERROR
+                    if isinstance(e, (OSError, PermissionError)):
+                        error_type = ErrorType.PERMISSION_DENIED
+                    elif isinstance(e, ValueError):
+                        error_type = ErrorType.INVALID_PATH
+                    self.app.error_handler.handle_error(
+                        e,
+                        error_type=error_type,
+                        context={'operation': 'handle_drop_converter'}
+                    )
+                except (ImportError, AttributeError, TypeError, ValueError) as handler_error:
+                    logger.debug(f"Ошибка в ErrorHandler при обработке drag&drop: {handler_error}")
+                    pass
             logger.error(f"Ошибка при обработке перетаскивания файлов для конвертации: {e}", exc_info=True)
 

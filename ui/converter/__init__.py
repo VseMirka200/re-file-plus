@@ -14,7 +14,7 @@
 # Основной класс ConverterTab находится в ui/converter_tab.py
 # Импортируем из основного модуля для обратной совместимости
 try:
-    from ui.converter_tab import ConverterTab
+    from ui.tabs.converter_tab import ConverterTab
     __all__ = ['ConverterTab']
 except ImportError:
     __all__ = []

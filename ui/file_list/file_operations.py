@@ -50,14 +50,44 @@ class FileOperations:
                 
                 if file_path and os.path.exists(file_path) and os.path.isfile(file_path):
                     try:
+                        # Валидация пути перед использованием
+                        from utils.security_utils import validate_path_for_subprocess
+                        is_safe, error_msg = validate_path_for_subprocess(file_path, must_exist=True, must_be_file=True)
+                        if not is_safe:
+                            logger.warning(f"Небезопасный путь отклонен: {file_path} - {error_msg}")
+                            self.app.log(f"Не удалось открыть файл: небезопасный путь")
+                            return
+                        
                         if sys.platform == 'win32':
                             os.startfile(file_path)
                         elif sys.platform == 'darwin':
                             subprocess.Popen(['open', file_path])
                         else:
                             subprocess.Popen(['xdg-open', file_path])
-                    except Exception as e:
+                        logger.debug(f"Файл открыт: {file_path}", extra={'action': 'FILE_OPENED'})
+                    except (OSError, PermissionError, ValueError) as e:
                         logger.error(f"Ошибка открытия файла {file_path}: {e}", exc_info=True)
+                        self.app.log(f"Не удалось открыть файл: {file_path}")
+                    except (subprocess.SubprocessError, FileNotFoundError) as e:
+                        logger.error(f"Ошибка subprocess при открытии файла {file_path}: {e}", exc_info=True)
+                        self.app.log(f"Не удалось открыть файл: {file_path}")
+                    except (ValueError, TypeError, KeyError, IndexError) as e:
+                        logger.error(f"Ошибка данных при открытии файла {file_path}: {e}", exc_info=True)
+                        self.app.log(f"Ошибка данных при открытии файла: {file_path}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка открытия файла {file_path}: {e}", exc_info=True)
                         self.app.log(f"Не удалось открыть файл: {file_path}")
     
     def open_file_folder(self) -> None:
@@ -81,15 +111,44 @@ class FileOperations:
                 
                 if file_path:
                     folder_path = os.path.dirname(file_path)
+                    # Валидация пути перед использованием
+                    from utils.security_utils import validate_path_for_subprocess
+                    is_safe, error_msg = validate_path_for_subprocess(folder_path, must_exist=True, must_be_file=False)
+                    if not is_safe:
+                        logger.warning(f"Небезопасный путь отклонен: {folder_path} - {error_msg}")
+                        messagebox.showerror("Ошибка", f"Небезопасный путь: {folder_path}")
+                        return
+                    
                     if platform.system() == 'Windows':
                         subprocess.Popen(f'explorer "{folder_path}"')
                     elif platform.system() == 'Darwin':
                         subprocess.Popen(['open', folder_path])
                     else:
                         subprocess.Popen(['xdg-open', folder_path])
-        except Exception as e:
+        except (OSError, PermissionError, ValueError) as e:
             messagebox.showerror("Ошибка", f"Не удалось открыть папку:\n{str(e)}")
             logger.error(f"Ошибка открытия папки: {e}", exc_info=True)
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка subprocess:\n{str(e)}")
+            logger.error(f"Ошибка subprocess при открытии папки: {e}", exc_info=True)
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка данных:\n{str(e)}")
+            logger.error(f"Ошибка данных при открытии папки: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка:\n{str(e)}")
+            logger.error(f"Неожиданная ошибка открытия папки: {e}", exc_info=True)
     
     def rename_file_manually(self) -> None:
         """Ручное переименование выбранного файла."""
@@ -128,6 +187,10 @@ class FileOperations:
                 file_data['new_name'] = new_name
                 file_data['extension'] = extension
             self.app.file_list_manager.refresh_treeview()
+            logger.info(
+                f"Имя файла изменено вручную: {old_name} -> {new_name}",
+                extra={'action': 'FILE_RENAMED_MANUAL', 'old_name': old_name, 'new_name': new_name}
+            )
             self.app.log(f"Имя файла изменено вручную: {old_name} -> {new_name}")
     
     def copy_file_path(self) -> None:
@@ -149,9 +212,26 @@ class FileOperations:
                 if file_path:
                     self.app.root.clipboard_clear()
                     self.app.root.clipboard_append(file_path)
+                    logger.debug(f"Путь скопирован в буфер обмена: {file_path}", extra={'action': 'PATH_COPIED'})
                     self.app.log(f"Путь скопирован в буфер обмена: {file_path}")
-        except Exception as e:
-            logger.error(f"Ошибка копирования пути: {e}", exc_info=True)
+        except (AttributeError, TypeError, RuntimeError) as e:
+            logger.error(f"Ошибка доступа к данным при копировании пути: {e}", exc_info=True)
+        except (ValueError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при копировании пути: {e}", exc_info=True)
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка копирования пути: {e}", exc_info=True)
     
     def apply_to_selected(self) -> None:
         """Применение методов только к выбранным файлам."""
@@ -218,8 +298,32 @@ class FileOperations:
                     file_data.status = status
                 elif isinstance(file_data, dict):
                     file_data['status'] = status
-            except Exception as e:
-                status_error = f"Ошибка: {str(e)}"
+            except (ValueError, TypeError, AttributeError) as e:
+                status_error = f"Ошибка валидации: {str(e)}"
+                if hasattr(file_data, 'status'):
+                    file_data.status = status_error
+                elif isinstance(file_data, dict):
+                    file_data['status'] = status_error
+            except (ValueError, TypeError, KeyError, IndexError) as e:
+                status_error = f"Ошибка данных: {str(e)}"
+                if hasattr(file_data, 'status'):
+                    file_data.status = status_error
+                elif isinstance(file_data, dict):
+                    file_data['status'] = status_error
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                status_error = f"Неожиданная ошибка: {str(e)}"
                 if hasattr(file_data, 'status'):
                     file_data.status = status_error
                 elif isinstance(file_data, dict):
@@ -229,6 +333,10 @@ class FileOperations:
         # Проверка конфликтов
         check_conflicts(selected_files)
         self.app.file_list_manager.refresh_treeview()
+        logger.info(
+            f"Методы применены к {len(selected_files)} выбранным файлам",
+            extra={'action': 'METHODS_APPLIED', 'file_count': len(selected_files)}
+        )
         self.app.log(f"Методы применены к {len(selected_files)} выбранным файлам")
     
     def show_file_context_menu(self, event) -> None:

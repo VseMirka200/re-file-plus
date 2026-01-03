@@ -280,8 +280,31 @@ class ConverterProcessor:
                             lambda idx=file_index, success=False, msg="Ошибка конвертации", out=None, fp=file_path:
                             self.app.converter_tab_handler.update_converter_status(idx, success, msg, out, fp)
                         )
-                except Exception as e:
+                except (OSError, PermissionError, ValueError, TypeError, AttributeError, FileNotFoundError) as e:
                     error_count += 1
+                    
+                    # Используем ErrorHandler если доступен
+                    if hasattr(self.app, 'error_handler') and self.app.error_handler:
+                        try:
+                            from core.error_handling.errors import ErrorType
+                            error_type = ErrorType.CONVERSION_ERROR
+                            if isinstance(e, (OSError, PermissionError)):
+                                error_type = ErrorType.PERMISSION_DENIED
+                            elif isinstance(e, ValueError):
+                                error_type = ErrorType.INVALID_FILENAME
+                            self.app.error_handler.handle_error(
+                                e,
+                                error_type=error_type,
+                                context={
+                                    'operation': 'convert_files',
+                                    'file_path': file_path,
+                                    'target_format': target_format
+                                }
+                            )
+                        except (ImportError, AttributeError, TypeError, ValueError) as handler_error:
+                            logger.debug(f"Ошибка в ErrorHandler при конвертации: {handler_error}")
+                            pass
+                    
                     log_file_action(
                         logger=logger,
                         action='CONVERT_FILE_ERROR',

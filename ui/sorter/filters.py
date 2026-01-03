@@ -31,7 +31,21 @@ class SorterFilters:
             set_window_icon(filter_window, self.app._icon_photos)
         except (AttributeError, tk.TclError, OSError) as e:
             logger.debug(f"Не удалось установить иконку окна: {e}")
-        except Exception as e:
+        except (RuntimeError, TypeError) as e:
+            logger.debug(f"Ошибка выполнения при установке иконки: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
             logger.warning(f"Неожиданная ошибка при установке иконки: {e}")
         
         main_frame = tk.Frame(filter_window, bg=self.app.colors['bg_main'])
@@ -208,8 +222,24 @@ class SorterFilters:
             self.app.settings_manager.set('file_sorter_filters', filters_data)
             self.app.settings_manager.save_settings(self.app.settings_manager.settings)
             messagebox.showinfo("Успешно", "Фильтры сохранены")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить фильтры: {e}")
+        except (OSError, PermissionError, IOError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка доступа при сохранении фильтров: {e}")
+        except (ValueError, TypeError, AttributeError) as e:
+            messagebox.showerror("Ошибка", f"Ошибка данных при сохранении фильтров: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            messagebox.showerror("Ошибка", f"Неожиданная ошибка при сохранении фильтров: {e}")
     
     def load_sorter_filters(self):
         """Загрузка фильтров из настроек"""
@@ -221,8 +251,25 @@ class SorterFilters:
                 if 'filters' in filters_data:
                     self.app.sorter_filters = filters_data['filters']
                     self.app.sorter_tab_handler.refresh_filters_display()
-        except Exception as e:
-            logger.debug(f"Не удалось загрузить фильтры: {e}")
+        except (KeyError, AttributeError, TypeError) as e:
+            logger.debug(f"Ошибка данных при загрузке фильтров: {e}")
+            # Если не удалось загрузить, добавляем фильтры по умолчанию
+            if not self.app.sorter_filters:
+                self.app.sorter_tab_handler.add_default_filters()
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.debug(f"Неожиданная ошибка при загрузке фильтров: {e}")
             # Если не удалось загрузить, добавляем фильтры по умолчанию
             if not self.app.sorter_filters:
                 self.app.sorter_tab_handler.add_default_filters()

@@ -28,9 +28,9 @@ try:
     from utils.logging_utils import log_action, log_batch_action
 except ImportError:
     # Fallback если модуль недоступен
-    def log_action(logger, level, action, message, **kwargs):
+    def log_action(logger: logging.Logger, level: int, action: str, message: str, **kwargs: Any) -> None:
         logger.log(level, f"[{action}] {message}")
-    def log_batch_action(logger, action, message, file_count, **kwargs):
+    def log_batch_action(logger: logging.Logger, action: str, message: str, file_count: int, **kwargs: Any) -> None:
         logger.info(f"[{action}] {message} (файлов: {file_count})")
 
 
@@ -200,8 +200,26 @@ class ReFilePlusApp:
                         self.notification_manager.notify_info(
                             f"Доступно обновление {update_info['latest_version']}"
                         )
-            except Exception as e:
-                logger.debug(f"Ошибка проверки обновлений: {e}")
+            except (AttributeError, KeyError, TypeError) as e:
+                logger.debug(f"Ошибка данных при проверке обновлений: {e}")
+            except (OSError, RuntimeError) as e:
+                logger.debug(f"Ошибка выполнения при проверке обновлений: {e}")
+            except (ValueError, TypeError, KeyError, IndexError) as e:
+                logger.debug(f"Ошибка данных при проверке обновлений: {e}")
+            except (MemoryError, RecursionError) as e:
+
+                # Ошибки памяти/рекурсии
+
+                pass
+
+            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+            except BaseException as e:
+
+                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                    raise
+                logger.debug(f"Неожиданная ошибка проверки обновлений: {e}")
     
     def bind_mousewheel(self, widget: 'tk.Widget', canvas: Optional['tk.Canvas'] = None) -> None:
         """Привязка прокрутки колесом мыши к виджету.
@@ -476,9 +494,27 @@ class ReFilePlusApp:
             
             self.log("Все кеши очищены")
             logger.info("Все кеши приложения очищены")
-        except Exception as e:
-            logger.error(f"Ошибка при очистке кешей: {e}", exc_info=True)
+        except (AttributeError, TypeError, RuntimeError) as e:
+            logger.error(f"Ошибка доступа/выполнения при очистке кешей: {e}", exc_info=True)
             self.log(f"Ошибка при очистке кешей: {e}")
+        except (ValueError, KeyError, IndexError) as e:
+            logger.error(f"Ошибка данных при очистке кешей: {e}", exc_info=True)
+            self.log(f"Ошибка данных при очистке кешей: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при очистке кешей: {e}", exc_info=True)
+            self.log(f"Неожиданная ошибка при очистке кешей: {e}")
     
     def show_file_context_menu(self, event: 'tk.Event') -> None:
         """Показ контекстного меню для файла.
@@ -570,7 +606,7 @@ class ReFilePlusApp:
     
     def _create_about_tab(self, notebook):
         """Создание вкладки 'О программе' в notebook"""
-        from ui.about_tab import AboutTab
+        from ui.tabs.about_tab import AboutTab
         about_tab = AboutTab(
             notebook,
             self.colors,
@@ -581,7 +617,7 @@ class ReFilePlusApp:
     
     def _create_support_tab(self, notebook):
         """Создание вкладки 'Поддержка' в notebook"""
-        from ui.about_tab import SupportTab
+        from ui.tabs.about_tab import SupportTab
         support_tab = SupportTab(
             notebook,
             self.colors

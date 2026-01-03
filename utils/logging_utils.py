@@ -8,11 +8,13 @@ import os
 from typing import Dict, Optional, Any
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 
 class StructuredFormatter(logging.Formatter):
     """Упрощенный форматтер для логирования."""
     
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         """Форматирование записи лога с действием."""
         # Простой формат: время, уровень, действие (если есть), сообщение
         timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S')
@@ -65,10 +67,30 @@ class RotatingLogHandler(logging.FileHandler):
         # Проверяем и ограничиваем количество строк
         try:
             self._limit_file_size()
-        except Exception:
+        except (OSError, IOError, UnicodeDecodeError, PermissionError):
             # Игнорируем ошибки при ограничении размера файла
             # чтобы не прерывать логирование
             pass
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except (OSError, IOError, PermissionError) as e:
+            # Ошибки файловых операций при ограничении размера лога
+            logger.debug(f"Ошибка файловой системы при ограничении размера лога: {e}")
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            # Логируем неожиданные ошибки, но не прерываем логирование
+            logger.debug(f"Неожиданная ошибка при ограничении размера лога: {e}")
     
     def _limit_file_size(self) -> None:
         """Ограничение размера файла до max_lines записей."""

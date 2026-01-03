@@ -25,7 +25,7 @@ from core.re_file_methods import (
     CaseMethod,
     NumberingMethod
 )
-from core.methods_manager import MethodsManager
+from core.managers.methods_manager import MethodsManager
 from core.services.re_file_service import ReFileService
 from core.domain.file_info import FileInfo
 
@@ -205,7 +205,23 @@ def main():
         print("2. Проверьте функции с большим количеством вызовов")
         print("3. Оптимизируйте узкие места для улучшения производительности")
         
-    except Exception as e:
+    except (OSError, PermissionError, FileNotFoundError) as e:
+        print(f"\nОшибка доступа при профилировании: {e}")
+        import traceback
+        traceback.print_exc()
+    except (ValueError, TypeError, AttributeError, KeyError, IndexError) as e:
+        print(f"\nОшибка данных при профилировании: {e}")
+        import traceback
+        traceback.print_exc()
+    except (MemoryError, RecursionError) as e:
+        # Ошибки памяти/рекурсии
+        print(f"\nОшибка памяти/рекурсии при профилировании: {e}")
+        import traceback
+        traceback.print_exc()
+    except BaseException as e:
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise
         print(f"\nОшибка при профилировании: {e}")
         import traceback
         traceback.print_exc()

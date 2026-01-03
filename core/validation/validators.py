@@ -4,7 +4,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 try:
     from config.constants import (
@@ -31,7 +31,7 @@ class FilenameValidator:
     """Класс для валидации имен файлов."""
     
     @staticmethod
-    def is_valid_filename(name: str, extension: str = '') -> tuple[bool, Optional[str]]:
+    def is_valid_filename(name: str, extension: str = '') -> Tuple[bool, Optional[str]]:
         """Проверка валидности имени файла.
         
         Args:
@@ -74,7 +74,7 @@ class FilenameValidator:
         return True, None
     
     @staticmethod
-    def is_valid_path_length(full_path: str) -> tuple[bool, Optional[str]]:
+    def is_valid_path_length(full_path: str) -> Tuple[bool, Optional[str]]:
         """Проверка длины пути.
         
         Args:
@@ -165,8 +165,28 @@ class PathValidator:
                 return False
             
             return True
-        except Exception as e:
-            logger.debug(f"Ошибка при проверке пути: {e}")
+        except (OSError, ValueError, TypeError, AttributeError) as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Ошибка при проверке пути: {e}")
+            return False
+        except (PermissionError, FileNotFoundError) as e:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Ошибка доступа при проверке пути: {e}")
+            return False
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.warning(f"Неожиданная ошибка при проверке пути: {e}", exc_info=True)
             return False
     
     @staticmethod
@@ -175,7 +195,7 @@ class PathValidator:
         allowed_dirs: Optional[List[str]] = None,
         must_exist: bool = True,
         must_be_file: bool = True
-    ) -> tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str]]:
         """Валидация пути с возвратом результата и ошибки.
         
         Args:
@@ -214,6 +234,23 @@ class PathValidator:
                 return False, f"Путь не находится в разрешенных директориях: {normalized_path}"
             
             return True, None
-        except Exception as e:
+        except (OSError, ValueError, TypeError, AttributeError) as e:
             return False, f"Ошибка при проверке пути: {str(e)}"
+        except (PermissionError, FileNotFoundError) as e:
+            return False, f"Ошибка доступа при проверке пути: {str(e)}"
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.warning(f"Неожиданная ошибка при валидации пути: {e}", exc_info=True)
+            return False, f"Неожиданная ошибка: {str(e)}"
 

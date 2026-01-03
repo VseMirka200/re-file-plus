@@ -296,6 +296,18 @@ class FileConverter:
         if os.path.isdir(file_path):
             return False, "Нельзя конвертировать папку, выберите файл", None
         
+        # Проверка размера файла
+        try:
+            from config.constants import MAX_FILE_SIZE_MB
+            file_size = os.path.getsize(file_path)
+            max_size_bytes = MAX_FILE_SIZE_MB * 1024 * 1024
+            if file_size > max_size_bytes:
+                size_mb = file_size / 1024 / 1024
+                return False, f"Файл слишком большой: {size_mb:.2f} MB (максимум {MAX_FILE_SIZE_MB} MB)", None
+        except (OSError, ValueError) as size_error:
+            logger.warning(f"Не удалось проверить размер файла {file_path}: {size_error}")
+            # Продолжаем без проверки размера
+        
         if not self.can_convert(file_path, target_format):
             source_ext = os.path.splitext(file_path)[1].lower()
             target_ext = target_format.lower()
@@ -407,8 +419,22 @@ class FileConverter:
                                 converter.close()
                                 if os.path.exists(output_path):
                                     return True, "PDF успешно конвертирован в DOCX", output_path
-                            except Exception as e:
+                            except (OSError, PermissionError, ValueError, AttributeError) as e:
                                 return False, f"Ошибка конвертации: {str(e)}", None
+                            except (MemoryError, RecursionError) as e:
+
+                                # Ошибки памяти/рекурсии
+
+                                pass
+
+                            # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                            except BaseException as e:
+
+                                if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                                    raise
+                                return False, f"Неожиданная ошибка конвертации: {str(e)}", None
                         return False, "Модуль конвертации PDF недоступен", None
                 # Конвертация DOCX/DOC в ODT/ODP (через LibreOffice или Word)
                 elif (source_ext == '.docx' or source_ext == '.doc') and target_ext in ('.odt', '.odp'):
@@ -535,9 +561,24 @@ class FileConverter:
             else:
                 return False, "Неподдерживаемый формат файла", None
             
-        except Exception as e:
+        except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
             logger.error(f"Ошибка при конвертации файла {file_path}: {e}", exc_info=True)
             return False, f"Ошибка: {str(e)}", None
+        except (MemoryError, RecursionError) as e:
+
+            # Ошибки памяти/рекурсии
+
+            pass
+
+        # Финальный catch для неожиданных исключений (критично для стабильности)
+
+        except BaseException as e:
+
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                raise
+            logger.error(f"Неожиданная ошибка при конвертации файла {file_path}: {e}", exc_info=True)
+            return False, f"Неожиданная ошибка: {str(e)}", None
     
     def convert_file(self, file_path: str, target_format: str) -> Optional[str]:
         """Упрощенный метод конвертации файла (для обратной совместимости).

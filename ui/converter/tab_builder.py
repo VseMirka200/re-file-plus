@@ -284,7 +284,7 @@ class ConverterTabBuilder:
         
         # Настройка колонок
         tree.heading("file", text="Файл")
-        tree.heading("status", text="Статус")
+        tree.heading("status", text="Статус конвертации")
         tree.column("file", width=300, anchor='w', minwidth=100, stretch=tk.YES)
         tree.column("status", width=300, anchor='w', minwidth=100, stretch=tk.YES)
         

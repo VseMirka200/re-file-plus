@@ -47,8 +47,30 @@ class UndoRedoManager:
                         new_basename = os.path.basename(new_path)
                         old_basename = os.path.basename(old_path)
                         self.app.log(f"Отменено: {new_basename} -> {old_basename}")
-                    except Exception as e:
-                        self.app.log(f"Ошибка при отмене: {e}")
+                    except (OSError, PermissionError, FileExistsError) as e:
+                        logger.error(f"Ошибка файловой системы при отмене: {e}", exc_info=True)
+                        self.app.log(f"Ошибка файловой системы при отмене: {e}")
+                    except (ValueError, AttributeError, KeyError) as e:
+                        logger.error(f"Ошибка данных при отмене: {e}", exc_info=True)
+                        self.app.log(f"Ошибка данных при отмене: {e}")
+                    except (IndexError, TypeError) as e:
+                        logger.error(f"Ошибка типа/индекса при отмене: {e}", exc_info=True)
+                        self.app.log(f"Ошибка типа/индекса при отмене: {e}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка при отмене: {e}", exc_info=True)
+                        self.app.log(f"Неожиданная ошибка при отмене: {e}")
         
         # Обновление интерфейса
         self.app.refresh_treeview()
@@ -83,8 +105,30 @@ class UndoRedoManager:
                         current_basename = os.path.basename(current_path)
                         redo_basename = os.path.basename(redo_path)
                         self.app.log(f"Повторено: {current_basename} -> {redo_basename}")
-                    except Exception as e:
-                        self.app.log(f"Ошибка при повторе: {e}")
+                    except (OSError, PermissionError, FileExistsError) as e:
+                        logger.error(f"Ошибка файловой системы при повторе: {e}", exc_info=True)
+                        self.app.log(f"Ошибка файловой системы при повторе: {e}")
+                    except (ValueError, AttributeError, KeyError) as e:
+                        logger.error(f"Ошибка данных при повторе: {e}", exc_info=True)
+                        self.app.log(f"Ошибка данных при повторе: {e}")
+                    except (IndexError, TypeError) as e:
+                        logger.error(f"Ошибка типа/индекса при повторе: {e}", exc_info=True)
+                        self.app.log(f"Ошибка типа/индекса при повторе: {e}")
+                    except (MemoryError, RecursionError) as e:
+
+                        # Ошибки памяти/рекурсии
+
+                        pass
+
+                    # Финальный catch для неожиданных исключений (критично для стабильности)
+
+                    except BaseException as e:
+
+                        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+
+                            raise
+                        logger.error(f"Неожиданная ошибка при повторе: {e}", exc_info=True)
+                        self.app.log(f"Неожиданная ошибка при повторе: {e}")
         
         # Обновление интерфейса
         self.app.refresh_treeview()
