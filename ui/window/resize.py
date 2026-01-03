@@ -38,8 +38,13 @@ class MainWindowResize:
         try:
             current_columns = list(self.app.tree['columns'])
             
-            # Используем четыре колонки: "Имя файла", "Новое имя", "Путь" и "Статус"
+            # Определяем активную вкладку
+            current_tab = getattr(self.app, 'current_tab', 'files')
+            is_converter = current_tab == 'convert'
+            
+            # Всегда используем четыре колонки (включая "Статус"), но скрываем "status" для переименовщика
             required_columns = ("files", "new_name", "path", "status")
+            
             if current_columns != list(required_columns):
                 self.app.tree['columns'] = required_columns
                 # Настраиваем заголовки
@@ -49,11 +54,20 @@ class MainWindowResize:
                 self.app.tree.heading("status", text="Статус", command=lambda: self.app.file_list_manager.sort_column("status"))
                 # Настраиваем колонки (равной ширины)
                 list_frame_width = self.app.list_frame.winfo_width() if hasattr(self.app, 'list_frame') else 900
-                column_width = max(int(list_frame_width / 4), 150)
-                self.app.tree.column("files", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
-                self.app.tree.column("new_name", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
-                self.app.tree.column("path", width=column_width, anchor='w', minwidth=200, stretch=tk.YES)
-                self.app.tree.column("status", width=column_width, anchor='w', minwidth=100, stretch=tk.YES)
+                if is_converter:
+                    column_width = max(int(list_frame_width / 4), 150)
+                    self.app.tree.column("files", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
+                    self.app.tree.column("new_name", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
+                    self.app.tree.column("path", width=column_width, anchor='w', minwidth=200, stretch=tk.YES)
+                    self.app.tree.column("status", width=column_width, anchor='w', minwidth=100, stretch=tk.YES)
+                else:
+                    column_width = max(int(list_frame_width / 3), 150)
+                    self.app.tree.column("files", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
+                    self.app.tree.column("new_name", width=column_width, anchor='w', minwidth=150, stretch=tk.YES)
+                    self.app.tree.column("path", width=column_width, anchor='w', minwidth=200, stretch=tk.YES)
+                    # Скрываем колонку "status" для переименовщика
+                    self.app.tree.column("status", width=0, minwidth=0, stretch=tk.NO)
+                    self.app.tree.heading("status", text="")
             
             # Вызываем обновление размеров
             self.app.root.after(100, self.update_tree_columns)
@@ -72,13 +86,15 @@ class MainWindowResize:
                 list_frame_width = self.app.list_frame.winfo_width()
                 if list_frame_width > 100:
                     if current_tab == 'convert':
-                        # Для конвертера: только "Имя файла" и "Путь" (без "Новое имя")
-                        column_width = max(int(list_frame_width / 2), 200)
+                        # Для конвертера: "Имя файла", "Путь" и "Статус" (скрываем "Новое имя")
+                        column_width = max(int(list_frame_width / 3), 200)
                         
                         # Скрываем колонку "new_name" для конвертера
                         self.app.tree.column("new_name", width=0, minwidth=0, stretch=tk.NO)
                         self.app.tree.heading("new_name", text="")
                         
+                        # Показываем колонку "status" для конвертера
+                        self.app.tree.heading("status", text="Статус", command=lambda: self.app.file_list_manager.sort_column("status"))
                         self.app.tree.column(
                             "files",
                             width=column_width,
@@ -91,13 +107,23 @@ class MainWindowResize:
                             minwidth=200,
                             stretch=tk.YES
                         )
+                        self.app.tree.column(
+                            "status",
+                            width=column_width,
+                            minwidth=100,
+                            stretch=tk.YES
+                        )
                     else:
-                        # Для переименовщика: все три колонки
+                        # Для переименовщика: "Имя файла", "Новое имя" и "Путь" (скрываем "Статус")
                         column_width = max(int(list_frame_width / 3), 150)
                         
                         # Показываем колонку "new_name" для переименовщика
                         self.app.tree.heading("new_name", text="Новое имя", command=lambda: self.app.file_list_manager.sort_column("new_name"))
                         self.app.tree.column("new_name", width=column_width, minwidth=150, stretch=tk.YES)
+                        
+                        # Скрываем колонку "status" для переименовщика
+                        self.app.tree.column("status", width=0, minwidth=0, stretch=tk.NO)
+                        self.app.tree.heading("status", text="")
                         
                         self.app.tree.column(
                             "files",

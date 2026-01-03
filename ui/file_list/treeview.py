@@ -45,6 +45,7 @@ class TreeViewManager:
         tree_frame.pack(fill=tk.BOTH, expand=True)
         
         # Создаем Treeview
+        # Колонка "status" создается, но скрывается для переименовщика
         tree = ttk.Treeview(
             tree_frame,
             columns=("files", "new_name", "path", "status"),
@@ -58,7 +59,7 @@ class TreeViewManager:
         tree.column("files", width=250, minwidth=150, stretch=True)
         tree.column("new_name", width=250, minwidth=150, stretch=True)
         tree.column("path", width=250, minwidth=200, stretch=True)
-        tree.column("status", width=150, minwidth=100, stretch=True)
+        tree.column("status", width=0, minwidth=0, stretch=tk.NO)  # Скрыта по умолчанию
         
         # Настройка тегов для цветового выделения (для конвертера)
         tree.tag_configure('ready', background='#D1FAE5', foreground='#065F46')  # Зеленый - готов
@@ -270,12 +271,16 @@ class TreeViewManager:
                 
                 file_path_display = folder_path
                 
-                # Определяем статус для отображения
+                # Определяем статус для отображения (только для конвертера)
                 status_text = ""
                 tags = ()
                 
+                # Проверяем, используется ли конвертер (current_tab == 'convert')
+                current_tab = getattr(self.app, 'current_tab', 'files')
+                is_converter = current_tab == 'convert'
+                
                 # Для конвертера проверяем статус и применяем цветовую индикацию
-                if hasattr(file_data, 'status') or (isinstance(file_data, dict) and 'status' in file_data):
+                if is_converter and (hasattr(file_data, 'status') or (isinstance(file_data, dict) and 'status' in file_data)):
                     status = file_data.status if hasattr(file_data, 'status') else file_data.get('status', '')
                     if status:
                         status_text = status
@@ -289,6 +294,7 @@ class TreeViewManager:
                             tags = ('error',)
                 
                 # Вставляем имя файла, новое имя, путь и статус
+                # Для переименовщика статус будет пустым, колонка скрыта
                 new_display_name_full = new_full_name if new_full_name != old_full_name else ""
                 self.app.tree.insert("", tk.END, values=(old_display_name, new_display_name_full, file_path_display, status_text), tags=tags)
         
