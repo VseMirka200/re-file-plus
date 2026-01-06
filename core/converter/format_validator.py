@@ -185,11 +185,15 @@ class FormatValidator:
                 # PPTX в PPTX не поддерживается (тот же формат)
                 if source_ext == '.pptx' and target_ext == '.pptx':
                     return False
+                # PPT в PPT не поддерживается (тот же формат)
+                if source_ext == '.ppt' and target_ext == '.ppt':
+                    return False
                 # ODP в ODP не поддерживается (тот же формат)
                 if source_ext == '.odp' and target_ext == '.odp':
                     return False
-                # Конвертация не поддерживается без LibreOffice
-                return False
+                # Конвертация поддерживается через LibreOffice или PowerPoint COM
+                # LibreOffice доступен на всех платформах, PowerPoint COM только на Windows
+                return True
         
         # Проверяем конвертацию аудио (через ffmpeg)
         if source_ext in self.supported_audio_formats:

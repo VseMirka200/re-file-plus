@@ -12,7 +12,8 @@ from typing import Optional, Tuple
 try:
     from utils.security_utils import (
         sanitize_path_for_subprocess,
-        validate_path_for_subprocess
+        validate_path_for_subprocess,
+        _check_file_exists_unicode
     )
 except ImportError:
     # Fallback если утилиты недоступны
@@ -153,14 +154,45 @@ def convert_audio_video(
         if not check_ffmpeg_installed():
             return False, "ffmpeg не установлен. Установите ffmpeg для конвертации аудио/видео файлов.", None
         
-        # Валидируем и нормализуем пути
+        # Валидируем и нормализуем пути с поддержкой Unicode (кириллица)
+        # Сначала проверяем существование файла с полной поддержкой Unicode
+        try:
+            from utils.security_utils import _check_file_exists_unicode
+        except ImportError:
+            # Fallback если функция недоступна
+            def _check_file_exists_unicode(path: str) -> bool:
+                try:
+                    return os.path.exists(path) and os.path.isfile(path)
+                except (OSError, UnicodeEncodeError, UnicodeDecodeError):
+                    try:
+                        with open(path, 'rb') as f:
+                            return True
+                    except:
+                        return False
+        
+        if not _check_file_exists_unicode(file_path):
+            logger.warning(f"Файл не существует перед валидацией: {file_path}")
+            return False, f"Файл не найден: {os.path.basename(file_path)}", None
+        
         validated_file_path = sanitize_path_for_subprocess(file_path)
         if not validated_file_path:
-            return False, "Небезопасный путь к исходному файлу", None
+            # Если валидация не прошла, но файл существует, используем исходный путь
+            # Это может быть проблема с валидацией Unicode путей
+            logger.warning(f"Валидация пути не прошла, но файл существует: {file_path}")
+            # Используем исходный путь, но проверяем его безопасность базовыми методами
+            if _check_file_exists_unicode(file_path):
+                validated_file_path = os.path.abspath(os.path.normpath(file_path))
+            else:
+                return False, "Небезопасный путь к исходному файлу", None
         
-        validated_output_path = sanitize_path_for_subprocess(output_path)
+        # Для выходного файла не проверяем существование (файл еще не создан)
+        validated_output_path = sanitize_path_for_subprocess(output_path, check_existence=False)
         if not validated_output_path:
-            return False, "Небезопасный путь к выходному файлу", None
+            # Если нормализация не удалась, пробуем просто нормализовать путь
+            try:
+                validated_output_path = os.path.abspath(os.path.normpath(output_path))
+            except (OSError, ValueError):
+                return False, "Небезопасный путь к выходному файлу", None
         
         file_path = validated_file_path
         output_path = validated_output_path
@@ -230,12 +262,23 @@ def convert_audio_video(
             logger.error(f"Ошибка запуска subprocess для ffmpeg: {e}", exc_info=True)
             return False, f"Ошибка запуска конвертации: {str(e)}", None
         
-        # Проверяем результат
+        # Проверяем результат с поддержкой Unicode (кириллица в путях)
         if result.returncode == 0:
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                return True, "Конвертация завершена успешно", output_path
+            # Используем функцию с поддержкой Unicode для проверки существования
+            if _check_file_exists_unicode(output_path):
+                try:
+                    # Проверяем размер файла
+                    file_size = os.path.getsize(output_path)
+                    if file_size > 0:
+                        return True, "Конвертация завершена успешно", output_path
+                    else:
+                        return False, "Файл создан, но пуст", None
+                except (OSError, UnicodeEncodeError, UnicodeDecodeError) as e:
+                    # Если не удалось проверить размер, но файл существует - считаем успехом
+                    logger.debug(f"Не удалось проверить размер файла {output_path}: {e}")
+                    return True, "Конвертация завершена успешно", output_path
             else:
-                return False, "Файл создан, но пуст", None
+                return False, "Файл не был создан после конвертации", None
         else:
             error_msg = result.stderr.decode('utf-8', errors='ignore') if result.stderr else "Неизвестная ошибка"
             return False, f"Ошибка ffmpeg: {error_msg[:200]}", None

@@ -3,6 +3,7 @@
 import logging
 import os
 import threading
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -264,7 +265,6 @@ def re_file_files_thread(
                         old_name_before_update = file_data.get('old_name')
                     
                     if hasattr(file_data, 'path'):
-                        from pathlib import Path
                         if not hasattr(file_data, 'metadata') or file_data.metadata is None:
                             file_data.metadata = {}
                         if isinstance(file_data.metadata, dict):

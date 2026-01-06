@@ -3,7 +3,8 @@
 import logging
 import os
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from typing import List, Optional
+from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from utils.path_processing import normalize_path
 
@@ -21,33 +22,54 @@ class FileAdder:
         """
         self.app = app
     
+    def _get_files_list(self):
+        """Получить список файлов из state или app.files.
+        
+        Returns:
+            Список файлов
+        """
+        if hasattr(self.app, 'state') and self.app.state:
+            return self.app.state.files
+        elif hasattr(self.app, 'files'):
+            return self.app.files
+        else:
+            # Инициализируем пустой список, если его нет
+            if not hasattr(self.app, 'files'):
+                self.app.files = []
+            return self.app.files
+    
+    def _set_files_list(self, files):
+        """Установить список файлов в state или app.files.
+        
+        Args:
+            files: Список файлов
+        """
+        if hasattr(self.app, 'state') and self.app.state:
+            self.app.state.files = files
+        else:
+            self.app.files = files
+    
     def add_files(self) -> None:
         """Добавление файлов через диалог выбора."""
-        files = filedialog.askopenfilenames(
-            title="Выберите файлы",
-            filetypes=[
-                ("Все файлы", "*.*"),
-                (
-                    "Изображения",
-                    "*.png *.jpg *.jpeg *.ico *.webp *.gif *.pdf"
-                ),
-                (
-                    "Документы",
-                    "*.pdf *.doc *.docx *.odt"
-                ),
-                (
-                    "Презентации",
-                    "*.pptx *.ppt *.odp"
-                ),
-            ]
+        files, _ = QFileDialog.getOpenFileNames(
+            None,
+            "Выберите файлы",
+            "",
+            "Все файлы (*.*);;"
+            "Изображения (*.png *.jpg *.jpeg *.ico *.webp *.gif *.pdf);;"
+            "Документы (*.pdf *.doc *.docx *.odt);;"
+            "Презентации (*.pptx *.ppt *.odp)"
         )
         if files:
             # Проверка на максимальное количество файлов
             try:
                 from config.constants import MAX_FILES_IN_LIST
-                current_count = len(self.app.files)
+                # Получаем список файлов из state или app.files
+                files_list = self._get_files_list()
+                current_count = len(files_list)
                 if current_count >= MAX_FILES_IN_LIST:
-                    messagebox.showwarning(
+                    QMessageBox.warning(
+                        None,
                         "Превышен лимит",
                         f"Достигнут максимальный лимит файлов в списке ({MAX_FILES_IN_LIST}).\n"
                         f"Удалите некоторые файлы перед добавлением новых."
@@ -55,271 +77,130 @@ class FileAdder:
                     return
                 remaining_slots = MAX_FILES_IN_LIST - current_count
                 if len(files) > remaining_slots:
-                    if not messagebox.askyesno(
+                    reply = QMessageBox.question(
+                        None,
                         "Превышение лимита",
                         f"Вы пытаетесь добавить {len(files)} файлов, но доступно только {remaining_slots} слотов.\n"
-                        f"Добавить только первые {remaining_slots} файлов?"
-                    ):
+                        f"Добавить только первые {remaining_slots} файлов?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                    )
+                    if reply != QMessageBox.StandardButton.Yes:
                         return
                     files = files[:remaining_slots]
             except ImportError:
-                # Если константа недоступна, продолжаем без ограничения
                 pass
             
-            files_before = len(self.app.files)
+            files_list = self._get_files_list()
+            files_before = len(files_list)
             added_files = []
             skipped_files = []
             
-            # Оптимизация: обрабатываем файлы батчами для больших списков
-            BATCH_SIZE = 50  # Обрабатываем по 50 файлов за раз
-            total_files = len(files)
-            
-            if total_files > BATCH_SIZE and logger.isEnabledFor(logging.INFO):
-                logger.info(f"Добавление {total_files} файлов батчами по {BATCH_SIZE}")
-            
-            for idx, file_path in enumerate(files, 1):
-                # Проверяем лимит перед каждым добавлением
-                try:
-                    from config.constants import MAX_FILES_IN_LIST
-                    if len(self.app.files) >= MAX_FILES_IN_LIST:
-                        logger.warning(f"Достигнут лимит файлов ({MAX_FILES_IN_LIST}), остановка добавления")
-                        break
-                except ImportError:
-                    pass
+            for file_path in files:
                 result = self.add_file(file_path)
                 if result:
                     added_files.append(file_path)
                 else:
                     skipped_files.append(file_path)
-                    logger.debug(f"Файл не добавлен: {file_path}")
-                
-                # Логируем прогресс для больших батчей
-                if total_files > BATCH_SIZE and idx % BATCH_SIZE == 0:
-                    if logger.isEnabledFor(logging.INFO):
-                        logger.info(f"Обработано {idx}/{total_files} файлов при добавлении")
-            # Применяем методы (включая шаблон), если они есть
-            if self.app.methods_manager.get_methods():
-                self.app.apply_methods()
-            else:
-                # Если есть шаблон в поле, но нет метода, применяем шаблон
-                if hasattr(self.app, 'new_name_template'):
-                    template = self.app.new_name_template.get().strip()
-                    if template:
-                        if hasattr(self.app, 'ui_templates_manager'):
-                            self.app.ui_templates_manager.apply_template_quick(auto=True)
+            
             # Обновляем интерфейс
-            self.app.file_list_manager.refresh_treeview()
-            self.app.file_list_manager.update_status()
-            actual_count = len(self.app.files) - files_before
+            if hasattr(self.app, 'file_list_manager'):
+                self.app.file_list_manager.refresh_treeview()
+                self.app.file_list_manager.update_status()
+            
+            files_list = self._get_files_list()
+            actual_count = len(files_list) - files_before
             if actual_count > 0:
-                logger.info(
-                    f"Добавлено файлов в список: {actual_count} (успешно: {len(added_files)}, пропущено: {len(skipped_files)})",
-                    extra={'action': 'FILES_ADDED', 'count': actual_count, 'added': len(added_files), 'skipped': len(skipped_files)}
-                )
-            if skipped_files:
-                self.app.log(f"Добавлено файлов: {actual_count}, пропущено: {len(skipped_files)}")
-            else:
-                self.app.log(f"Добавлено файлов: {actual_count}")
+                logger.info(f"Добавлено файлов: {actual_count}")
     
     def add_folder(self) -> None:
-        """Добавление папки как отдельного элемента в список."""
-        folder = filedialog.askdirectory(title="Выберите папку")
+        """Добавление папки в список."""
+        folder = QFileDialog.getExistingDirectory(None, "Выберите папку")
         if folder:
             if self.add_folder_item(folder):
-                # Применяем методы (включая шаблон), если они есть
-                if self.app.methods_manager.get_methods():
-                    self.app.apply_methods()
-                else:
-                    # Обновляем интерфейс
+                if hasattr(self.app, 'file_list_manager'):
                     self.app.file_list_manager.refresh_treeview()
-                self.app.file_list_manager.update_status()
-                self.app.log(f"Добавлена папка: {folder}")
+                    self.app.file_list_manager.update_status()
+                logger.info(f"Добавлена папка: {folder}")
     
     def add_folder_item(self, folder_path: str) -> bool:
-        """Добавление папки как элемента списка.
+        """Добавление папки как отдельного элемента в список.
         
         Args:
             folder_path: Путь к папке
             
         Returns:
-            True если папка добавлена, False иначе
+            True если папка добавлена, False в противном случае
         """
-        if not os.path.isdir(folder_path):
-            return False
-        
-        folder_path = normalize_path(folder_path)
-        
-        # Проверяем на дубликаты
-        files_list = self.app._get_files_list()
-        for existing_file in files_list:
-            existing_path = None
-            if hasattr(existing_file, 'full_path'):
-                # Для FileInfo объектов
-                if existing_file.full_path:
-                    existing_path = existing_file.full_path
-                else:
-                    # Если full_path не установлен, собираем из path
-                    try:
-                        existing_path = str(existing_file.path)
-                    except (AttributeError, TypeError):
-                        continue
-            elif isinstance(existing_file, dict):
-                # Для словарей
-                existing_path = existing_file.get('full_path')
-                if not existing_path:
-                    # Если full_path нет, используем path напрямую
-                    existing_path = existing_file.get('path', '')
+        try:
+            normalized_path = normalize_path(folder_path)
+            if not os.path.exists(normalized_path) or not os.path.isdir(normalized_path):
+                return False
             
-            if existing_path:
-                try:
-                    existing_path_normalized = normalize_path(existing_path)
-                    if existing_path_normalized == folder_path:
-                        return False
-                except (OSError, ValueError):
-                    continue
-        
-        logger.info(f"Добавление папки в список: {folder_path}")
-        
-        # Используем внутренний метод для добавления папки
-        files_list = self.app._get_files_list()
-        
-        # Создаем запись для папки
-        path_obj = Path(folder_path)
-        old_name = path_obj.name
-        
-        # Для папок extension будет пустым, но добавим метку что это папка
-        if self.app.state:
-            from core.domain.file_info import FileInfo, FileStatus
-            # Для FileInfo создаем объект с пустым расширением
-            # Используем parent путь и имя папки
-            file_info = FileInfo(
-                path=path_obj,
-                old_name=old_name,
-                new_name=old_name,
-                extension="",
-                status=FileStatus.READY,
-                metadata={"is_folder": True},
-                full_path=folder_path
-            )
-            files_list.append(file_info)
-        else:
-            # Fallback для обратной совместимости
-            file_data = {
-                'path': str(path_obj.parent),
-                'old_name': old_name,
-                'new_name': old_name,
-                'extension': "",
-                'full_path': folder_path,
-                'status': 'Готов',
-                'is_folder': True  # Метка что это папка
-            }
-            files_list.append(file_data)
-        
-        return True
+            # Проверка на дубликаты
+            files_list = self._get_files_list()
+            for file_data in files_list:
+                    if hasattr(file_data, 'full_path'):
+                        if file_data.full_path == normalized_path:
+                            return False
+                    elif isinstance(file_data, dict):
+                        if file_data.get('full_path') == normalized_path:
+                            return False
+            
+            # Добавляем папку
+            from core.domain.file_info import FileInfo
+            try:
+                file_info = FileInfo.from_path(normalized_path)
+                file_info.metadata = file_info.metadata or {}
+                file_info.metadata['is_folder'] = True
+                
+                files_list = self._get_files_list()
+                files_list.append(file_info)
+                
+                return True
+            except Exception as e:
+                logger.error(f"Ошибка при создании FileInfo для папки {normalized_path}: {e}")
+                return False
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении папки {folder_path}: {e}")
+            return False
     
     def add_file(self, file_path: str) -> bool:
         """Добавление одного файла в список.
         
         Args:
-            file_path: Путь к файлу для добавления
+            file_path: Путь к файлу
             
         Returns:
-            True если файл добавлен, False иначе
+            True если файл добавлен, False в противном случае
         """
-        if not os.path.isfile(file_path):
-            return False
-        
-        file_path_normalized = normalize_path(file_path)
-        
-        # Проверяем на дубликаты
-        files_list = self.app._get_files_list()
-        for existing_file in files_list:
-            existing_path = None
-            if hasattr(existing_file, 'full_path'):
-                # Для FileInfo объектов
-                if existing_file.full_path:
-                    existing_path = existing_file.full_path
-                else:
-                    # Если full_path не установлен, используем path напрямую (он уже содержит полный путь)
-                    try:
-                        existing_path = str(existing_file.path)
-                    except (AttributeError, TypeError):
-                        continue
-            elif isinstance(existing_file, dict):
-                # Для словарей
-                existing_path = existing_file.get('full_path')
-                if not existing_path:
-                    # Если full_path нет, собираем из path + old_name + extension
-                    dir_path = existing_file.get('path', '')
-                    old_name = existing_file.get('old_name', '')
-                    extension = existing_file.get('extension', '')
-                    if dir_path and old_name:
-                        existing_path = str(Path(dir_path) / f"{old_name}{extension}")
-                    else:
-                        continue
-            
-            if existing_path:
-                try:
-                    # Нормализуем оба пути для корректного сравнения
-                    existing_path_str = str(existing_path)
-                    existing_path_normalized = normalize_path(existing_path_str)
-                    if existing_path_normalized == file_path_normalized:
-                        logger.debug(f"Файл уже в списке (дубликат): {file_path_normalized}")
-                        return False
-                except (OSError, ValueError):
-                    continue
-        
-        self.app.log(f"Добавление файла: {os.path.basename(file_path)}")
-        
         try:
-            files_list = self.app._get_files_list()
+            normalized_path = normalize_path(file_path)
+            if not os.path.exists(normalized_path) or not os.path.isfile(normalized_path):
+                return False
             
-            if self.app.state:
-                from core.domain.file_info import FileInfo
-                file_info = FileInfo.from_path(file_path_normalized)
-                files_list.append(file_info)
-            else:
-                path_obj = Path(file_path_normalized)
-                old_name = path_obj.stem
-                extension = path_obj.suffix
-                path = str(path_obj.parent)
+            # Проверка на дубликаты
+            files_list = self._get_files_list()
+            for file_data in files_list:
+                    if hasattr(file_data, 'full_path'):
+                        if file_data.full_path == normalized_path:
+                            return False
+                    elif isinstance(file_data, dict):
+                        if file_data.get('full_path') == normalized_path:
+                            return False
+            
+            # Добавляем файл
+            from core.domain.file_info import FileInfo
+            try:
+                file_info = FileInfo.from_path(normalized_path)
                 
-                file_data = {
-                    'path': path,
-                    'old_name': old_name,
-                    'new_name': old_name,
-                    'extension': extension,
-                    'full_path': file_path_normalized,
-                    'status': 'Готов'
-                }
-                files_list.append(file_data)
-            
-            logger.debug(f"Файл успешно добавлен в список: {file_path}", extra={'action': 'FILE_ADDED'})
-            return True
-        except (OSError, PermissionError, ValueError, TypeError, AttributeError) as e:
-            logger.error(f"Ошибка при добавлении файла {file_path}: {e}", exc_info=True)
-            self.app.log(f"Ошибка при добавлении файла {os.path.basename(file_path)}: {e}")
-            return False
-        except (KeyError, IndexError) as e:
-            # Ошибки доступа к данным
-            logger.error(f"Ошибка доступа к данным при добавлении файла {file_path}: {e}", exc_info=True)
-            self.app.log(f"Ошибка данных при добавлении файла {os.path.basename(file_path)}: {e}")
-            return False
-        except (MemoryError, RecursionError) as e:
-
-            # Ошибки памяти/рекурсии
-
-            pass
-
-        # Финальный catch для неожиданных исключений (критично для стабильности)
-
-        except BaseException as e:
-
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
-
-                raise
-            # Неожиданные ошибки
-            logger.error(f"Неожиданная ошибка при добавлении файла {file_path}: {e}", exc_info=True)
-            self.app.log(f"Неожиданная ошибка при добавлении файла {os.path.basename(file_path)}: {e}")
+                files_list = self._get_files_list()
+                files_list.append(file_info)
+                
+                return True
+            except Exception as e:
+                logger.error(f"Ошибка при создании FileInfo для файла {normalized_path}: {e}")
+                return False
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении файла {file_path}: {e}")
             return False
 

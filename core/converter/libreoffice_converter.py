@@ -12,11 +12,22 @@ import subprocess
 import sys
 from typing import Optional, Tuple
 
+# Импорт winreg для проверки реестра Windows (только на Windows)
+if sys.platform == 'win32':
+    try:
+        import winreg
+        HAS_WINREG = True
+    except ImportError:
+        HAS_WINREG = False
+else:
+    HAS_WINREG = False
+
 # Импорт утилит безопасности
 try:
     from utils.security_utils import (
         sanitize_path_for_subprocess,
-        validate_path_for_subprocess
+        validate_path_for_subprocess,
+        _check_file_exists_unicode
     )
 except ImportError:
     # Fallback если утилиты недоступны
@@ -36,6 +47,182 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def _find_libreoffice_path() -> Optional[str]:
+    """Поиск пути к LibreOffice soffice в системе.
+    
+    Проверяет:
+    - Реестр Windows (для Windows)
+    - Стандартные пути установки
+    - PATH environment variable
+    - Альтернативные расположения
+    
+    Returns:
+        Путь к soffice.exe/soffice или None если не найден
+    """
+    soffice_path = None
+    
+    if sys.platform == 'win32':
+        # Метод 1: Проверка реестра Windows
+        if HAS_WINREG:
+            try:
+                # Проверяем реестр для LibreOffice
+                registry_paths = [
+                    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\LibreOffice"),
+                    (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\LibreOffice"),
+                ]
+                
+                for hkey, path in registry_paths:
+                    try:
+                        with winreg.OpenKey(hkey, path) as key:
+                            try:
+                                # Пытаемся получить путь установки
+                                install_path, _ = winreg.QueryValueEx(key, "Path")
+                                if install_path:
+                                    potential_path = os.path.join(install_path, "program", "soffice.exe")
+                                    if _check_file_exists_unicode(potential_path):
+                                        soffice_path = potential_path
+                                        logger.debug(f"LibreOffice найден через реестр: {soffice_path}")
+                                        break
+                            except (OSError, FileNotFoundError, ValueError):
+                                # Пробуем найти через подразделы версий
+                                try:
+                                    for i in range(winreg.QueryInfoKey(key)[0]):
+                                        subkey_name = winreg.EnumKey(key, i)
+                                        try:
+                                            with winreg.OpenKey(key, subkey_name) as ver_key:
+                                                try:
+                                                    install_path, _ = winreg.QueryValueEx(ver_key, "Path")
+                                                    if install_path:
+                                                        potential_path = os.path.join(install_path, "program", "soffice.exe")
+                                                        if _check_file_exists_unicode(potential_path):
+                                                            soffice_path = potential_path
+                                                            logger.debug(f"LibreOffice найден через реестр (версия {subkey_name}): {soffice_path}")
+                                                            break
+                                                except (OSError, FileNotFoundError, ValueError):
+                                                    continue
+                                        except (OSError, FileNotFoundError):
+                                            continue
+                                    if soffice_path:
+                                        break
+                                except (OSError, FileNotFoundError):
+                                    continue
+                    except (OSError, FileNotFoundError):
+                        continue
+                
+                # Также проверяем Uninstall ключи (альтернативный способ)
+                if not soffice_path:
+                    uninstall_paths = [
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+                    ]
+                    
+                    for hkey, uninstall_path in uninstall_paths:
+                        try:
+                            with winreg.OpenKey(hkey, uninstall_path) as uninstall_key:
+                                for i in range(winreg.QueryInfoKey(uninstall_key)[0]):
+                                    try:
+                                        subkey_name = winreg.EnumKey(uninstall_key, i)
+                                        # Ищем ключи, содержащие "LibreOffice"
+                                        if "LibreOffice" in subkey_name or "libreoffice" in subkey_name.lower():
+                                            try:
+                                                with winreg.OpenKey(uninstall_key, subkey_name) as app_key:
+                                                    try:
+                                                        # Пробуем получить InstallLocation
+                                                        install_location, _ = winreg.QueryValueEx(app_key, "InstallLocation")
+                                                        if install_location:
+                                                            potential_path = os.path.join(install_location, "program", "soffice.exe")
+                                                            if _check_file_exists_unicode(potential_path):
+                                                                soffice_path = potential_path
+                                                                logger.debug(f"LibreOffice найден через Uninstall реестр: {soffice_path}")
+                                                                break
+                                                    except (OSError, FileNotFoundError, ValueError):
+                                                        continue
+                                            except (OSError, FileNotFoundError):
+                                                continue
+                                    except (OSError, FileNotFoundError):
+                                        continue
+                                if soffice_path:
+                                    break
+                        except (OSError, FileNotFoundError):
+                            continue
+            except Exception as e:
+                logger.debug(f"Ошибка при проверке реестра для LibreOffice: {e}")
+        
+        # Метод 2: Проверка стандартных путей установки
+        if not soffice_path:
+            # Получаем системные диски и Program Files пути
+            program_files_paths = []
+            
+            # Стандартные пути
+            program_files_paths.extend([
+                r'C:\Program Files\LibreOffice\program\soffice.exe',
+                r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
+            ])
+            
+            # Проверяем переменные окружения
+            program_files = os.environ.get('ProgramFiles', '')
+            program_files_x86 = os.environ.get('ProgramFiles(x86)', '')
+            program_files_alt = os.environ.get('ProgramW6432', '')
+            
+            if program_files:
+                program_files_paths.append(os.path.join(program_files, 'LibreOffice', 'program', 'soffice.exe'))
+            if program_files_x86:
+                program_files_paths.append(os.path.join(program_files_x86, 'LibreOffice', 'program', 'soffice.exe'))
+            if program_files_alt:
+                program_files_paths.append(os.path.join(program_files_alt, 'LibreOffice', 'program', 'soffice.exe'))
+            
+            # Проверяем альтернативные диски (только существующие)
+            # Получаем список доступных дисков
+            try:
+                import string
+                available_drives = []
+                for drive_letter in string.ascii_uppercase:
+                    drive_path = f'{drive_letter}:\\'
+                    if os.path.exists(drive_path):
+                        available_drives.append(drive_letter)
+                
+                # Ограничиваем проверку разумным количеством дисков (первые 5)
+                for drive_letter in available_drives[:5]:
+                    program_files_paths.extend([
+                        f'{drive_letter}:\\Program Files\\LibreOffice\\program\\soffice.exe',
+                        f'{drive_letter}:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+                    ])
+            except Exception:
+                # Если не удалось получить список дисков, проверяем только D: и E:
+                for drive_letter in 'DE':
+                    program_files_paths.extend([
+                        f'{drive_letter}:\\Program Files\\LibreOffice\\program\\soffice.exe',
+                        f'{drive_letter}:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+                    ])
+            
+            for path in program_files_paths:
+                try:
+                    if _check_file_exists_unicode(path):
+                        soffice_path = path
+                        logger.debug(f"LibreOffice найден по стандартному пути: {soffice_path}")
+                        break
+                except:
+                    # Fallback на os.path.exists если функция недоступна
+                    try:
+                        if os.path.exists(path):
+                            soffice_path = path
+                            logger.debug(f"LibreOffice найден по стандартному пути (fallback): {soffice_path}")
+                            break
+                    except (OSError, ValueError):
+                        continue
+        
+        # Метод 3: Проверка через PATH environment variable
+        if not soffice_path:
+            soffice_path = shutil.which('soffice.exe')
+            if soffice_path:
+                logger.debug(f"LibreOffice найден через PATH: {soffice_path}")
+    else:
+        # Для не-Windows систем просто проверяем PATH
+        soffice_path = shutil.which('soffice')
+        if soffice_path:
+            logger.debug(f"LibreOffice найден через PATH: {soffice_path}")
+    
+    return soffice_path
 
 
 def convert_with_libreoffice(
@@ -55,22 +242,7 @@ def convert_with_libreoffice(
     """
     try:
         # Находим путь к soffice
-        soffice_path = None
-        if sys.platform == 'win32':
-            # Проверяем стандартные пути
-            possible_paths = [
-                r'C:\Program Files\LibreOffice\program\soffice.exe',
-                r'C:\Program Files (x86)\LibreOffice\program\soffice.exe',
-            ]
-            for path in possible_paths:
-                if os.path.exists(path):
-                    soffice_path = path
-                    break
-            # Если не нашли, проверяем через PATH
-            if not soffice_path:
-                soffice_path = shutil.which('soffice.exe')
-        else:
-            soffice_path = shutil.which('soffice')
+        soffice_path = _find_libreoffice_path()
         
         if not soffice_path:
             return False, "LibreOffice не найден в системе", None
@@ -179,17 +351,20 @@ def convert_with_libreoffice(
         base_name = os.path.splitext(os.path.basename(file_path))[0]
         expected_output = os.path.join(output_dir, base_name + target_ext)
         
-        # Если ожидаемый файл не найден, ищем файлы с похожим именем
-        if not os.path.exists(expected_output):
-            if os.path.exists(output_dir):
-                for file in os.listdir(output_dir):
-                    if file.startswith(base_name) and file.endswith(target_ext):
-                        expected_output = os.path.join(output_dir, file)
-                        break
+        # Если ожидаемый файл не найден, ищем файлы с похожим именем (с поддержкой Unicode)
+        if not _check_file_exists_unicode(expected_output):
+            if os.path.isdir(output_dir):
+                try:
+                    for file in os.listdir(output_dir):
+                        if file.startswith(base_name) and file.endswith(target_ext):
+                            expected_output = os.path.join(output_dir, file)
+                            break
+                except (OSError, UnicodeEncodeError, UnicodeDecodeError):
+                    pass
         
         # Если файл все еще не найден, пробуем использовать указанный output_path
-        if not os.path.exists(expected_output):
-            if os.path.exists(output_path):
+        if not _check_file_exists_unicode(expected_output):
+            if _check_file_exists_unicode(output_path):
                 expected_output = output_path
             else:
                 return False, f"Файл не был создан: {expected_output}", None
@@ -197,7 +372,7 @@ def convert_with_libreoffice(
         # Если нужно переименовать файл
         if expected_output != output_path:
             try:
-                if os.path.exists(output_path):
+                if _check_file_exists_unicode(output_path):
                     os.remove(output_path)
                 shutil.move(expected_output, output_path)
             except (OSError, PermissionError, shutil.Error) as e:

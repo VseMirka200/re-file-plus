@@ -517,7 +517,7 @@ class TemplatesManager:
                             if isinstance(key, str):
                                 # Поддерживаем оба формата: строку и словарь
                                 if isinstance(value, str):
-                                    # Старый формат (строка) - оставляем как есть для обратной совместимости
+                                    # Формат (строка) - оставляем как есть для обратной совместимости
                                     templates[key] = value
                                 elif isinstance(value, dict):
                                     # Новый формат (словарь с ключом 'template')

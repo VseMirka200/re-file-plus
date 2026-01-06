@@ -16,7 +16,7 @@ class StructuredFormatter(logging.Formatter):
     
     def format(self, record: logging.LogRecord) -> str:
         """Форматирование записи лога с действием."""
-        # Простой формат: время, уровень, действие (если есть), сообщение
+        # Формат: время, уровень, действие (если есть), сообщение
         timestamp = datetime.fromtimestamp(record.created).strftime('%H:%M:%S')
         level = record.levelname[:4]  # Сокращенный уровень (INFO -> INFO, DEBUG -> DEBU)
         message = record.getMessage()
@@ -188,7 +188,7 @@ def log_batch_action(logger: logging.Logger,
         **kwargs: Игнорируется (для упрощения)
     """
     extra = {'action': action}
-    # Упрощенное сообщение с количеством файлов
+    # Сообщение с количеством файлов
     if file_count > 0:
         logger.info(f"{message} (файлов: {file_count})", extra=extra)
     else:

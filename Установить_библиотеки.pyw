@@ -254,7 +254,7 @@ def main():
     print("\n[2/4] Установка обязательных библиотек...")
     required = [
         ("Pillow>=9.0.0", "Pillow (работа с изображениями)"),
-        ("tkinterdnd2>=0.4.0", "tkinterdnd2 (drag and drop)"),
+        ("PyQt6>=6.6.0", "PyQt6 (GUI фреймворк)"),
     ]
     
     required_failed = []
@@ -275,6 +275,9 @@ def main():
         ("pypdf>=3.0.0", "pypdf (работа с PDF)"),
         ("PyMuPDF>=1.23.0", "PyMuPDF (работа с PDF)"),
         ("python-docx>=0.8.11", "python-docx (работа с DOCX)"),
+        ("python-pptx>=0.6.0", "python-pptx (работа с PowerPoint)"),
+        ("pydub>=0.25.0", "pydub (работа с аудио)"),
+        ("moviepy>=1.0.3", "moviepy (работа с видео)"),
     ]
     
     for package, desc in optional:

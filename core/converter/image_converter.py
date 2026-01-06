@@ -13,6 +13,21 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Импорт функции проверки существования с поддержкой Unicode
+try:
+    from utils.security_utils import _check_file_exists_unicode
+except ImportError:
+    # Fallback если функция недоступна
+    def _check_file_exists_unicode(path: str) -> bool:
+        try:
+            return os.path.exists(path) and os.path.isfile(path)
+        except (OSError, UnicodeEncodeError, UnicodeDecodeError):
+            try:
+                with open(path, 'rb') as f:
+                    return True
+            except:
+                return False
+
 
 def convert_pdf_to_image(
     file_path: str,
@@ -93,7 +108,8 @@ def convert_pdf_to_image(
             counter = 1
             original_folder = output_folder
             max_attempts = 1000  # Защита от бесконечного цикла
-            while os.path.exists(output_folder) and counter < max_attempts:
+            # Используем os.path.isdir для проверки директорий (более надежно для Unicode)
+            while os.path.isdir(output_folder) and counter < max_attempts:
                 output_folder = os.path.join(converted_base, f"{folder_name}_{counter:03d}")
                 counter += 1
             
@@ -103,8 +119,8 @@ def convert_pdf_to_image(
             # Создаем папку (включая родительскую "Конвертированные")
             try:
                 os.makedirs(output_folder, exist_ok=True)
-                # Проверяем, что папка действительно создана
-                if not os.path.exists(output_folder):
+                # Проверяем, что папка действительно создана (с поддержкой Unicode)
+                if not os.path.isdir(output_folder):
                     if pdf_document:
                         pdf_document.close()
                     return False, f"Не удалось создать папку: {output_folder}", None

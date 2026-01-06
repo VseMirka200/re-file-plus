@@ -279,7 +279,7 @@ def convert_odt_without_libreoffice(
                         content_xml = odt_zip.read('content.xml').decode('utf-8')
                         root = ET.fromstring(content_xml)
                         
-                        # Простая конвертация в HTML
+                        # Конвертация в HTML
                         html_content = ['<html><head><meta charset="utf-8"></head><body>']
                         
                         # Извлекаем параграфы

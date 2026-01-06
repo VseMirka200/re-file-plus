@@ -19,6 +19,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 # Локальные импорты
@@ -65,8 +66,6 @@ except ImportError:
         return None, "COM утилиты не доступны"
     def convert_docx_with_word(word_app: Any, file_path: str, output_path: str, com_client_type: str = "win32com") -> Tuple[bool, Optional[str]]:
         return False, "COM утилиты не доступны"
-
-
 
 
 class FileConverter:
@@ -289,7 +288,31 @@ class FileConverter:
         Returns:
             Кортеж (успех, сообщение, путь к выходному файлу)
         """
-        if not os.path.exists(file_path):
+        # Проверка существования файла с поддержкой Unicode (кириллица)
+        file_exists = False
+        try:
+            file_exists = os.path.exists(file_path)
+        except (OSError, UnicodeEncodeError, UnicodeDecodeError):
+            pass
+        
+        if not file_exists:
+            # Пробуем через pathlib
+            try:
+                file_exists = Path(file_path).exists()
+            except (OSError, UnicodeEncodeError, UnicodeDecodeError, ValueError):
+                pass
+        
+        if not file_exists:
+            # Пробуем открыть файл напрямую (самый надежный способ для Unicode на Windows)
+            try:
+                with open(file_path, 'rb') as f:
+                    file_exists = True
+            except (OSError, IOError, FileNotFoundError, PermissionError):
+                file_exists = False
+            except (UnicodeEncodeError, UnicodeDecodeError):
+                file_exists = False
+        
+        if not file_exists:
             return False, "Файл не найден", None
         
         # Проверяем, что это файл, а не папка
@@ -436,25 +459,26 @@ class FileConverter:
                                     raise
                                 return False, f"Неожиданная ошибка конвертации: {str(e)}", None
                         return False, "Модуль конвертации PDF недоступен", None
-                # Конвертация DOCX/DOC в ODT/ODP (через LibreOffice или Word)
+                # Конвертация DOCX/DOC в ODT/ODP (через Word или LibreOffice)
                 elif (source_ext == '.docx' or source_ext == '.doc') and target_ext in ('.odt', '.odp'):
                     try:
                         from core.converter.libreoffice_converter import convert_with_libreoffice
-                        from core.converter.odt_converter import convert_odt_with_word
                         from core.converter.com_utils import convert_docx_with_word_com
+                        
+                        # Сначала пробуем Word (если доступен и это ODT)
+                        # Word поддерживает сохранение в ODT (формат 23)
+                        if target_ext == '.odt' and sys.platform == 'win32' and (self.win32com or self.comtypes):
+                            result = convert_docx_with_word_com(file_path, output_path, 23)  # 23 = ODT format
+                            if result[0]:
+                                return result
+                        
+                        # Если Word не сработал, пробуем LibreOffice
                         result = convert_with_libreoffice(
                             file_path, output_path, target_ext
                         )
-                        # Если LibreOffice недоступен и это ODT, пробуем Word (только на Windows)
+                        # Если LibreOffice тоже не сработал и это ODT, пробуем Word еще раз
                         if not result[0] and target_ext == '.odt' and sys.platform == 'win32' and (self.win32com or self.comtypes):
-                            word_result = convert_odt_with_word(
-                                file_path, output_path, target_ext,
-                                self.win32com, self.comtypes,
-                                check_word_installed,
-                                create_word_application,
-                                cleanup_word_document,
-                                cleanup_word_application
-                            )
+                            word_result = convert_docx_with_word_com(file_path, output_path, 23)  # 23 = ODT format
                             if word_result[0]:
                                 result = word_result
                         return result
@@ -469,37 +493,60 @@ class FileConverter:
                             convert_odt_without_libreoffice
                         )
                         from core.converter.com_utils import convert_docx_with_word_com
+                        
+                        # Сначала пробуем Word (если доступен и это ODT)
+                        result = None
+                        if source_ext == '.odt' and sys.platform == 'win32' and (self.win32com or self.comtypes):
+                            result = convert_odt_with_word(
+                                file_path, output_path, target_ext,
+                                self.win32com, self.comtypes,
+                                check_word_installed,
+                                create_word_application,
+                                cleanup_word_document,
+                                cleanup_word_application
+                            )
+                            if result[0]:
+                                return result
+                        
+                        # Если Word не сработал, пробуем LibreOffice
                         result = convert_with_libreoffice(
                             file_path, output_path, target_ext
                         )
-                        # Если LibreOffice недоступен и это ODT файл, пробуем Word или другие fallback методы
+                        # Если LibreOffice недоступен и это ODT файл, пробуем Word еще раз
+                        if not result[0] and source_ext == '.odt' and sys.platform == 'win32' and (self.win32com or self.comtypes):
+                            word_result = convert_odt_with_word(
+                                file_path, output_path, target_ext,
+                                self.win32com, self.comtypes,
+                                check_word_installed,
+                                create_word_application,
+                                cleanup_word_document,
+                                cleanup_word_application
+                            )
+                            if word_result[0]:
+                                result = word_result
+                        # Если Word тоже не сработал, пробуем другие fallback методы
                         if not result[0] and source_ext == '.odt':
-                            # Пробуем через Word (если еще не пробовали)
-                            if sys.platform == 'win32' and (self.win32com or self.comtypes):
-                                word_result = convert_odt_with_word(
-                                    file_path, output_path, target_ext,
-                                    self.win32com, self.comtypes,
-                                    check_word_installed,
-                                    create_word_application,
-                                    cleanup_word_document,
-                                    cleanup_word_application
-                                )
-                                if word_result[0]:
-                                    result = word_result
-                            # Если Word тоже не сработал, пробуем другие fallback методы
-                            if not result[0]:
-                                result = convert_odt_without_libreoffice(
-                                    file_path, output_path, target_ext
-                                )
+                            result = convert_odt_without_libreoffice(
+                                file_path, output_path, target_ext
+                            )
                         return result
                     except ImportError:
                         return False, "Модуль конвертации ODT недоступен", None
                 else:
                     try:
                         from core.converter.document_converter import convert_document
+                        from core.converter.libreoffice_converter import convert_with_libreoffice
+                        from core.converter.com_utils import convert_docx_with_word_com
+                        
+                        # Используем универсальную функцию конвертации, которая пробует Word перед LibreOffice
                         return convert_document(
                             file_path, target_ext, output_path,
-                            self.docx_module
+                            self.win32com,
+                            self.comtypes,
+                            check_word_installed,
+                            create_word_application,
+                            convert_docx_with_word_com,
+                            convert_with_libreoffice
                         )
                     except ImportError:
                         return False, "Модуль конвертации документов недоступен", None
@@ -523,6 +570,22 @@ class FileConverter:
                         return convert_audio_video(file_path, output_path, target_ext)
                     except ImportError:
                         return False, "Модуль конвертации аудио/видео недоступен", None
+                else:
+                    return False, "Неподдерживаемый формат файла", None
+            
+            # Конвертация презентаций
+            if source_ext in self.supported_presentation_formats:
+                if target_ext in self.supported_presentation_target_formats:
+                    try:
+                        from core.converter.presentation_converter import convert_presentation
+                        from core.converter.libreoffice_converter import convert_with_libreoffice
+                        return convert_presentation(
+                            file_path, output_path, target_ext,
+                            self.win32com, self.comtypes,
+                            convert_with_libreoffice
+                        )
+                    except ImportError:
+                        return False, "Модуль конвертации презентаций недоступен", None
                 else:
                     return False, "Неподдерживаемый формат файла", None
             

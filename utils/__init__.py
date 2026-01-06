@@ -18,6 +18,7 @@ from utils.helpers import (
 
 # Импорты из path_processing
 from utils.path_processing import (
+    normalize_path,
     process_file_argument,
     filter_cli_args
 )

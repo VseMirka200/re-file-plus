@@ -15,6 +15,21 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Импорт функции проверки существования с поддержкой Unicode
+try:
+    from utils.security_utils import _check_file_exists_unicode
+except ImportError:
+    # Fallback если функция недоступна
+    def _check_file_exists_unicode(path: str) -> bool:
+        try:
+            return os.path.exists(path) and os.path.isfile(path)
+        except (OSError, UnicodeEncodeError, UnicodeDecodeError):
+            try:
+                with open(path, 'rb') as f:
+                    return True
+            except:
+                return False
+
 
 def convert_docx_to_pdf(
     file_path: str,
@@ -53,22 +68,33 @@ def convert_docx_to_pdf(
         # Определяем расширение исходного файла
         source_ext = os.path.splitext(file_path)[1].lower()
         
+        logger.info(f"Начало конвертации DOCX/DOC в PDF: {file_path} (расширение: {source_ext}) -> {output_path}")
+        
         # Пробуем разные методы конвертации по порядку
         tried_methods = []
         
         # Метод 1: Пробуем через Word COM (Windows) - приоритетный метод
+        logger.info(f"Проверка доступности Word COM: platform={sys.platform}, win32com={win32com is not None}, comtypes={comtypes is not None}")
         if sys.platform == 'win32' and (win32com or comtypes):
             logger.info(f"Пробуем конвертировать через Word COM: {file_path} -> {output_path}")
             try:
                 # Формат 17 = PDF
                 result = convert_docx_with_word_com(file_path, output_path, 17)
                 if result[0]:
+                    logger.info("Конвертация через Word COM успешна")
                     return result
                 else:
+                    logger.warning(f"Word COM вернул ошибку: {result[1]}")
                     tried_methods.append(f"Word COM (ошибка: {result[1][:100]})")
             except (OSError, RuntimeError, AttributeError, TypeError) as e:
-                logger.warning(f"Ошибка выполнения при конвертации через Word COM: {e}")
+                logger.warning(f"Ошибка выполнения при конвертации через Word COM: {e}", exc_info=True)
                 tried_methods.append(f"Word COM (ошибка: {str(e)[:100]})")
+        else:
+            if sys.platform != 'win32':
+                logger.info("Word COM недоступен: не Windows платформа")
+            elif not win32com and not comtypes:
+                logger.warning("Word COM недоступен: не установлены win32com или comtypes. Установите: pip install pywin32 или pip install comtypes")
+                tried_methods.append("Word COM (недоступен - не установлены библиотеки)")
             except (ValueError, KeyError, IndexError) as e:
                 logger.warning(f"Ошибка данных при конвертации через Word COM: {e}")
                 tried_methods.append(f"Word COM (ошибка: {str(e)[:100]})")
@@ -108,14 +134,14 @@ def convert_docx_to_pdf(
                     sys_module.stdout = old_stdout
                     sys_module.stderr = old_stderr
                 
-                # Проверяем, создан ли файл
+                # Проверяем, создан ли файл (с поддержкой Unicode)
                 base_name = os.path.splitext(os.path.basename(file_path))[0]
                 expected_pdf = os.path.join(output_dir, base_name + '.pdf')
                 
-                if os.path.exists(expected_pdf):
+                if _check_file_exists_unicode(expected_pdf):
                     # Если имя файла отличается, переименовываем
                     if expected_pdf != output_path:
-                        if os.path.exists(output_path):
+                        if _check_file_exists_unicode(output_path):
                             os.remove(output_path)
                         os.rename(expected_pdf, output_path)
                     
@@ -138,12 +164,32 @@ def convert_docx_to_pdf(
                 logger.warning(f"Критическая ошибка конвертации через docx2pdf: {e}", exc_info=True)
                 tried_methods.append(f"docx2pdf (ошибка: {str(e)[:100]})")
         
+        # Метод 3: Пробуем через LibreOffice как последнюю альтернативу
+        try:
+            from core.converter.libreoffice_converter import convert_with_libreoffice
+            logger.info(f"Пробуем конвертировать через LibreOffice: {file_path} -> {output_path}")
+            try:
+                result = convert_with_libreoffice(file_path, output_path, '.pdf')
+                if result[0]:
+                    return result
+                else:
+                    tried_methods.append(f"LibreOffice (ошибка: {result[1][:100]})")
+            except (OSError, RuntimeError, AttributeError, TypeError) as e:
+                logger.warning(f"Ошибка выполнения при конвертации через LibreOffice: {e}")
+                tried_methods.append(f"LibreOffice (ошибка: {str(e)[:100]})")
+            except Exception as e:
+                logger.warning(f"Ошибка при конвертации через LibreOffice: {e}")
+                tried_methods.append(f"LibreOffice (ошибка: {str(e)[:100]})")
+        except ImportError:
+            logger.debug("Модуль LibreOffice недоступен")
+            tried_methods.append("LibreOffice (недоступен)")
+        
         # Если все методы не сработали
         if not tried_methods:
             if sys.platform == 'win32':
-                return False, "Не удалось конвертировать файл. Убедитесь, что Microsoft Word установлен и доступен.", None
+                return False, "Не удалось конвертировать файл. Убедитесь, что Microsoft Word или LibreOffice установлены и доступны.", None
             else:
-                return False, "Конвертация DOC/DOCX в PDF доступна только на Windows с установленным Microsoft Word или при установленной библиотеке docx2pdf.", None
+                return False, "Конвертация DOC/DOCX в PDF доступна только на Windows с установленным Microsoft Word или при установленной библиотеке docx2pdf или LibreOffice.", None
         
         methods_str = ", ".join(tried_methods)
         return False, f"Не удалось конвертировать файл. Попробованы методы: {methods_str}", None
@@ -258,9 +304,9 @@ def convert_pdf_to_docx(
         pdf_path = os.path.abspath(file_path)
         docx_path = os.path.abspath(output_path)
         
-        # Убеждаемся, что директория существует
+        # Убеждаемся, что директория существует (с поддержкой Unicode)
         output_dir = os.path.dirname(docx_path)
-        if output_dir and not os.path.exists(output_dir):
+        if output_dir and not os.path.isdir(output_dir):
             os.makedirs(output_dir, exist_ok=True)
         
         logger.info(f"Конвертируем PDF в DOCX через Word: {pdf_path} -> {docx_path}")
@@ -298,7 +344,8 @@ def convert_pdf_to_docx(
             doc.SaveAs(FileName=docx_path, FileFormat=16)
             logger.info(f"PDF успешно конвертирован в DOCX через Word: {docx_path}")
             
-            if os.path.exists(docx_path):
+            # Проверяем существование файла с поддержкой Unicode
+            if _check_file_exists_unicode(docx_path):
                 return True, "PDF успешно конвертирован в DOCX через Word", docx_path
             else:
                 return False, "Файл DOCX не был создан", None
@@ -442,16 +489,24 @@ def convert_document(
     word_format = word_format_map.get(target_ext.lower())
     
     # Пробуем через Word (если доступен и формат поддерживается)
+    # Word поддерживает конвертацию из DOCX, DOC, RTF, TXT, HTML, ODT
     if sys.platform == 'win32' and (win32com or comtypes) and word_format is not None:
-        if source_ext in ('.docx', '.doc'):
+        if source_ext in ('.docx', '.doc', '.rtf', '.txt', '.html', '.htm', '.odt'):
             result = convert_docx_with_word_com(file_path, output_path, word_format)
             if result[0]:
                 return result
     
-    # Пробуем через LibreOffice
+    # Пробуем через LibreOffice как альтернативу
     result = convert_with_libreoffice(file_path, output_path, target_ext)
     if result[0]:
         return result
     
-    return False, f"Не удалось конвертировать {source_ext} в {target_ext}", None
+    # Если оба метода не сработали, возвращаем ошибку
+    error_msg = f"Не удалось конвертировать {source_ext} в {target_ext}"
+    if word_format is not None:
+        error_msg += ". LibreOffice и Microsoft Word недоступны или не поддерживают этот формат"
+    else:
+        error_msg += ". LibreOffice недоступен"
+    
+    return False, error_msg, None
 

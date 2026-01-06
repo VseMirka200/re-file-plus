@@ -1,154 +1,283 @@
-"""Модуль для вкладки конвертации файлов.
-
-Обеспечивает интерфейс для конвертации файлов между различными форматами
-с поддержкой выбора формата, настроек качества и отслеживания прогресса.
-"""
+"""Вкладка Конвертация."""
 
 import logging
 import os
+from typing import List
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout,
+    QTreeWidget, QTreeWidgetItem, QPushButton, QLabel,
+    QComboBox, QHeaderView
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
+from ui.components.drag_drop import DragDropMixin
 
 logger = logging.getLogger(__name__)
 
 
-class ConverterTab:
-    """Класс для управления вкладкой конвертации файлов.
+class ConverterTab(QWidget, DragDropMixin):
+    """Вкладка Конвертация."""
     
-    Координирует работу различных модулей конвертации.
-    """
-    
-    def __init__(self, app) -> None:
-        """Инициализация вкладки конвертации.
+    def __init__(self, app, parent=None):
+        """Инициализация вкладки.
         
         Args:
-            app: Экземпляр главного приложения (для доступа к методам и данным)
+            app: Экземпляр главного приложения
+            parent: Родительский виджет
         """
+        QWidget.__init__(self, parent)
+        DragDropMixin.__init__(self)
         self.app = app
         
-        # Инициализируем модули
-        from ui.converter.file_handler import ConverterFileHandler
-        from ui.converter.ui_components import ConverterUIComponents
-        from ui.converter.drag_drop import ConverterDragDrop
-        from ui.converter.context_menu import ConverterContextMenu
-        from ui.converter.converter import ConverterProcessor
-        from ui.converter.progress import ConverterProgress
-        from ui.converter.tab_builder import ConverterTabBuilder
-        from ui.converter.args_processor import ConverterArgsProcessor
+        # Основной layout - вертикальный
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(5)
         
-        self.file_handler = ConverterFileHandler(app)
-        self.ui_components = ConverterUIComponents(app)
-        self.drag_drop = ConverterDragDrop(app)
-        self.context_menu = ConverterContextMenu(app)
-        self.converter = ConverterProcessor(app)
-        self.progress = ConverterProgress(app)
-        self.tab_builder = ConverterTabBuilder(app, self)
-        self.args_processor = ConverterArgsProcessor(app, self)
+        # Панель управления - под вкладками, в одну линию
+        self._create_control_panel(main_layout)
+        
+        # Список файлов - на всю ширину
+        self._create_files_panel(main_layout)
+        
+        # Инициализация списка файлов конвертации
+        if not hasattr(self.app, 'converter_files'):
+            self.app.converter_files = []
+        
+        logger.info("ConverterTab создана")
     
-    def create_tab(self):
-        """Создание вкладки конвертации файлов на главном экране."""
-        return self.tab_builder.create_tab()
+    def _create_control_panel(self, parent):
+        """Создание панели управления под вкладками."""
+        control_layout = QHBoxLayout()
+        control_layout.setSpacing(5)
+        
+        # Кнопка добавления файлов
+        add_btn = QPushButton("+")
+        add_btn.setFixedSize(15, 15)
+        add_btn.setObjectName("addButton")
+        add_btn.clicked.connect(self._add_files)
+        control_layout.addWidget(add_btn)
+        
+        # Кнопка очистки
+        clear_btn = QPushButton("🗑")
+        clear_btn.setFixedSize(15, 15)
+        clear_btn.setObjectName("clearButton")
+        clear_btn.clicked.connect(self._clear_files)
+        control_layout.addWidget(clear_btn)
+        
+        # Метка "Фильтр:"
+        filter_label = QLabel("Фильтр:")
+        filter_label.setFont(QFont("Robot", 9))
+        control_layout.addWidget(filter_label)
+        
+        # Выпадающий список фильтра
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItems(["Все", "Изображения", "Документы", "Презентации", "Аудио", "Видео"])
+        self.filter_combo.currentTextChanged.connect(self._on_filter_changed)
+        control_layout.addWidget(self.filter_combo)
+        
+        # Метка "Формат:"
+        format_label = QLabel("Формат:")
+        format_label.setFont(QFont("Robot", 9))
+        control_layout.addWidget(format_label)
+        
+        # Выпадающий список формата
+        self.format_combo = QComboBox()
+        if hasattr(self.app, 'file_converter') and self.app.file_converter:
+            formats = self.app.file_converter.get_supported_formats()
+            unique_formats = sorted(set(formats))
+            self.format_combo.addItems(unique_formats)
+        control_layout.addWidget(self.format_combo, 1)  # stretch=1
+        
+        # Кнопка конвертации
+        convert_btn = QPushButton("✓")
+        convert_btn.setFixedSize(15, 15)
+        convert_btn.setObjectName("convertButton")
+        convert_btn.setToolTip("Конвертировать")
+        convert_btn.clicked.connect(self._convert_files)
+        control_layout.addWidget(convert_btn)
+        
+        parent.addLayout(control_layout)
     
-    def create_tab_content(self, parent):
-        """Создание содержимого вкладки конвертации (только правая панель с настройками).
+    def _on_filter_changed(self, filter_text: str):
+        """Обработка изменения фильтра.
         
         Args:
-            parent: Родительский контейнер для размещения содержимого
+            filter_text: Текст фильтра
         """
-        return self.tab_builder.create_tab_content(parent)
+        if not hasattr(self.app, 'file_converter') or not self.app.file_converter:
+            return
+        
+        # Обновляем список форматов в зависимости от фильтра
+        all_formats = self.app.file_converter.get_supported_formats()
+        
+        if filter_text == "Все":
+            formats = all_formats
+        elif filter_text == "Изображения":
+            formats = [f for f in all_formats if f.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.ico', '.tiff']]
+        elif filter_text == "Документы":
+            formats = [f for f in all_formats if f.lower() in ['.pdf', '.docx', '.doc', '.odt', '.rtf', '.txt']]
+        elif filter_text == "Презентации":
+            formats = [f for f in all_formats if f.lower() in ['.pptx', '.ppt', '.odp']]
+        elif filter_text == "Аудио":
+            formats = [f for f in all_formats if f.lower() in ['.mp3', '.wav', '.aac', '.ogg', '.flac', '.wma', '.m4a']]
+        elif filter_text == "Видео":
+            formats = [f for f in all_formats if f.lower() in ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm']]
+        else:
+            formats = all_formats
+        
+        self.format_combo.clear()
+        self.format_combo.addItems(sorted(set(formats)))
     
-    def create_full_tab_content(self, parent):
-        """Создание полноценной вкладки конвертации с левой и правой панелями.
+    def _create_files_panel(self, parent):
+        """Создание панели со списком файлов."""
+        # Таблица файлов
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels(["Файл", "Формат", "Новый формат", "Статус"])
+        self.tree.setAlternatingRowColors(True)
+        self.tree.setRootIsDecorated(False)
+        self.tree.header().setStretchLastSection(True)
+        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.tree.header().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        
+        parent.addWidget(self.tree)
+        self.app.converter_tree = self.tree
+        
+        # Метка с количеством файлов
+        self.app.converter_files_label = QLabel("Список файлов (Файлов: 0)")
+        parent.addWidget(self.app.converter_files_label)
+    
+    def _add_files(self):
+        """Добавление файлов."""
+        from PyQt6.QtWidgets import QFileDialog
+        files, _ = QFileDialog.getOpenFileNames(
+            self, "Выберите файлы для конвертации", "", "Все файлы (*.*)"
+        )
+        if files:
+            self._add_files_to_list(files)
+    
+    def _add_files_to_list(self, file_paths: List[str]):
+        """Добавление файлов в список конвертации.
         
         Args:
-            parent: Родительский контейнер для размещения содержимого
+            file_paths: Список путей к файлам
         """
-        return self.tab_builder.create_full_tab_content(parent)
+        if not hasattr(self.app, 'converter_files'):
+            self.app.converter_files = []
+        
+        from ui.operations.converter_operations import ConverterFile
+        
+        for file_path in file_paths:
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                # Проверяем на дубликаты
+                if not any(cf.file_path == file_path for cf in self.app.converter_files):
+                    converter_file = ConverterFile(file_path)
+                    self.app.converter_files.append(converter_file)
+        
+        self._refresh_files_list()
     
-    def process_files_from_args(self):
-        """Обработка файлов из аргументов командной строки."""
-        return self.args_processor.process_files_from_args()
-    
-    def add_files_for_conversion(self):
-        """Добавление файлов для конвертации."""
-        return self.file_handler.add_files_for_conversion()
-    
-    def update_available_formats(self):
-        """Обновление списка доступных форматов в combobox на основе выбранных файлов."""
-        return self.ui_components.update_available_formats()
-    
-    def filter_converter_files_by_type(self):
-        """Фильтрация файлов в конвертере по типу (использует общий список файлов)."""
-        return self.ui_components.filter_converter_files_by_type()
-    
-    def convert_files(self):
-        """Конвертация выбранных файлов."""
-        return self.converter.convert_files()
-    
-    def update_converter_progress(self, current: int, total: int, filename: str):
-        """Обновление прогресса конвертации."""
-        return self.progress.update_progress(current, total, filename)
-    
-    def _set_file_in_progress(self, file_path: str):
-        """Установка желтого тега "в работе" для файла в treeview."""
-        return self.progress.set_file_in_progress(file_path)
-    
-    def update_converter_status(self, index: int, success: bool, message: str, output_path=None, file_path=None):
-        """Обновление статуса файла в списке конвертации."""
-        return self.progress.update_status(index, success, message, output_path, file_path)
-    
-    def _update_file_status_in_treeview(self, file_path: str, success: bool, message: str):
-        """Обновление статуса и цвета файла в treeview после конвертации."""
-        return self.progress.update_file_status_in_treeview(file_path, success, message)
-    
-    def _check_if_file_already_converted(self, file_path: str, available_formats: list):
-        """Проверка, был ли файл уже конвертирован."""
-        return self.file_handler.check_if_file_already_converted(file_path, available_formats)
-    
-    def clear_converter_files_list(self):
-        """Очистка списка файлов для конвертации."""
-        return self.file_handler.clear_converter_files_list()
-    
-    def setup_converter_drag_drop(self, list_frame, tree, tab_frame):
-        """Настройка drag and drop для вкладки конвертации."""
-        return self.drag_drop.setup_drag_drop(list_frame, tree, tab_frame)
-    
-    def on_drop_converter_files(self, event):
-        """Обработка перетаскивания файлов на вкладку конвертации."""
-        return self.drag_drop.on_drop_files(event)
-    
-    def show_converter_context_menu(self, event):
-        """Показ контекстного меню для файла в конвертации."""
-        return self.context_menu.show_context_menu(event)
-    
-    def open_converter_file(self):
-        """Открытие файла конвертации в программе по умолчанию."""
-        return self.context_menu.open_file()
-    
-    def open_converter_file_folder(self):
-        """Открытие папки с выбранным файлом конвертации."""
-        return self.context_menu.open_file_folder()
-    
-    def copy_converter_file_path(self):
-        """Копирование пути файла конвертации в буфер обмена."""
-        return self.context_menu.copy_file_path()
-    
-    def remove_selected_converter_files(self):
-        """Удаление выбранных файлов из списка конвертации."""
-        if not hasattr(self.app, 'converter_tree'):
+    def _refresh_files_list(self):
+        """Обновление списка файлов."""
+        self.tree.clear()
+        
+        if not hasattr(self.app, 'converter_files'):
             return
         
-        selected_items = self.app.converter_tree.selection()
-        if not selected_items:
-            return
+        for converter_file in self.app.converter_files:
+            item = QTreeWidgetItem(self.tree)
+            item.setText(0, os.path.basename(converter_file.file_path))
+            item.setText(1, converter_file.source_format)
+            item.setText(2, converter_file.target_format)
+            item.setText(3, converter_file.status)
+            item.setData(0, Qt.ItemDataRole.UserRole, converter_file)
         
-        files_to_remove = []
-        for item in selected_items:
-            values = self.app.converter_tree.item(item, 'values')
-            if values and len(values) > 0:
-                files_to_remove.append(values[0])
-        
+        if hasattr(self.app, 'converter_files_label'):
+            count = len(self.app.converter_files)
+            self.app.converter_files_label.setText(f"Список файлов (Файлов: {count})")
+    
+    def _clear_files(self):
+        """Очистка списка файлов."""
         if hasattr(self.app, 'converter_files'):
-            self.app.converter_files = [f for f in self.app.converter_files 
-                                        if os.path.basename(f.get('path', '')) not in files_to_remove]
+            self.app.converter_files.clear()
+        self.tree.clear()
+        if hasattr(self.app, 'converter_files_label'):
+            self.app.converter_files_label.setText("Список файлов (Файлов: 0)")
+    
+    def _convert_files(self):
+        """Конвертация файлов."""
+        if not hasattr(self.app, 'converter_files') or not self.app.converter_files:
+            from ui.components.dialogs import InfoDialog
+            InfoDialog.showinfo(self, "Информация", "Нет файлов для конвертации")
+            return
         
-        self.filter_converter_files_by_type()
-        self.app.log(f"Удалено файлов из списка конвертации: {len(files_to_remove)}")
+        # Получаем целевой формат
+        target_format = self.format_combo.currentText()
+        if not target_format.startswith('.'):
+            target_format = '.' + target_format
+        
+        # Устанавливаем целевой формат для всех файлов
+        for converter_file in self.app.converter_files:
+            converter_file.target_format = target_format
+        
+        # Обновляем список
+        self._refresh_files_list()
+        
+        # Подтверждение
+        from ui.components.dialogs import ConfirmationDialog
+        if not ConfirmationDialog.askyesno(
+            self,
+            "Подтверждение",
+            f"Конвертировать {len(self.app.converter_files)} файл(ов) в {target_format}?"
+        ):
+            return
+        
+        # Создаем поток для конвертации
+        from ui.operations.converter_operations import ConverterWorker
+        from ui.components.dialogs import ProgressDialog
+        
+        progress_dialog = ProgressDialog(
+            self,
+            "Конвертация файлов",
+            "Выполняется конвертация..."
+        )
+        
+        worker = ConverterWorker(self.app, self.app.converter_files)
+        worker.progress.connect(lambda curr, total: progress_dialog.set_progress(curr, total))
+        worker.file_processed.connect(lambda path, success, msg: progress_dialog.set_message(f"{'✓' if success else '✗'} {os.path.basename(path)}"))
+        worker.finished.connect(lambda success, msg: (
+            progress_dialog.close(),
+            self._on_convert_finished(success, msg)
+        ))
+        
+        progress_dialog.button_box.rejected.connect(worker.cancel)
+        
+        worker.start()
+        progress_dialog.exec()
+    
+    def _on_convert_finished(self, success: bool, message: str):
+        """Обработка завершения конвертации.
+        
+        Args:
+            success: Успешно ли завершено
+            message: Сообщение
+        """
+        from ui.components.dialogs import InfoDialog
+        
+        if success:
+            InfoDialog.showinfo(self, "Успешно", message)
+        else:
+            InfoDialog.showerror(self, "Ошибка", message)
+        
+        # Обновляем список файлов
+        self._refresh_files_list()
+    
+    def on_files_dropped(self, files):
+        """Обработка перетащенных файлов.
+        
+        Args:
+            files: Список путей к файлам
+        """
+        logger.info(f"Перетащено файлов на вкладку Конвертация: {len(files)}")
+        self._add_files_to_list(files)

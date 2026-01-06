@@ -1,97 +1,64 @@
-"""Модуль для вкладки настроек.
-
-Обеспечивает интерфейс для управления настройками приложения:
-автоприменение, шрифты и другие параметры.
-"""
+"""Вкладка Настройки."""
 
 import logging
 import os
 import subprocess
 import sys
-
-import tkinter as tk
-import tkinter.messagebox as messagebox
-from tkinter import ttk
-
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QCheckBox, QStackedWidget, QFrame
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
 
-class SettingsTab:
-    """
-    Класс для управления вкладкой настроек приложения.
+class SettingsTab(QWidget):
+    """Вкладка Настройки."""
     
-    Предоставляет интерфейс для изменения различных параметров приложения,
-    таких как автоприменение методов, размер шрифта и т.д.
-    """
-    
-    def __init__(self, app) -> None:
-        """Инициализация вкладки настроек.
+    def __init__(self, app, parent=None):
+        """Инициализация вкладки.
         
         Args:
-            app: Экземпляр главного приложения (для доступа к методам и данным)
+            app: Экземпляр главного приложения
+            parent: Родительский виджет
         """
+        super().__init__(parent)
         self.app = app
         self.current_section = None
-        self.section_frames = {}
+        self.section_widgets = {}
+        
+        # Основной layout - горизонтальный (левое меню + правое содержимое)
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        # Левое меню
+        self._create_menu_panel(main_layout)
+        
+        # Правое содержимое
+        self._create_content_panel(main_layout)
+        
+        # Выбираем первый раздел
+        self.switch_section("remove_files")
+        
+        logger.info("SettingsTab создана")
     
-    def create_tab(self):
-        """Создание вкладки настроек на главном экране"""
-        if not hasattr(self.app, 'main_notebook') or not self.app.main_notebook:
-            return
+    def _create_menu_panel(self, parent):
+        """Создание левой панели меню."""
+        menu_frame = QFrame()
+        menu_frame.setFixedWidth(200)
+        menu_frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.app.colors.get('bg_main', '#FFFFFF')};
+                border-right: 1px solid #CCCCCC;
+            }}
+        """)
         
-        settings_tab = tk.Frame(self.app.main_notebook, bg=self.app.colors['bg_main'])
-        settings_tab.columnconfigure(1, weight=1)
-        settings_tab.rowconfigure(0, weight=1)
-        self.app.main_notebook.add(settings_tab, text="Настройки")
-        
-        # Используем общий метод для создания содержимого
-        self.create_tab_content(settings_tab)
-    
-    def create_tab_for_notebook(self, notebook):
-        """
-        Создание вкладки настроек для внешнего notebook.
-        
-        Args:
-            notebook: Экземпляр ttk.Notebook для добавления вкладки
-        """
-        settings_tab = tk.Frame(notebook, bg=self.app.colors['bg_main'])
-        settings_tab.columnconfigure(1, weight=1)
-        settings_tab.rowconfigure(0, weight=1)
-        notebook.add(settings_tab, text="Настройки")
-        
-        # Используем общий метод для создания содержимого
-        self.create_tab_content(settings_tab)
-    
-    def create_tab_content_for_main(self, settings_tab):
-        """
-        Создание содержимого вкладки настроек для главного окна.
-        
-        Args:
-            settings_tab: Родительский контейнер (Frame) для размещения содержимого
-        """
-        # Используем тот же метод, что и для обычного notebook
-        self.create_tab_content(settings_tab)
-    
-    def create_tab_content(self, settings_tab):
-        """
-        Создание содержимого вкладки настроек.
-        
-        Args:
-            settings_tab: Родительский контейнер (Frame) для размещения содержимого
-        """
-        # Основной контейнер с двумя панелями
-        main_container = tk.Frame(settings_tab, bg=self.app.colors['bg_main'])
-        main_container.pack(fill=tk.BOTH, expand=True)
-        # Настраиваем grid для размещения дочерних элементов
-        main_container.grid_columnconfigure(2, weight=1)  # Содержимое растягивается
-        main_container.grid_rowconfigure(0, weight=1)
-        
-        # Левая панель - меню настроек
-        menu_frame = tk.Frame(main_container, bg=self.app.colors['bg_main'], width=200)
-        menu_frame.grid(row=0, column=0, sticky="nsw", padx=0, pady=0)
-        menu_frame.grid_propagate(False)
-        menu_frame.pack_propagate(False)
+        menu_layout = QVBoxLayout(menu_frame)
+        menu_layout.setContentsMargins(0, 0, 0, 0)
+        menu_layout.setSpacing(0)
         
         # Список пунктов меню
         menu_items = [
@@ -99,201 +66,240 @@ class SettingsTab:
             ("Логи", "logs")
         ]
         
-        # Переменная для хранения выбранного пункта меню
-        self.selected_menu_item = tk.StringVar(value=menu_items[0][1])
-        
         # Создаем кнопки меню
         self.menu_buttons = {}
         for text, value in menu_items:
-            btn = tk.Button(
-                menu_frame,
-                text=text,
-                font=('Robot', 10),
-                bg=self.app.colors['bg_main'],
-                fg=self.app.colors['text_primary'],
-                activebackground=self.app.colors['primary'],
-                activeforeground='white',
-                relief=tk.FLAT,
-                anchor='w',
-                padx=15,
-                pady=10,
-                command=lambda v=value: self.switch_section(v)
-            )
-            btn.pack(fill=tk.X, padx=0, pady=0)
+            btn = QPushButton(text)
+            btn.setFont(QFont("Robot", 10))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setCheckable(True)
+            btn.clicked.connect(lambda checked, v=value: self.switch_section(v))
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {self.app.colors.get('bg_main', '#FFFFFF')};
+                    color: {self.app.colors.get('text_primary', '#000000')};
+                    border: none;
+                    text-align: left;
+                    padding: 10px 15px;
+                }}
+                QPushButton:hover {{
+                    background-color: {self.app.colors.get('bg_secondary', '#F5F5F5')};
+                }}
+            """)
+            menu_layout.addWidget(btn)
             self.menu_buttons[value] = btn
         
-        # Добавляем "О программе" внизу меню
-        about_label = tk.Label(
-            menu_frame,
-            text="О программе",
-            font=('Robot', 10),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors.get('text_muted', self.app.colors.get('secondary', '#718096')),  # Голубовато-серый цвет
-            cursor='hand2',
-            anchor='w',
-            padx=15,
-            pady=10
-        )
-        about_label.pack(side=tk.BOTTOM, fill=tk.X, padx=0, pady=0)
-        about_label.bind("<Button-1>", lambda e: self.open_about_window())
-        self.menu_buttons["about"] = about_label
+        menu_layout.addStretch()
         
-        # Правая панель - содержимое настроек
-        content_container = tk.Frame(main_container, bg=self.app.colors['bg_main'])
-        content_container.grid(row=0, column=1, columnspan=2, sticky="nsew", padx=0, pady=0)
-        content_container.columnconfigure(0, weight=1)
-        content_container.rowconfigure(0, weight=1)
+        # Кнопка "О программе" внизу
+        about_btn = QPushButton("О программе")
+        about_btn.setFont(QFont("Robot", 10))
+        about_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        about_btn.clicked.connect(self._open_about_window)
+        about_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.app.colors.get('bg_main', '#FFFFFF')};
+                color: {self.app.colors.get('text_secondary', '#666666')};
+                border: none;
+                text-align: left;
+                padding: 10px 15px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.app.colors.get('bg_secondary', '#F5F5F5')};
+            }}
+        """)
+        menu_layout.addWidget(about_btn)
+        self.menu_buttons["about"] = about_btn
         
-        # Простой Frame для содержимого (без прокрутки для упрощения)
-        scrollable_frame = tk.Frame(content_container, bg=self.app.colors['bg_main'])
-        scrollable_frame.pack(fill=tk.BOTH, expand=True)
-        
-        # Сохраняем ссылку на scrollable_frame для использования в методах создания секций
-        self.content_scrollable_frame = scrollable_frame
-        
-        # Выделяем первый пункт меню после инициализации всех контейнеров
-        self.switch_section("remove_files")
+        parent.addWidget(menu_frame)
     
-    def switch_section(self, section_name):
-        """Переключение между разделами настроек"""
+    def _create_content_panel(self, parent):
+        """Создание правой панели содержимого."""
+        # Stacked widget для переключения между разделами
+        self.content_stack = QStackedWidget()
+        parent.addWidget(self.content_stack, 1)  # stretch=1
+    
+    def switch_section(self, section_name: str):
+        """Переключение между разделами настроек.
+        
+        Args:
+            section_name: Имя раздела
+        """
         # Обновляем выделение в меню
         for value, btn in self.menu_buttons.items():
             if value == section_name:
                 if value == "about":
-                    # Для "О программе" не меняем стиль, оставляем как есть
-                    pass
+                    pass  # Для "О программе" не меняем стиль
                 else:
-                    btn.config(bg=self.app.colors['primary'], fg='white')
+                    btn.setChecked(True)
+                    btn.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {self.app.colors.get('primary', '#0078D4')};
+                            color: white;
+                            border: none;
+                            text-align: left;
+                            padding: 10px 15px;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {self.app.colors.get('primary_hover', '#0063B1')};
+                        }}
+                    """)
             else:
                 if value == "about":
-                    # Для "О программе" не меняем стиль
                     pass
                 else:
-                    btn.config(bg=self.app.colors['bg_main'], fg=self.app.colors['text_primary'])
-        
-        # Удаляем старое содержимое
-        for frame in self.section_frames.values():
-            frame.pack_forget()
+                    btn.setChecked(False)
+                    btn.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {self.app.colors.get('bg_main', '#FFFFFF')};
+                            color: {self.app.colors.get('text_primary', '#000000')};
+                            border: none;
+                            text-align: left;
+                            padding: 10px 15px;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {self.app.colors.get('bg_secondary', '#F5F5F5')};
+                        }}
+                    """)
         
         # Создаем или показываем выбранный раздел
-        if section_name not in self.section_frames:
-            self.create_section_content(section_name)
+        if section_name not in self.section_widgets:
+            self._create_section_content(section_name)
         
-        self.section_frames[section_name].pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+        widget = self.section_widgets[section_name]
+        self.content_stack.setCurrentWidget(widget)
         self.current_section = section_name
     
-    def create_section_content(self, section_name):
-        """Создание содержимого для конкретного раздела настроек"""
-        section_frame = tk.Frame(self.content_scrollable_frame, bg=self.app.colors['bg_main'])
-        self.section_frames[section_name] = section_frame
-        
-        if section_name == "remove_files":
-            self.create_remove_files_section(section_frame)
-        elif section_name == "logs":
-            self.create_logs_section(section_frame)
-        elif section_name == "about":
-            self.create_about_section(section_frame)
-    
-    def create_general_section(self, parent):
-        """Создание секции общих настроек.
+    def _create_section_content(self, section_name: str):
+        """Создание содержимого для конкретного раздела настроек.
         
         Args:
-            parent: Родительский виджет для размещения секции
+            section_name: Имя раздела
         """
-        self._create_section_header(parent, "Общие настройки")
-        # Здесь можно добавить общие настройки
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        if section_name == "remove_files":
+            self._create_remove_files_section(layout)
+        elif section_name == "logs":
+            self._create_logs_section(layout)
+        elif section_name == "about":
+            self._create_about_section(layout)
+        
+        layout.addStretch()
+        self.section_widgets[section_name] = widget
+        self.content_stack.addWidget(widget)
     
-    def create_remove_files_section(self, parent):
+    def _create_remove_files_section(self, layout):
         """Создание секции настроек удаления файлов.
         
         Args:
-            parent: Родительский виджет для размещения секции
+            layout: Layout для размещения элементов
         """
-        self._create_section_header(parent, "Удаление файлов", "Настройки поведения при удалении файлов")
+        # Заголовок
+        title = QLabel("Удаление файлов")
+        title.setFont(QFont("Robot", 14, QFont.Weight.Bold))
+        layout.addWidget(title)
         
-        # Чекбоксы для настроек удаления файлов
-        settings_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        settings_frame.pack(fill=tk.X, pady=(0, 10))
+        # Описание
+        description = QLabel("Настройки поведения при удалении файлов")
+        description.setFont(QFont("Robot", 10))
+        description.setStyleSheet(f"color: {self.app.colors.get('text_secondary', '#666666')};")
+        layout.addWidget(description)
         
-        # Настройка удаления файлов из списка после операции
-        self._create_remove_files_checkbox(settings_frame)
+        # Чекбокс
+        if not hasattr(self.app, 'remove_files_after_operation_var'):
+            default_value = False
+            if hasattr(self.app, 'settings_manager'):
+                default_value = self.app.settings_manager.get('remove_files_after_operation', False)
+            self.app.remove_files_after_operation_var = default_value
+        
+        checkbox = QCheckBox("Удалять файлы из списка после операции")
+        checkbox.setFont(QFont("Robot", 10))
+        checkbox.setChecked(self.app.remove_files_after_operation_var)
+        checkbox.stateChanged.connect(self._on_remove_files_changed)
+        layout.addWidget(checkbox)
     
-    def create_logs_section(self, parent):
+    def _on_remove_files_changed(self, state):
+        """Обработчик изменения настройки удаления файлов."""
+        value = state == Qt.CheckState.Checked.value
+        self.app.remove_files_after_operation_var = value
+        if hasattr(self.app, 'settings_manager'):
+            self.app.settings_manager.set('remove_files_after_operation', value)
+            self.app.settings_manager.save_settings()
+    
+    def _create_logs_section(self, layout):
         """Создание секции настроек логов.
         
         Args:
-            parent: Родительский виджет для размещения секции
+            layout: Layout для размещения элементов
         """
-        self._create_section_header(parent, "Логи", "Настройки логирования приложения")
+        # Заголовок
+        title = QLabel("Логи")
+        title.setFont(QFont("Robot", 14, QFont.Weight.Bold))
+        layout.addWidget(title)
         
-        # Получаем путь к логам
+        # Описание
+        description = QLabel("Настройки логирования приложения")
+        description.setFont(QFont("Robot", 10))
+        description.setStyleSheet(f"color: {self.app.colors.get('text_secondary', '#666666')};")
+        layout.addWidget(description)
+        
+        # Путь к логам
         logs_path = self._get_logs_path()
         
-        # Отображаем путь к логам
-        self._create_logs_path_display(parent, logs_path)
+        path_label = QLabel(f"Путь к логам: {logs_path}")
+        path_label.setFont(QFont("Robot", 9))
+        path_label.setStyleSheet(f"color: {self.app.colors.get('text_secondary', '#666666')};")
+        layout.addWidget(path_label)
         
-        # Кнопки открытия папки и файла логов
-        logs_buttons_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        logs_buttons_frame.pack(fill=tk.X, pady=(0, 10))
+        # Кнопки
+        buttons_layout = QHBoxLayout()
         
-        self._create_open_logs_folder_button(logs_buttons_frame, logs_path)
-        self._create_open_log_file_button(logs_buttons_frame)
+        open_folder_btn = QPushButton("Открыть папку")
+        open_folder_btn.setFont(QFont("Robot", 9))
+        open_folder_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.app.colors.get('primary', '#0078D4')};
+                color: white;
+                border: none;
+                padding: 5px 15px;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.app.colors.get('primary_hover', '#0063B1')};
+            }}
+        """)
+        open_folder_btn.clicked.connect(lambda: self._open_logs_folder(logs_path))
+        buttons_layout.addWidget(open_folder_btn)
+        
+        open_file_btn = QPushButton("Открыть файл логов")
+        open_file_btn.setFont(QFont("Robot", 9))
+        open_file_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.app.colors.get('info', '#17A2B8')};
+                color: white;
+                border: none;
+                padding: 5px 15px;
+                border-radius: 4px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.app.colors.get('info_hover', '#138496')};
+            }}
+        """)
+        open_file_btn.clicked.connect(self._open_log_file)
+        buttons_layout.addWidget(open_file_btn)
+        
+        buttons_layout.addStretch()
+        layout.addLayout(buttons_layout)
     
-    def open_about_window(self):
-        """Открытие отдельного окна 'О программе'."""
-        # Проверяем, не открыто ли уже окно
-        if hasattr(self.app, '_about_window') and self.app._about_window is not None:
-            try:
-                if self.app._about_window.winfo_exists():
-                    # Окно уже открыто, поднимаем его на передний план
-                    self.app._about_window.lift()
-                    self.app._about_window.focus_force()
-                    return
-            except (tk.TclError, AttributeError):
-                # Окно было закрыто, но ссылка осталась
-                pass
-        
-        # Создаем новое окно
-        about_window = tk.Toplevel(self.app.root)
-        about_window.title("О программе")
-        about_window.geometry("800x600")
-        about_window.minsize(600, 400)
-        about_window.configure(bg=self.app.colors['bg_main'])
-        
-        # Установка иконки
-        try:
-            from ui.ui_components import set_window_icon
-            set_window_icon(about_window, self.app._icon_photos)
-        except (ImportError, AttributeError, tk.TclError, OSError):
-            pass
-        
-        about_window.columnconfigure(0, weight=1)
-        about_window.rowconfigure(0, weight=1)
-        
-        # Сохраняем ссылку на окно
-        self.app._about_window = about_window
-        
-        # Создаем содержимое окна
-        if hasattr(self.app, 'main_window_handler') and hasattr(self.app.main_window_handler, 'about'):
-            self.app.main_window_handler.about.create_about_tab_content(about_window)
-        else:
-            # Если нет доступа к main_window_handler, создаем напрямую
-            from ui.window.about import MainWindowAbout
-            about_handler = MainWindowAbout(self.app)
-            about_handler.create_about_tab_content(about_window)
-        
-        # Обработчик закрытия окна
-        def on_close():
-            self.app._about_window = None
-            about_window.destroy()
-        
-        about_window.protocol("WM_DELETE_WINDOW", on_close)
-    
-    def create_about_section(self, parent):
+    def _create_about_section(self, layout):
         """Создание секции 'О программе'.
         
         Args:
-            parent: Родительский виджет для размещения секции (section_frame)
+            layout: Layout для размещения элементов
         """
         from ui.tabs.about_tab import AboutTab
         
@@ -301,76 +307,12 @@ class SettingsTab:
         about_tab_handler = AboutTab(
             None,  # notebook не нужен
             self.app.colors,
-            self.app.bind_mousewheel,
-            self.app._icon_photos
+            None,  # bind_mousewheel не нужен
+            None   # icon_photos не нужен
         )
         
-        # Используем метод создания содержимого напрямую в parent
-        # (как и другие секции, просто добавляем контент в section_frame)
-        about_tab_handler._create_content(parent)
-    
-    def _create_section_header(self, parent, title, description=None):
-        """Создание заголовка и описания для секции настроек.
-        
-        Args:
-            parent: Родительский виджет
-            title: Заголовок секции
-            description: Описание секции (опционально)
-        """
-        title_label = tk.Label(
-            parent,
-            text=title,
-            font=('Robot', 14, 'bold'),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary']
-        )
-        title_label.pack(anchor=tk.W, pady=(0, 20))
-        
-        if description:
-            description_label = tk.Label(
-                parent,
-                text=description,
-                font=('Robot', 10),
-                bg=self.app.colors['bg_main'],
-                fg=self.app.colors['text_secondary']
-            )
-            description_label.pack(anchor=tk.W, pady=(0, 15))
-    
-    def _create_remove_files_checkbox(self, parent):
-        """Создание чекбокса для настройки удаления файлов из списка после операции.
-        
-        Args:
-            parent: Родительский виджет для размещения чекбокса
-        """
-        # Инициализируем переменную, если её еще нет
-        if not hasattr(self.app, 'remove_files_after_operation_var'):
-            default_value = False
-            if hasattr(self.app, 'settings_manager'):
-                default_value = self.app.settings_manager.get('remove_files_after_operation', False)
-            self.app.remove_files_after_operation_var = tk.BooleanVar(value=default_value)
-        
-        def on_remove_files_change(*args):
-            """Обработчик изменения настройки удаления файлов"""
-            if hasattr(self.app, 'settings_manager'):
-                value = self.app.remove_files_after_operation_var.get()
-                self.app.settings_manager.set('remove_files_after_operation', value)
-                self.app.settings_manager.save_settings()
-        
-        self.app.remove_files_after_operation_var.trace('w', on_remove_files_change)
-        
-        checkbox = tk.Checkbutton(
-            parent,
-            text="Удалять файлы из списка после операции",
-            font=('Robot', 10),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary'],
-            activebackground=self.app.colors['bg_main'],
-            activeforeground=self.app.colors['text_primary'],
-            selectcolor=self.app.colors['bg_main'],
-            variable=self.app.remove_files_after_operation_var,
-            anchor='w'
-        )
-        checkbox.pack(anchor=tk.W, pady=(0, 10))
+        # Используем метод создания содержимого
+        about_tab_handler._create_content(self)
     
     def _get_logs_path(self):
         """Получение пути к директории с логами.
@@ -383,152 +325,16 @@ class SettingsTab:
             "logs"
         )
     
-    def _create_logs_path_display(self, parent, logs_path):
-        """Создание отображения пути к логам.
-        
-        Args:
-            parent: Родительский виджет
-            logs_path: Путь к директории с логами
-        """
-        logs_path_frame = tk.Frame(parent, bg=self.app.colors['bg_main'])
-        logs_path_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        logs_path_label = tk.Label(
-            logs_path_frame,
-            text="Путь к логам:",
-            font=('Robot', 10),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_primary']
-        )
-        logs_path_label.pack(side=tk.LEFT, padx=(0, 10))
-        
-        logs_path_text = tk.Label(
-            logs_path_frame,
-            text=logs_path,
-            font=('Robot', 9),
-            bg=self.app.colors['bg_main'],
-            fg=self.app.colors['text_secondary']
-        )
-        logs_path_text.pack(side=tk.LEFT)
-    
-    def _open_path_in_system(self, path):
-        """Открытие пути в системе по умолчанию.
-        
-        Args:
-            path: Путь к файлу или директории
-            
-        Raises:
-            Exception: Если не удалось открыть путь
-        """
+    def _open_logs_folder(self, logs_path):
+        """Открытие папки с логами."""
         try:
-            # Валидация пути перед использованием
-            from utils.security_utils import validate_path_for_subprocess
-            is_safe, error_msg = validate_path_for_subprocess(path, must_exist=True, must_be_file=False)
-            if not is_safe:
-                logger.warning(f"Небезопасный путь отклонен: {path} - {error_msg}")
-                raise ValueError(f"Небезопасный путь: {error_msg}")
-            
-            if sys.platform == "win32":
-                os.startfile(path)
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", path])
-            else:
-                subprocess.Popen(["xdg-open", path])
-        except (OSError, PermissionError, ValueError) as e:
-            logger.error(f"Ошибка при открытии пути {path}: {e}")
-            raise
-        except (subprocess.SubprocessError, FileNotFoundError) as e:
-            logger.error(f"Ошибка subprocess при открытии пути {path}: {e}", exc_info=True)
-            raise
-        except (ValueError, TypeError, KeyError, IndexError) as e:
-            logger.error(f"Ошибка данных при открытии пути {path}: {e}", exc_info=True)
-            raise
-        except (MemoryError, RecursionError) as e:
-
-            # Ошибки памяти/рекурсии
-
-            pass
-
-        # Финальный catch для неожиданных исключений (критично для стабильности)
-
-        except BaseException as e:
-
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
-
-                raise
-            logger.error(f"Неожиданная ошибка при открытии пути {path}: {e}", exc_info=True)
-            raise
-    
-    def _create_open_logs_folder_button(self, parent, logs_path):
-        """Создание кнопки для открытия папки с логами.
-        
-        Args:
-            parent: Родительский виджет
-            logs_path: Путь к директории с логами
-        """
-        def open_logs_folder():
-            """Открытие папки с логами"""
-            try:
-                self._open_path_in_system(logs_path)
-            except (OSError, PermissionError, ValueError, subprocess.SubprocessError) as e:
-                messagebox.showerror("Ошибка", f"Не удалось открыть папку с логами:\n{e}")
-            except (TypeError, KeyError, IndexError) as e:
-                messagebox.showerror("Ошибка", f"Ошибка данных при открытии папки с логами:\n{e}")
-                logger.error(f"Ошибка данных при открытии папки с логами: {e}", exc_info=True)
-            except (MemoryError, RecursionError) as e:
-
-                # Ошибки памяти/рекурсии
-
-                pass
-
-            # Финальный catch для неожиданных исключений (критично для стабильности)
-
-            except BaseException as e:
-
-                if isinstance(e, (KeyboardInterrupt, SystemExit)):
-
-                    raise
-                messagebox.showerror("Ошибка", f"Неожиданная ошибка при открытии папки с логами:\n{e}")
-                logger.error(f"Неожиданная ошибка при открытии папки с логами: {e}", exc_info=True)
-        
-        open_logs_btn = tk.Button(
-            parent,
-            text="Открыть папку",
-            font=('Robot', 9),
-            bg=self.app.colors['primary'],
-            fg='white',
-            activebackground=self.app.colors['primary_hover'],
-            activeforeground='white',
-            relief=tk.FLAT,
-            padx=15,
-            pady=5,
-            command=open_logs_folder
-        )
-        open_logs_btn.pack(side=tk.LEFT)
-    
-    def _create_open_log_file_button(self, parent):
-        """Создание кнопки для открытия файла логов.
-        
-        Args:
-            parent: Родительский виджет
-        """
-        open_log_file_btn = tk.Button(
-            parent,
-            text="Открыть файл логов",
-            font=('Robot', 9),
-            bg=self.app.colors['info'],
-            fg='white',
-            activebackground=self.app.colors['info_hover'],
-            activeforeground='white',
-            relief=tk.FLAT,
-            padx=15,
-            pady=5,
-            command=self._open_log_file
-        )
-        open_log_file_btn.pack(side=tk.LEFT, padx=(10, 0))
+            self._open_path_in_system(logs_path)
+        except Exception as e:
+            from ui.components.dialogs import InfoDialog
+            InfoDialog.showerror(self, "Ошибка", f"Не удалось открыть папку с логами:\n{e}")
     
     def _open_log_file(self):
-        """Открытие файла логов в редакторе по умолчанию"""
+        """Открытие файла логов."""
         logs_path = self._get_logs_path()
         log_file_path = os.path.join(logs_path, "re-file-plus.log")
         
@@ -536,25 +342,60 @@ class SettingsTab:
             if os.path.exists(log_file_path):
                 self._open_path_in_system(log_file_path)
             else:
-                messagebox.showinfo("Информация", "Файл логов не найден")
-        except (OSError, PermissionError, ValueError, subprocess.SubprocessError) as e:
-            logger.error(f"Ошибка при открытии файла логов: {e}", exc_info=True)
-            messagebox.showerror("Ошибка", f"Не удалось открыть файл логов:\n{e}")
-        except (TypeError, KeyError, IndexError) as e:
-            logger.error(f"Ошибка данных при открытии файла логов: {e}", exc_info=True)
-            messagebox.showerror("Ошибка", f"Ошибка данных при открытии файла логов:\n{e}")
-        except (MemoryError, RecursionError) as e:
-
-            # Ошибки памяти/рекурсии
-
-            pass
-
-        # Финальный catch для неожиданных исключений (критично для стабильности)
-
-        except BaseException as e:
-
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
-
-                raise
-            logger.error(f"Неожиданная ошибка при открытии файла логов: {e}", exc_info=True)
-            messagebox.showerror("Ошибка", f"Неожиданная ошибка при открытии файла логов:\n{e}")
+                from ui.components.dialogs import InfoDialog
+                InfoDialog.showinfo(self, "Информация", "Файл логов не найден")
+        except Exception as e:
+            from ui.components.dialogs import InfoDialog
+            InfoDialog.showerror(self, "Ошибка", f"Не удалось открыть файл логов:\n{e}")
+    
+    def _open_path_in_system(self, path):
+        """Открытие пути в системе по умолчанию.
+        
+        Args:
+            path: Путь к файлу или директории
+        """
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            logger.error(f"Ошибка при открытии пути {path}: {e}")
+            raise
+    
+    def _open_about_window(self):
+        """Открытие отдельного окна 'О программе'."""
+        from PyQt6.QtWidgets import QDialog
+        from ui.tabs.about_tab import AboutTab
+        
+        # Проверяем, не открыто ли уже окно
+        if hasattr(self.app, '_about_window') and self.app._about_window is not None:
+            try:
+                if self.app._about_window.isVisible():
+                    self.app._about_window.raise_()
+                    self.app._about_window.activateWindow()
+                    return
+            except:
+                pass
+        
+        # Создаем новое окно
+        about_window = QDialog(self)
+        about_window.setWindowTitle("О программе")
+        about_window.resize(800, 600)
+        about_window.setMinimumSize(600, 400)
+        
+        # Создаем содержимое окна
+        about_tab_handler = AboutTab(
+            None,
+            self.app.colors,
+            None,
+            None
+        )
+        about_tab_handler._create_content(about_window)
+        
+        # Сохраняем ссылку на окно
+        self.app._about_window = about_window
+        
+        about_window.exec()
